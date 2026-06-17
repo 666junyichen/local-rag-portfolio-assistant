@@ -4,6 +4,30 @@ A fully local Retrieval-Augmented Generation assistant that answers questions ab
 
 This project adapts a Google/MongoDB local RAG workshop into a portfolio-focused assistant. Instead of asking about MongoDB documentation, the assistant retrieves from `data/portfolio_docs.json` and answers as Junyi's portfolio assistant.
 
+![Local RAG Portfolio Assistant Streamlit demo](assets/streamlit-answer.png)
+
+## Local Demo
+
+This is a fully local AI demo. The portfolio data, vector database, embedding model, and LLM runtime all run on the local machine.
+
+- No cloud deployment is required.
+- No online LLM API key is required.
+- Requires local Docker/MongoDB Local Atlas and Ollama.
+- Answers are grounded in the curated knowledge base at `data/portfolio_docs.json`.
+
+## Demo Questions
+
+Try questions like:
+
+- What are Junyi Chen's strongest AI and data projects?
+- What MongoDB experience does Junyi have?
+- Summarize Junyi for a full-stack role.
+- Which projects show LLM or AI application experience?
+
+## Example Answer
+
+For an AI/data project question, the assistant retrieves Junyi's strongest matching portfolio entries and summarizes projects such as the Accessibility Testing QA Engine, QANet question answering work, PulseScape emotion-aware recommender, diabetes prediction, and spatial resource accessibility analysis. The response is generated from local portfolio context rather than a generic resume prompt.
+
 ## Tech Stack
 
 - Python
@@ -18,6 +42,9 @@ This project adapts a Google/MongoDB local RAG workshop into a portfolio-focused
 ```text
 .
 |-- app.py
+|-- assets/
+|   |-- streamlit-answer.png
+|   `-- streamlit-home.png
 |-- data/
 |   `-- portfolio_docs.json
 |-- docs/
@@ -80,6 +107,12 @@ Run:
 uv run python scripts/ingest.py
 ```
 
+If `uv run` cannot access the local cache on Windows, use the project virtual environment directly:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\ingest.py
+```
+
 This loads `data/portfolio_docs.json`, chunks the documents, creates embeddings, inserts them into MongoDB, and creates the vector index.
 
 ## Run a Smoke Test
@@ -88,15 +121,27 @@ This loads `data/portfolio_docs.json`, chunks the documents, creates embeddings,
 uv run python scripts/smoke_test.py
 ```
 
+Or:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\smoke_test.py
+```
+
 ## Run the Chat UI
 
 ```powershell
 uv run streamlit run app.py
 ```
 
+Or:
+
+```powershell
+.\.venv\Scripts\python.exe -m streamlit run app.py --server.port 8505
+```
+
 ## Resume Description
 
-Built a fully local RAG portfolio assistant using MongoDB Atlas Vector Search, local `voyageai/voyage-4-nano` embeddings, and Ollama-hosted Gemma. Implemented document ingestion, chunking, vector indexing, semantic retrieval, local LLM answer generation, and a Streamlit chat interface for private portfolio Q&A.
+- Built a fully local RAG portfolio assistant using MongoDB Atlas Vector Search, local `voyageai/voyage-4-nano` embeddings, and Ollama-hosted Gemma; implemented document ingestion, chunking, vector indexing, semantic retrieval, local LLM answer generation, smoke testing, and a Streamlit chat interface for private portfolio Q&A.
 
 ## Next Customization Steps
 
