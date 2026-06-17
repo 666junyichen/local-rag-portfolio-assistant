@@ -1,0 +1,8 @@
+.env
+.venv/
+__pycache__/
+.ipynb_checkpoints/
+*.pyc
+notebooks/*.executed.ipynb
+.streamlit/secrets.toml
+streamlit-*.log

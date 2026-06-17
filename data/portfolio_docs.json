@@ -1,0 +1,280 @@
+[
+  {
+    "title": "Profile - Junyi Chen",
+    "body": "Junyi Chen is a University of Sydney data science postgraduate student and builder focused on full-stack web development, AI application engineering, RAG/LLM systems, data analytics, and product-minded prototypes. Junyi has experience across deployable web applications, MongoDB-backed platforms, machine learning experiments, AI-assisted data pipelines, spatial analytics, healthcare analytics, and portfolio product design. Target directions include Web/Full-stack Development, AI Application Engineering, Data Analysis, Product Data Analysis, and Software Engineering internships.",
+    "url": "https://junyi-chen.vercel.app",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "profile",
+      "language": "en",
+      "source": "master resume and personal website"
+    }
+  },
+  {
+    "title": "个人定位 - 陈君奕",
+    "body": "陈君奕是悉尼大学数据科学硕士在读学生，具备全栈 Web 开发、AI 应用原型、数据分析、模型评估和产品化展示经验。项目覆盖 Owlswap Marketplace、Accessibility Testing QA Engine、PulseScape、Diabetes Readmission Risk Analysis、MERN Categorised Quiz Game、Spatial Resource Accessibility Analysis 等方向，能够围绕业务或用户场景推进模块开发、数据处理、模型实验、上线部署和结果交付。求职方向包括 Web/全栈开发、AI 应用工程、数据分析、产品数据分析和软件工程实习。",
+    "url": "https://junyi-chen.vercel.app",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "profile",
+      "language": "zh",
+      "source": "中文 master 简历"
+    }
+  },
+  {
+    "title": "Education",
+    "body": "Junyi Chen is studying a Master of Data Science at the University of Sydney from 2025 to 2026, with coursework and project experience related to machine learning, deep learning, data mining, big data management and visualization, data ethics, privacy, AI application development, model evaluation, database systems, and cross-disciplinary project collaboration. Junyi previously completed a Bachelor of Science with a major in Data Science and a minor in Mathematics at the University of Sydney from 2022 to 2024.",
+    "url": "https://www.sydney.edu.au/",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "education",
+      "source": "master resume"
+    }
+  },
+  {
+    "title": "Technical Skills",
+    "body": "Junyi's technical skills include Python, R, SQL, JavaScript, TypeScript, HTML, CSS, React, Next.js, Node.js, Express, MongoDB, Mongoose, REST APIs, JWT, RBAC, PostgreSQL, PostGIS, GeoPandas, pandas, NumPy, PyTorch, NLP, LLM prompt engineering, machine learning, model evaluation, data visualization, Tableau, Power BI, Streamlit, Flask, Jupyter Notebook, Excel, Google Sheets, PowerPoint, Git, GitHub, Vercel, Canva, and full-stack application delivery.",
+    "url": "https://github.com/666junyichen",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "skills",
+      "source": "master resume"
+    }
+  },
+  {
+    "title": "Local RAG Portfolio Assistant",
+    "body": "Local RAG Portfolio Assistant is Junyi Chen's local AI portfolio assistant project. It adapts a Google and MongoDB RAG workshop into a personal portfolio assistant that answers questions about Junyi's projects, skills, internships, awards, and technical background. The system uses Python, MongoDB Local Atlas, MongoDB Vector Search, voyageai/voyage-4-nano embeddings, Ollama-hosted Gemma, reusable RAG modules, ingestion scripts, smoke tests, Jupyter notebooks, and a Streamlit chat UI. It demonstrates document ingestion, chunking, embedding generation, vector indexing, semantic retrieval, local LLM answer generation, and private portfolio Q&A.",
+    "url": "https://github.com/666junyichen/local-rag-portfolio-assistant",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "project",
+      "stack": ["Python", "MongoDB Vector Search", "Ollama", "Gemma", "voyage-4-nano", "Streamlit", "RAG"],
+      "source": "new project implementation"
+    }
+  },
+  {
+    "title": "AI Intern - Nanjing iSoftStone / Huawei ecosystem",
+    "body": "Junyi worked as an AI Intern from June 2025 to July 2025 at Nanjing Ruantong Power Information Tech in the Huawei outsourcing ecosystem. The internship involved text-to-image and AI Agent workflow development and testing, education, laboratory, and industry park AI application research, scenario analysis, implementation testing, recommendations for AI tool improvements, and simple Python recommendation model work with ranking and offline evaluation concepts. This experience strengthened Junyi's AI application engineering, recommendation system fundamentals, tool testing, education technology understanding, and cross-team collaboration.",
+    "url": "",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "internship",
+      "stack": ["Python", "AI Agent", "Recommendation Systems", "Text-to-image workflow"],
+      "source": "master resume"
+    }
+  },
+  {
+    "title": "AI 实习生 - 华为外包/南京软通动力",
+    "body": "陈君奕于 2025 年 6 月至 7 月在华为外包生态的南京软通动力信息技术服务有限公司担任 AI 实习生，围绕文本生成图像与 AI Agent 工作流参与开发和测试，支持教育、实验室与产业园区等场景的 AI 应用调研与方案整理。实习中结合高校教学与业务落地需求，输出 AI 在教学支持、实验环境和园区应用中的场景分析与改进建议，并积累 AI 工具接入、推荐系统基础理解与跨团队协作经验。",
+    "url": "",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "internship",
+      "language": "zh",
+      "source": "中文 master 简历"
+    }
+  },
+  {
+    "title": "Software Intern - Beijing Century Chaoxing",
+    "body": "Junyi worked as a Software Intern from June 2024 to July 2024 at Beijing Century Chaoxing. The internship supported smart-campus product deployment and technical service for portal, scheduling, and admissions systems across five schools. Junyi assisted with demonstrations, teacher and administrator training, usage guidance, issue troubleshooting, provincial vocational skills competition technical support, process coordination, and daily progress logs. This experience built customer-facing communication, education technology implementation, on-site support, documentation, and multi-task execution skills.",
+    "url": "",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "internship",
+      "stack": ["Smart-campus platform", "Excel", "Scheduling Systems", "Admissions Systems"],
+      "source": "master resume"
+    }
+  },
+  {
+    "title": "软件实习生 - 北京世纪超星",
+    "body": "陈君奕于 2024 年 6 月至 7 月在北京世纪超星信息技术发展有限责任公司南京分公司担任软件实习生，支持智慧校园产品实施与技术服务，覆盖排课、招生、门户等模块，为 5 所学校提供系统演示、使用指导、培训支持与问题排查。实习中还参与江苏省职业技能竞赛相关技术保障工作，协助处理现场系统支持、流程协调与问题响应，积累教育信息化场景下的客户沟通、培训执行和现场支持能力。",
+    "url": "",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "internship",
+      "language": "zh",
+      "source": "中文 master 简历"
+    }
+  },
+  {
+    "title": "Student Consultant - Study Australia Industry Experience Program",
+    "body": "Junyi worked as a Student Consultant and Data Tracking Coordinator in the Study Australia Industry Experience Program from November 2025 to December 2025. In a five-member cross-university consulting team for a client-facing AI ecosystem strategy project, Junyi tracked AI adoption, AI literacy, user digital behavior, macro technology shifts, and platform ecosystem examples. The team analyzed four user groups, five key problem areas, and five recommendation types, producing an industry strategy report and deck. The experience strengthened consulting communication, secondary research, structured analysis, stakeholder alignment, and product strategy thinking.",
+    "url": "https://github.com/666junyichen/study-australia-ai-ecosystem-strategy.git",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "internship",
+      "stack": ["Excel", "Google Sheets", "PowerPoint", "Research", "Strategy"],
+      "source": "master resume"
+    }
+  },
+  {
+    "title": "Owlswap Marketplace",
+    "body": "Owlswap Marketplace is a Chinese-first second-hand trading and rental platform MVP for international students. Junyi independently designed and implemented the web MVP using Next.js App Router, TypeScript, React, Tailwind CSS, MongoDB Atlas, Mongoose, and Vercel. The platform supports listing discovery, posting, editing, deleting, sold status, favorites, reports, sharing, account flows, school email verification, profile management, content management, listing history tracking, and an admin backend for report handling, user handling, and audit log export. The project was deployed to the custom domain www.owlswapmarket.com and demonstrates full-stack product delivery, MongoDB data modelling, and student-marketplace domain thinking.",
+    "url": "https://www.owlswapmarket.com/",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "project",
+      "stack": ["Next.js", "TypeScript", "React", "Tailwind CSS", "MongoDB Atlas", "Mongoose", "Vercel"]
+    }
+  },
+  {
+    "title": "Accessibility Testing QA Engine",
+    "body": "Accessibility Testing QA Engine is an AI-assisted quality assessment and coaching recommendation prototype for accessibility testing video submissions. Junyi contributed to the data and AI pipeline using Python, AWS Transcribe, NLP, LLM prompt engineering, JSON, Streamlit, clustering, evaluation, and pytest. The project parsed 57 transcript JSON files into 26,191 segments and 3,331 analysis windows, supported Layer 3 semantic analysis, generated QualityReport JSON outputs, maintained dev55 official reports and tester aggregates, and supported performance tests. Junyi worked on prompt frameworks, taxonomy documentation, manual annotation, validation, prompt calibration, inter-annotator agreement, and downstream scoring/coaching use cases.",
+    "url": "https://github.com/seemeplease/usyd-03-2025-cs20-1.git",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "project",
+      "stack": ["Python", "AWS Transcribe", "NLP", "LLM Prompt Engineering", "JSON", "Streamlit", "pytest"]
+    }
+  },
+  {
+    "title": "PulseScape Emotion-Aware Music Recommender",
+    "body": "PulseScape is an emotion-aware music recommendation web demo that upgrades a course prototype into a portfolio-ready AI product. It uses Python, Flask, Jinja, NeuroKit2, Random Forest concepts, MongoDB Atlas, Vercel, and feedback mechanisms. The system maps user BPM to an inferred emotional state and produces explainable music recommendations. It integrates 10 publicly playable MP3 tracks and 25 scene images, supports recommendation explanations, similar tracks, immersive playback, Like/Not for me/listening-after BPM feedback, localStorage favorites, and optional MongoDB feedback persistence. A prototype notebook accuracy of 83.33% is kept as model validation evidence.",
+    "url": "https://emotion-aware-music-recommender.vercel.app/",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "project",
+      "stack": ["Python", "Flask", "Jinja", "NeuroKit2", "Random Forest", "MongoDB Atlas", "Vercel"]
+    }
+  },
+  {
+    "title": "QANet Debugging and Controlled Experiments",
+    "body": "QANet Debugging and Controlled Experiments is a deep learning and NLP project on a PyTorch-based QANet question answering model for SQuAD v1.1. Junyi restored end-to-end training, evaluation, checkpointing, and metric reporting by fixing 24 pipeline-level defects and 26 mechanism-level defects across tensor flow, attention modules, normalization, activation, initialization, dropout, optimizers, schedulers, and evaluation decoding. Junyi designed controlled experiments for dropout, learning rate, and optimizer selection using F1, Exact Match, and loss. Example results include dropout 0.10 achieving F1 28.4401 / EM 20.3333 and learning rate 0.002 achieving F1 28.8104 / EM 22.0000.",
+    "url": "https://github.com/666junyichen/qanet-debugging-experiments.git",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "project",
+      "stack": ["Python", "PyTorch", "QANet", "SQuAD", "NLP", "F1", "Exact Match"]
+    }
+  },
+  {
+    "title": "MERN Categorised Quiz Game",
+    "body": "MERN Categorised Quiz Game is a full-stack quiz game built with MongoDB, Mongoose, Express, Node.js, React, Vite, Tailwind CSS, React Router, JWT, RBAC, React Hook Form, Zod, REST APIs, and Swagger UI. Junyi worked on the admin subsystem and documentation integration, implementing admin routes, controllers, middleware, question CRUD, active/inactive toggling, bulk JSON import, duplicate skipping, inserted/skipped count responses, protected admin routes, persistent dark mode, Swagger API docs, architecture diagrams, and deployment coordination. The project demonstrates MongoDB-backed full-stack engineering and admin workflow design.",
+    "url": "https://mern-categorised-quiz-game.vercel.app",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "project",
+      "stack": ["MongoDB", "Mongoose", "Express", "Node.js", "React", "Vite", "JWT", "RBAC", "Swagger"]
+    }
+  },
+  {
+    "title": "Diabetes Readmission Risk Analysis",
+    "body": "Diabetes Readmission Risk Analysis is a healthcare data analytics and modelling project using R, Quarto, tidyverse, caret, glmnet, gbm, pROC, MLmetrics, ggplot2, and Plotly. Junyi built a data analysis pipeline for 101,767 diabetes inpatient records, cleaning the data to 39,304 records and 36 features, handling class imbalance analysis, comparing five model families, and evaluating readmission risk predictions with accuracy, Macro F1, recall, and predicted class distribution. Example results include SVM accuracy of 60.16% and weighted Logistic Regression Macro F1 of 36.72%. The project highlights healthcare analytics, model comparison, and careful evaluation under class imbalance.",
+    "url": "https://github.com/666junyichen/diabetes-readmission-risk-analysis.git",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "project",
+      "stack": ["R", "Quarto", "tidyverse", "caret", "glmnet", "gbm", "pROC", "Plotly"]
+    }
+  },
+  {
+    "title": "Spatial Resource Accessibility Analysis",
+    "body": "Spatial Resource Accessibility Analysis is a spatial data analytics project measuring resource accessibility across SA2 regions in New South Wales. Junyi worked as a data analyst and spatial database contributor using Python, pandas, GeoPandas, Shapely, SQLAlchemy, PostgreSQL, PostGIS, Folium, Matplotlib, and Seaborn. The project integrated 10 open datasets, built 10 spatial database tables and 27 SQL views, designed 8 resource accessibility indicators, generated a Folium interactive map, and found a positive relationship between final composite accessibility score and median income with correlation r = 0.504201. It demonstrates public service analytics, spatial databases, and indicator modelling.",
+    "url": "https://github.com/666junyichen/spatial-resource-accessibility-analysis.git",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "project",
+      "stack": ["Python", "pandas", "GeoPandas", "PostgreSQL", "PostGIS", "Folium"]
+    }
+  },
+  {
+    "title": "Personal Website",
+    "body": "Junyi Chen Personal Website is a bilingual static portfolio site built with HTML, Tailwind CSS via CDN, JavaScript, Google Fonts, Material Symbols, and Vercel. It presents Junyi as a data science, machine learning, and product-minded web builder. The site includes 18 project archive cards, filters for Web, AI & Data, Product, and Security, English/Chinese language toggle, professional experience, skills, about, contact, campus activities, competitions, internship galleries, certificate displays, mobile bottom navigation, and live demo links. It is deployed at junyi-chen.vercel.app and supports job application storytelling.",
+    "url": "https://junyi-chen.vercel.app",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "project",
+      "stack": ["HTML", "Tailwind CSS", "JavaScript", "Vercel", "Static Site"]
+    }
+  },
+  {
+    "title": "ImagineX Poster Creator",
+    "body": "ImagineX Poster Creator is a Python and web demo project for generating event posters. Junyi developed a reusable poster generation tool using Python, Pillow, dataclasses, image processing, unit testing, Google Colab, Jupyter Notebook, HTML, CSS, JavaScript, and Vercel. The tool supports structured event inputs such as title, date, time, place, description, and optional image, and generates 768 x 1086 PNG posters. The web version supports live preview, image upload, and PNG download. It demonstrates Python tooling, creative generation, testing, and lightweight web product packaging.",
+    "url": "https://imaginex-poster-creator.vercel.app",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "project",
+      "stack": ["Python", "Pillow", "Dataclass", "Testing", "HTML", "CSS", "JavaScript", "Vercel"]
+    }
+  },
+  {
+    "title": "GameForge Catalogue",
+    "body": "GameForge Catalogue is a responsive front-end product catalogue built with HTML5, CSS3, JavaScript, JSON, responsive design, accessibility considerations, and Vercel. Junyi built a data-driven catalogue that renders 12 product records from JSON, supports four category groups, search highlighting, cart state, reset confirmation, dark/light theme switching, and local image assets without a front-end framework. It demonstrates structured data rendering, front-end interaction design, and deployment.",
+    "url": "https://gameforge-catalogue.vercel.app/gameforge-catalogue/",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "project",
+      "stack": ["HTML", "CSS", "JavaScript", "JSON", "Accessibility", "Vercel"]
+    }
+  },
+  {
+    "title": "SYNCS Front-End Development Race",
+    "body": "Junyi achieved 3rd place individually in the SYNCS / Google Developer Group on Campus front-end development race at the University of Sydney in April 2026. Round 1 involved replicating a multi-page interactive website from a Figma design using HTML, CSS, and JavaScript. Round 2 involved debugging an existing front-end project, including login flow, dashboard actions, task assignment, calendar, settings, localStorage, and responsive UI. Junyi deployed solutions through GitHub and Vercel, demonstrating UI implementation, debugging, attention to detail, and problem solving under time pressure.",
+    "url": "https://github.com/666junyichen/gdg-syncs-frontend-round1-ui-replication.git",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "award",
+      "stack": ["HTML", "CSS", "JavaScript", "Vercel"]
+    }
+  },
+  {
+    "title": "Datathon 2025 Shipment Risk Prediction Challenge",
+    "body": "Junyi participated in Datathon 2025 Shipment Risk Prediction Challenge with a four-member team and achieved 4th place among 20+ teams. The project forecasted shipment risks using hourly data, feature engineering, SMOTE for class balance, and model comparison including XGBoost, neural network, and TabTransformer concepts. Junyi contributed to supply chain risk analysis, engineered features such as Fuel Efficiency Index and Congestion Stress, and supported interpretability through confusion matrix and feature importance outputs. The experience shows teamwork, data science problem solving, feature engineering, and time-constrained analytics delivery.",
+    "url": "https://github.com/666junyichen/datathon-supply-chain-risk.git",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "award",
+      "stack": ["Python", "EDA", "Feature Engineering", "SMOTE", "XGBoost", "TabTransformer"]
+    }
+  },
+  {
+    "title": "Peer Mentoring Advisor",
+    "body": "Junyi served as a Peer Mentoring Advisor in the University of Sydney Faculty of Engineering PG Connect / ENGO Mentoring Program in 2026. Junyi mentored 10+ first-year engineering students, supported academic planning and campus life questions, co-organised engagement events including Welcome Day, supported onboarding for 50+ new students, and helped with a campus tour for 40+ incoming students. Junyi was awarded a PG Connect S1 2026 certificate for commitment, involvement, and service to student life. This experience demonstrates communication, mentoring, leadership, event coordination, and student support.",
+    "url": "https://junyi-chen.vercel.app",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "leadership",
+      "source": "master resume"
+    }
+  },
+  {
+    "title": "Best Projects for AI and Data Roles",
+    "body": "For AI and data-focused roles, Junyi's strongest projects include Accessibility Testing QA Engine, QANet Debugging and Controlled Experiments, PulseScape Emotion-Aware Music Recommender, Diabetes Readmission Risk Analysis, Spatial Resource Accessibility Analysis, Datathon Supply Chain Risk Classification, and Study Australia AI Ecosystem Strategy. These projects demonstrate AI-assisted data pipelines, LLM prompt engineering, NLP, model debugging, model evaluation, healthcare analytics, spatial analytics, feature engineering, strategy research, and deployable prototypes.",
+    "url": "https://junyi-chen.vercel.app",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "summary",
+      "target_role": "AI/Data"
+    }
+  },
+  {
+    "title": "Best Projects for Full-stack and Web Roles",
+    "body": "For full-stack and web development roles, Junyi's strongest projects include Owlswap Marketplace, MERN Categorised Quiz Game, Personal Website, GameForge Catalogue, GDG SYNCS Frontend Round 1 UI Replication, GDG SYNCS Frontend Round 2 Debugging, Student Focus App MVP, and PulseScape. These projects demonstrate Next.js, React, TypeScript, Node.js, Express, MongoDB, REST APIs, JWT/RBAC, admin workflows, responsive UI, Vercel deployment, static site design, debugging, and product-oriented front-end delivery.",
+    "url": "https://junyi-chen.vercel.app",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "summary",
+      "target_role": "Full-stack/Web"
+    }
+  },
+  {
+    "title": "MongoDB Experience",
+    "body": "Junyi has MongoDB experience across several projects. Owlswap Marketplace uses MongoDB Atlas and Mongoose for User, Listing, Favorite, and marketplace data models. MERN Categorised Quiz Game uses MongoDB and Mongoose in a full-stack Express/React quiz application with question CRUD, admin APIs, bulk import, and role-based access. PulseScape includes an optional MongoDB feedback persistence layer. Local RAG Portfolio Assistant uses MongoDB Local Atlas, MongoDB Vector Search, vector indexes, and collections for portfolio knowledge and chat history. This gives Junyi practical MongoDB experience in full-stack apps, admin workflows, feedback persistence, and RAG retrieval.",
+    "url": "https://github.com/666junyichen",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "skills",
+      "stack": ["MongoDB", "Mongoose", "MongoDB Atlas", "MongoDB Vector Search"]
+    }
+  },
+  {
+    "title": "Recruiter Summary",
+    "body": "A recruiter can summarize Junyi Chen as a data science postgraduate and practical AI/full-stack builder with experience in MongoDB-backed applications, RAG systems, AI-assisted data pipelines, machine learning experiments, healthcare analytics, spatial analytics, and deployed web products. Junyi combines Python, JavaScript/TypeScript, React/Next.js, Node/Express, MongoDB, SQL/PostGIS, data science tooling, LLM prompt engineering, Streamlit/Flask demos, and Vercel deployment. Junyi is especially suited to AI application engineering, full-stack development, data analytics, product data, and software engineering internship roles.",
+    "url": "https://junyi-chen.vercel.app",
+    "updated": "2026-06-17",
+    "metadata": {
+      "category": "summary",
+      "source": "resume synthesis"
+    }
+  }
+]
