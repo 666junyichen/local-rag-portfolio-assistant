@@ -15,6 +15,22 @@ This is a fully local AI demo. The portfolio data, vector database, embedding mo
 - Requires local Docker/MongoDB Local Atlas and Ollama.
 - Answers are grounded in the curated knowledge base at `data/portfolio_docs.json`.
 
+## Vercel Showcase
+
+This repository also includes a deployable static showcase page:
+
+- `index.html`
+- `styles.css`
+- `script.js`
+- `vercel.json`
+
+The Vercel page is a bilingual project presentation, not the cloud-hosted RAG backend. Use the language toggle in the header to switch between English and Chinese, or open:
+
+- `/?lang=en`
+- `/?lang=zh`
+
+Deploy with Vercel from the repository root. No build command is required because the showcase is plain HTML/CSS/JavaScript.
+
 ## Demo Questions
 
 Try questions like:
@@ -56,6 +72,10 @@ For an AI/data project question, the assistant retrieves Junyi's strongest match
 |   `-- smoke_test.py
 |-- src/
 |   `-- portfolio_rag.py
+|-- index.html
+|-- script.js
+|-- styles.css
+|-- vercel.json
 |-- .env.example
 |-- pyproject.toml
 `-- uv.lock

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="A bilingual Vercel showcase for Junyi Chen's fully local RAG portfolio assistant."
+    />
+    <title>Local RAG Portfolio Assistant | Junyi Chen</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="Local RAG Portfolio Assistant home">
+        <span class="brand-mark">R</span>
+        <span>
+          <span class="brand-name">Local RAG Portfolio Assistant</span>
+          <span class="brand-subtitle" data-i18n="brandSubtitle">Junyi Chen project showcase</span>
+        </span>
+      </a>
+      <nav class="nav-links" aria-label="Main navigation">
+        <a href="#architecture" data-i18n="navArchitecture">Architecture</a>
+        <a href="#demo" data-i18n="navDemo">Demo</a>
+        <a href="#run" data-i18n="navRun">Run locally</a>
+      </nav>
+      <div class="language-toggle" aria-label="Language selector">
+        <button class="lang-button active" type="button" data-lang="en">EN</button>
+        <button class="lang-button" type="button" data-lang="zh">中文</button>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero section-band">
+        <div class="hero-copy">
+          <p class="eyebrow" data-i18n="heroEyebrow">Fully local RAG portfolio demo</p>
+          <h1 data-i18n="heroTitle">A private AI assistant that answers questions about my portfolio.</h1>
+          <p class="hero-lede" data-i18n="heroLede">
+            This project turns a Google and MongoDB local RAG workshop into a recruiter-friendly portfolio assistant. It retrieves curated resume and project facts from MongoDB Vector Search, then answers with a local Ollama-hosted Gemma model.
+          </p>
+          <div class="hero-actions">
+            <a class="primary-action" href="https://github.com/666junyichen/local-rag-portfolio-assistant" data-i18n="viewGithub">View GitHub repo</a>
+            <a class="secondary-action" href="#demo" data-i18n="viewDemo">View screenshots</a>
+          </div>
+        </div>
+        <figure class="hero-visual" aria-label="Streamlit answer screenshot">
+          <img src="assets/streamlit-answer.png" alt="Streamlit interface answering a portfolio question" />
+        </figure>
+      </section>
+
+      <section class="metrics" aria-label="Project highlights">
+        <div>
+          <strong>100%</strong>
+          <span data-i18n="metricLocal">local runtime</span>
+        </div>
+        <div>
+          <strong>27</strong>
+          <span data-i18n="metricDocs">curated knowledge entries</span>
+        </div>
+        <div>
+          <strong>4</strong>
+          <span data-i18n="metricStack">core RAG components</span>
+        </div>
+      </section>
+
+      <section id="architecture" class="section-grid">
+        <div class="section-heading">
+          <p class="eyebrow" data-i18n="architectureEyebrow">How it works</p>
+          <h2 data-i18n="architectureTitle">Local RAG architecture with a public showcase layer.</h2>
+        </div>
+        <div class="pipeline" aria-label="RAG pipeline">
+          <article>
+            <span>01</span>
+            <h3 data-i18n="stepOneTitle">Curated portfolio data</h3>
+            <p data-i18n="stepOneText">Resume-safe facts live in data/portfolio_docs.json, not in private folders or certificates.</p>
+          </article>
+          <article>
+            <span>02</span>
+            <h3 data-i18n="stepTwoTitle">Local embeddings</h3>
+            <p data-i18n="stepTwoText">voyage-4-nano embeddings are generated locally through SentenceTransformers.</p>
+          </article>
+          <article>
+            <span>03</span>
+            <h3 data-i18n="stepThreeTitle">MongoDB Vector Search</h3>
+            <p data-i18n="stepThreeText">MongoDB Local Atlas stores chunks and retrieves the most relevant portfolio context.</p>
+          </article>
+          <article>
+            <span>04</span>
+            <h3 data-i18n="stepFourTitle">Ollama Gemma answer</h3>
+            <p data-i18n="stepFourText">A local Gemma model generates a grounded answer for the Streamlit chat UI.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="demo" class="demo-section section-band">
+        <div class="section-heading">
+          <p class="eyebrow" data-i18n="demoEyebrow">Demo preview</p>
+          <h2 data-i18n="demoTitle">The deployed page explains the project; the AI assistant runs locally.</h2>
+          <p data-i18n="demoText">
+            Vercel hosts this bilingual showcase. The private RAG assistant stays local because it depends on Docker, MongoDB Local Atlas, and Ollama.
+          </p>
+        </div>
+        <div class="screenshot-grid">
+          <figure>
+            <img src="assets/streamlit-home.png" alt="Streamlit home screen" />
+            <figcaption data-i18n="homeCaption">Home screen with example recruiter questions.</figcaption>
+          </figure>
+          <figure>
+            <img src="assets/streamlit-answer.png" alt="Streamlit answer screen" />
+            <figcaption data-i18n="answerCaption">Generated answer grounded in the portfolio knowledge base.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section id="run" class="run-section">
+        <div class="section-heading">
+          <p class="eyebrow" data-i18n="runEyebrow">Run locally</p>
+          <h2 data-i18n="runTitle">Reproduce the RAG assistant on your machine.</h2>
+        </div>
+        <div class="command-layout">
+          <pre><code>docker ps
+curl http://localhost:11434/api/tags
+.\.venv\Scripts\python.exe scripts\ingest.py
+.\.venv\Scripts\python.exe scripts\smoke_test.py
+.\.venv\Scripts\python.exe -m streamlit run app.py --server.port 8505</code></pre>
+          <div class="resume-note">
+            <h3 data-i18n="resumeTitle">Resume-ready impact</h3>
+            <p data-i18n="resumeText">
+              Built a fully local RAG portfolio assistant using MongoDB Atlas Vector Search, local embeddings, Ollama-hosted Gemma, ingestion scripts, smoke tests, and a Streamlit chat UI.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span data-i18n="footerText">Built as a local-first AI portfolio project by Junyi Chen.</span>
+      <a href="https://github.com/666junyichen/local-rag-portfolio-assistant">GitHub</a>
+    </footer>
+
+    <script src="script.js?v=2"></script>
+  </body>
+</html>
