@@ -11,18 +11,73 @@ sys.path.insert(0, str(ROOT))
 from src.portfolio_rag import generate_answer, get_collections, load_embedding_model, load_settings  # noqa: E402
 
 
-EXAMPLE_QUESTIONS = [
-    "What are Junyi Chen's strongest AI and data projects?",
-    "What MongoDB experience does Junyi have?",
-    "Summarize Junyi for a full-stack role.",
-    "Which projects show LLM or AI application experience?",
-]
+EXAMPLE_QUESTIONS = {
+    "zh": [
+        "Junyi Chen 最强的 AI 和数据项目有哪些？",
+        "Junyi 有哪些 MongoDB 相关经验？",
+        "请用中文总结 Junyi 为什么适合全栈开发岗位。",
+        "哪些项目体现了 Junyi 的 LLM 或 AI 应用能力？",
+    ],
+    "en": [
+        "What are Junyi Chen's strongest AI and data projects?",
+        "What MongoDB experience does Junyi have?",
+        "Summarize Junyi for a full-stack role.",
+        "Which projects show LLM or AI application experience?",
+    ],
+}
+
+COPY = {
+    "zh": {
+        "eyebrow": "私有本地 RAG demo",
+        "title": "Local RAG Portfolio Assistant",
+        "hero": (
+            "用中文或英文询问 Junyi Chen 的项目、技能、实习和技术背景。"
+            "系统会从 MongoDB Vector Search 检索精选 portfolio 信息，再用本地 Ollama Gemma 模型生成回答。"
+        ),
+        "local_note": "本地运行 demo。需要 MongoDB Local Atlas、Ollama，以及 .env 中配置的模型。",
+        "stack": "技术栈",
+        "runtime": "运行配置",
+        "runtime_caption": "来自本地 .env",
+        "knowledge": "知识库",
+        "knowledge_text": "回答基于 data/portfolio_docs.json。",
+        "knowledge_caption": "只包含适合公开展示、适合简历使用的精选摘要。",
+        "try_question": "试试这些中文问题",
+        "ask_this": "问这个",
+        "source": "来源：本地精选知识库 data/portfolio_docs.json。",
+        "greeting": "你好，可以用中文问我 Junyi 的项目、技能、实习、AI/data 经验或全栈能力。",
+        "chat_input": "用中文询问 Junyi 的 portfolio",
+        "spinner": "正在检索 portfolio 上下文并生成回答...",
+        "language_label": "界面语言",
+    },
+    "en": {
+        "eyebrow": "Private local RAG demo",
+        "title": "Local RAG Portfolio Assistant",
+        "hero": (
+            "Ask questions about Junyi Chen's projects, skills, internships, and technical background. "
+            "The assistant retrieves curated portfolio facts from MongoDB Vector Search, then answers with a local Ollama-hosted Gemma model."
+        ),
+        "local_note": "Local-only demo. Requires MongoDB Local Atlas, Ollama, and the model configured in .env.",
+        "stack": "Demo Stack",
+        "runtime": "Runtime",
+        "runtime_caption": "Configured from local .env",
+        "knowledge": "Knowledge Base",
+        "knowledge_text": "Answers are based on data/portfolio_docs.json.",
+        "knowledge_caption": "Only curated, resume-safe portfolio summaries are included.",
+        "try_question": "Try a Portfolio Question",
+        "ask_this": "Ask this",
+        "source": "Source: curated local knowledge base in data/portfolio_docs.json.",
+        "greeting": "Hi, ask me about Junyi's projects, skills, internships, or AI/data experience.",
+        "chat_input": "Ask about Junyi's portfolio",
+        "spinner": "Retrieving portfolio context and generating an answer...",
+        "language_label": "Interface language",
+    },
+}
 
 DEMO_QUERY_MAP = {
-    "ai_projects": EXAMPLE_QUESTIONS[0],
-    "mongodb": EXAMPLE_QUESTIONS[1],
-    "full_stack": EXAMPLE_QUESTIONS[2],
-    "llm": EXAMPLE_QUESTIONS[3],
+    "ai_projects": EXAMPLE_QUESTIONS["zh"][0],
+    "mongodb": EXAMPLE_QUESTIONS["zh"][1],
+    "full_stack": EXAMPLE_QUESTIONS["zh"][2],
+    "llm": EXAMPLE_QUESTIONS["zh"][3],
 }
 
 
@@ -99,22 +154,27 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.markdown('<div class="hero-eyebrow">Private local RAG demo</div>', unsafe_allow_html=True)
-st.markdown('<h1 class="hero-title">Local RAG Portfolio Assistant</h1>', unsafe_allow_html=True)
-st.markdown(
-    """
-    <p class="hero-copy">
-    Ask questions about Junyi Chen's projects, skills, internships, and technical background.
-    The assistant retrieves curated portfolio facts from MongoDB Vector Search, then answers with a
-    local Ollama-hosted Gemma model.
-    </p>
-    """,
-    unsafe_allow_html=True,
+if "language" not in st.session_state:
+    st.session_state.language = "zh"
+
+language = st.radio(
+    COPY[st.session_state.language]["language_label"],
+    ["zh", "en"],
+    index=0 if st.session_state.language == "zh" else 1,
+    format_func=lambda value: "中文" if value == "zh" else "English",
+    horizontal=True,
 )
-st.markdown(
-    '<div class="local-note">Local-only demo. Requires MongoDB Local Atlas, Ollama, and the model configured in <code>.env</code>.</div>',
-    unsafe_allow_html=True,
-)
+if language != st.session_state.language:
+    st.session_state.language = language
+    st.session_state.messages = [{"role": "assistant", "content": COPY[language]["greeting"]}]
+    st.rerun()
+
+text = COPY[language]
+
+st.markdown(f'<div class="hero-eyebrow">{text["eyebrow"]}</div>', unsafe_allow_html=True)
+st.markdown(f'<h1 class="hero-title">{text["title"]}</h1>', unsafe_allow_html=True)
+st.markdown(f'<p class="hero-copy">{text["hero"]}</p>', unsafe_allow_html=True)
+st.markdown(f'<div class="local-note">{text["local_note"]}</div>', unsafe_allow_html=True)
 
 
 @st.cache_resource
@@ -128,7 +188,7 @@ def load_runtime():
 settings, collection, model = load_runtime()
 
 with st.sidebar:
-    st.header("Demo Stack")
+    st.header(text["stack"])
     st.markdown(
         """
         - MongoDB Vector Search
@@ -138,8 +198,8 @@ with st.sidebar:
         """
     )
     st.divider()
-    st.subheader("Runtime")
-    st.caption("Configured from local `.env`")
+    st.subheader(text["runtime"])
+    st.caption(text["runtime_caption"])
     st.code(
         f"DB: {settings.db_name}\n"
         f"Collection: {settings.collection_name}\n"
@@ -148,17 +208,12 @@ with st.sidebar:
         language="text",
     )
     st.divider()
-    st.subheader("Knowledge Base")
-    st.markdown("Answers are based on `data/portfolio_docs.json`.")
-    st.caption("Only curated, resume-safe portfolio summaries are included.")
+    st.subheader(text["knowledge"])
+    st.markdown(text["knowledge_text"])
+    st.caption(text["knowledge_caption"])
 
 if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {
-            "role": "assistant",
-            "content": "Hi, ask me about Junyi's projects, skills, internships, or AI/data experience.",
-        }
-    ]
+    st.session_state.messages = [{"role": "assistant", "content": text["greeting"]}]
 
 demo_key = st.query_params.get("demo")
 if demo_key and not st.session_state.get(f"demo_loaded_{demo_key}"):
@@ -167,18 +222,15 @@ if demo_key and not st.session_state.get(f"demo_loaded_{demo_key}"):
         st.session_state.pending_query = demo_question
         st.session_state[f"demo_loaded_{demo_key}"] = True
 
-st.subheader("Try a Portfolio Question")
+st.subheader(text["try_question"])
 example_cols = st.columns(2)
-for index, question in enumerate(EXAMPLE_QUESTIONS):
+for index, question in enumerate(EXAMPLE_QUESTIONS[language]):
     with example_cols[index % 2]:
         st.markdown(f'<div class="example-card">{question}</div>', unsafe_allow_html=True)
-        if st.button("Ask this", key=f"example_{index}", use_container_width=True):
+        if st.button(text["ask_this"], key=f"example_{language}_{index}", use_container_width=True):
             st.session_state.pending_query = question
 
-st.markdown(
-    '<p class="source-note">Source: curated local knowledge base in <code>data/portfolio_docs.json</code>.</p>',
-    unsafe_allow_html=True,
-)
+st.markdown(f'<p class="source-note">{text["source"]}</p>', unsafe_allow_html=True)
 st.divider()
 
 for message in st.session_state.messages:
@@ -186,7 +238,7 @@ for message in st.session_state.messages:
         st.write(message["content"])
 
 query = st.session_state.pop("pending_query", None)
-typed_query = st.chat_input("Ask about Junyi's portfolio")
+typed_query = st.chat_input(text["chat_input"])
 if typed_query:
     query = typed_query
 
@@ -196,7 +248,7 @@ if query:
         st.write(query)
 
     with st.chat_message("assistant"):
-        with st.spinner("Retrieving portfolio context and generating an answer..."):
+        with st.spinner(text["spinner"]):
             answer = generate_answer(collection, model, settings, query)
         st.write(answer)
     st.session_state.messages.append({"role": "assistant", "content": answer})

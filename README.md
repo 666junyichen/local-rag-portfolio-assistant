@@ -94,7 +94,7 @@ Update `MONGODB_URI` if your Local Atlas port is different:
 ```dotenv
 MONGODB_URI=mongodb://localhost:62262/?directConnection=true
 OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=gemma:2b
+OLLAMA_MODEL=qwen2.5:3b
 ```
 
 Install dependencies:
@@ -118,6 +118,20 @@ Ollama should expose port `11434` and include the model named in `.env`:
 docker ps
 curl http://localhost:11434/api/tags
 ```
+
+For Chinese-first local Q&A, this project recommends Qwen:
+
+```powershell
+docker exec compassionate_turing ollama pull qwen2.5:3b
+```
+
+You can still switch back to the original workshop-style Gemma model by changing `.env`:
+
+```dotenv
+OLLAMA_MODEL=gemma:2b
+```
+
+Use `qwen2.5:3b` for stronger Chinese answers and `gemma:2b` if you want to stay closer to the original workshop template.
 
 ## Ingest Portfolio Data
 
@@ -158,6 +172,14 @@ Or:
 ```powershell
 .\.venv\Scripts\python.exe -m streamlit run app.py --server.port 8505
 ```
+
+Then open:
+
+```text
+http://localhost:8505
+```
+
+The local Streamlit UI supports Chinese and English interface switching. Chinese is the recommended mode if you are preparing for China-based roles.
 
 ## Resume Description
 

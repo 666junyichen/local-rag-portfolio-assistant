@@ -152,9 +152,16 @@ def build_system_prompt(context: str) -> str:
         "You are Junyi Chen's portfolio assistant. "
         "Answer questions based only on the provided resume, project, internship, "
         "skill, and technical background context. "
+        "The context may be in English, Chinese, or both. You may translate and summarize relevant context into the user's language. "
+        "Answer in the same language as the user's question unless the user explicitly asks for another language. "
+        "For Chinese questions, answer in natural Chinese and keep project names or technical terms in English when useful. "
         "If the answer is not supported by the context, say you do not know based on the available portfolio data.\n\n"
         f"Context:\n{context}"
     )
+
+
+def contains_cjk(text: str) -> bool:
+    return any("\u4e00" <= char <= "\u9fff" for char in text)
 
 
 def generate_answer(
@@ -167,11 +174,19 @@ def generate_answer(
     results = vector_search(collection, model, settings, query, top_k=top_k)
     context = "\n\n".join(doc["body"] for doc in results)
     client = OpenAI(base_url=f"{settings.ollama_base_url}/v1", api_key="ollama")
+    user_content = query
+    if contains_cjk(query):
+        user_content = (
+            "请务必用自然、清晰的中文回答下面的问题。"
+            "可以根据英文上下文翻译和总结，但不要把回答切换成英文。"
+            "请直接回答用户真正问的问题，不要改写成其他问题。\n\n"
+            f"用户问题：{query}"
+        )
     response = client.chat.completions.create(
         model=settings.ollama_model,
         messages=[
             {"role": "system", "content": build_system_prompt(context)},
-            {"role": "user", "content": query},
+            {"role": "user", "content": user_content},
         ],
         temperature=0.1,
     )
