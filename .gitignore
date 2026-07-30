@@ -8,3 +8,5 @@ notebooks/*.executed.ipynb
 streamlit-*.log
 
 .vercel
+data/local_private_docs.json
+data/local_private_docs.summary.json

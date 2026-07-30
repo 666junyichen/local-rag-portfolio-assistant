@@ -23,6 +23,11 @@ def main() -> None:
     settings = load_settings(ROOT / ".env")
     data_path = ROOT / "data" / "portfolio_docs.json"
     docs = json.loads(data_path.read_text(encoding="utf-8"))
+    private_data_path = ROOT / "data" / "local_private_docs.json"
+    if private_data_path.exists():
+        private_docs = json.loads(private_data_path.read_text(encoding="utf-8"))
+        docs.extend(private_docs)
+        print(f"Loaded local private documents: {len(private_docs)}")
 
     _, collection, history = get_collections(settings)
     model = load_embedding_model(settings)

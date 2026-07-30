@@ -149,6 +149,37 @@ If `uv run` cannot access the local cache on Windows, use the project virtual en
 
 This loads `data/portfolio_docs.json`, chunks the documents, creates embeddings, inserts them into MongoDB, and creates the vector index.
 
+## Optional: Build a Local Private Knowledge Base
+
+The committed knowledge base is intentionally curated and safe to show on GitHub. For local-only use, you can let the assistant read richer private materials from your machine:
+
+- `C:\简历投递\Company-resume\最近的project 和活动来一直更新`
+- `C:\简历投递\Company-resume\resumes`
+- `C:\Users\20430\.agents\skills\ranking-jobs-from-resume`
+
+Generate the private local knowledge file:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\build_local_private_docs.py
+```
+
+This writes:
+
+```text
+data/local_private_docs.json
+data/local_private_docs.summary.json
+```
+
+Both files are ignored by Git. They are for your local RAG only and should not be uploaded to GitHub because they may include resume drafts, project notes, private evidence, or role-tailoring material.
+
+After generating the private docs, re-run ingestion:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\ingest.py
+```
+
+`scripts/ingest.py` will automatically merge `data/portfolio_docs.json` and `data/local_private_docs.json` when the private file exists.
+
 ## Run a Smoke Test
 
 ```powershell
