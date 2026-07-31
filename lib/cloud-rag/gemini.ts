@@ -12,10 +12,18 @@ export async function requestWithRetry<T = unknown>(
   init: RequestInit,
   fetcher: Fetcher = fetch,
   sleeper: Sleeper = sleep,
+  maxRetries = 2,
 ): Promise<T> {
-  const delays = [350, 900];
+  const delays = [350, 900].slice(0, maxRetries);
   for (let attempt = 0; attempt <= delays.length; attempt += 1) {
-    const response = await fetcher(url, init);
+    let response: Response;
+    try {
+      response = await fetcher(url, { ...init, signal: init.signal || AbortSignal.timeout(15_000) });
+    } catch (error) {
+      if (attempt === delays.length) throw error;
+      await sleeper(delays[attempt]);
+      continue;
+    }
     if (response.ok) return response.json() as Promise<T>;
     const retryable = response.status === 429 || response.status >= 500;
     if (!retryable || attempt === delays.length) {
@@ -26,13 +34,13 @@ export async function requestWithRetry<T = unknown>(
   throw new Error("Gemini request failed");
 }
 
-async function callGemini<T = unknown>(path: string, payload: unknown): Promise<T> {
+async function callGemini<T = unknown>(path: string, payload: unknown, maxRetries = 2): Promise<T> {
   if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured");
   return requestWithRetry<T>(`https://generativelanguage.googleapis.com/v1beta/${path}`, {
     method: "POST",
     headers: { "x-goog-api-key": process.env.GEMINI_API_KEY, "Content-Type": "application/json" },
     body: JSON.stringify(payload),
-  });
+  }, fetch, sleep, maxRetries);
 }
 
 export async function embedQuery(text: string): Promise<number[]> {
@@ -59,10 +67,10 @@ export async function generateText(prompt: string): Promise<string> {
   type GenerationResponse = { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
   let result: GenerationResponse;
   try {
-    result = await callGemini<GenerationResponse>(`models/${chatModel()}:generateContent`, payload);
+    result = await callGemini<GenerationResponse>(`models/${chatModel()}:generateContent`, payload, 0);
   } catch (error) {
-    if (!String(error).includes("(429)") && !String(error).match(/\(5\d\d\)/)) throw error;
-    result = await callGemini<GenerationResponse>(`models/${fallbackChatModel()}:generateContent`, payload);
+    console.warn("Primary Gemini model unavailable; using fallback", error);
+    result = await callGemini<GenerationResponse>(`models/${fallbackChatModel()}:generateContent`, payload, 1);
   }
   return result.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text || "").join("").trim() || "";
 }
