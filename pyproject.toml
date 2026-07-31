@@ -8,6 +8,7 @@ dependencies = [
     "langchain-text-splitters",
     "openai",
     "python-dotenv",
+    "pypdf>=5.0",
     "streamlit",
     "tqdm",
     "jupyter",
