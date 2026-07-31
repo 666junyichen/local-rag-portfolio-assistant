@@ -55,22 +55,33 @@ export async function embedQuery(text: string): Promise<number[]> {
   return values;
 }
 
-export async function generateText(prompt: string): Promise<string> {
-  const payload = {
+export function buildGenerationPayload(prompt: string, thinkingEnabled: boolean) {
+  return {
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: {
       temperature: 0.15,
       maxOutputTokens: 1200,
-      thinkingConfig: { thinkingBudget: 0 },
+      ...(thinkingEnabled ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
     },
   };
+}
+
+export async function generateText(prompt: string): Promise<string> {
   type GenerationResponse = { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
   let result: GenerationResponse;
   try {
-    result = await callGemini<GenerationResponse>(`models/${chatModel()}:generateContent`, payload, 0);
+    result = await callGemini<GenerationResponse>(
+      `models/${chatModel()}:generateContent`,
+      buildGenerationPayload(prompt, true),
+      0,
+    );
   } catch (error) {
     console.warn("Primary Gemini model unavailable; using fallback", error);
-    result = await callGemini<GenerationResponse>(`models/${fallbackChatModel()}:generateContent`, payload, 1);
+    result = await callGemini<GenerationResponse>(
+      `models/${fallbackChatModel()}:generateContent`,
+      buildGenerationPayload(prompt, false),
+      1,
+    );
   }
   return result.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text || "").join("").trim() || "";
 }
