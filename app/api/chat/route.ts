@@ -1,0 +1,55 @@
+import { buildPrompt } from "@/lib/cloud-rag/prompt";
+import { generateText } from "@/lib/cloud-rag/gemini";
+import { enforceRateLimit } from "@/lib/cloud-rag/rate-limit";
+import { retrieve } from "@/lib/cloud-rag/retrieval";
+import { sse } from "@/lib/cloud-rag/sse";
+import { chatRequestSchema } from "@/lib/cloud-rag/validation";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+const encoder = new TextEncoder();
+
+export async function POST(request: Request) {
+  try {
+    const body = chatRequestSchema.parse(await request.json());
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    if (!(await enforceRateLimit(ip))) {
+      return Response.json({ error: "Too many requests. Please try again in one minute." }, { status: 429 });
+    }
+    const sources = await retrieve(body.question, body.settings);
+    const stream = new ReadableStream({
+      async start(controller) {
+        const send = (event: string, payload: unknown) => controller.enqueue(encoder.encode(sse(event, payload)));
+        try {
+          send("retrieval", { sources, settings: body.settings });
+          if (!sources.length) {
+            const fallback = body.language === "zh" ? "当前公开知识库没有足够依据回答这个问题。" : "The public knowledge base does not contain enough evidence to answer this question.";
+            send("token", { text: fallback });
+            send("done", {});
+            controller.close();
+            return;
+          }
+          const answer = await generateText(buildPrompt(body.question, sources, body.history, body.language));
+          for (const token of answer.match(/.{1,18}/gs) || [answer]) {
+            send("token", { text: token });
+          }
+          send("done", {});
+        } catch (error) {
+          send("error", { message: error instanceof Error ? error.message : "Generation failed" });
+        } finally {
+          controller.close();
+        }
+      },
+    });
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+      },
+    });
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : "Invalid request" }, { status: 400 });
+  }
+}

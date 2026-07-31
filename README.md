@@ -1,224 +1,166 @@
-# Local RAG Portfolio Assistant
+# Local + Cloud Portfolio RAG Assistant
 
-A fully local Retrieval-Augmented Generation assistant that answers questions about Junyi Chen's projects, skills, internships, and technical background.
+A bilingual portfolio assistant with two deliberately separated privacy modes:
 
-This project adapts a Google/MongoDB local RAG workshop into a portfolio-focused assistant. Instead of asking about MongoDB documentation, the assistant retrieves from `data/portfolio_docs.json` and answers as Junyi's portfolio assistant.
+- **Local private mode:** Streamlit, MongoDB Local Atlas, SentenceTransformers, and Ollama.
+- **Cloud public mode:** Next.js, Vercel Functions, MongoDB Atlas Vector Search, and Gemini.
 
-![Local RAG Portfolio Assistant Streamlit demo](assets/streamlit-answer.png)
+The project began with the Google for Developers and MongoDB **Building with RAG using Gemma 4, Antigravity 2.0 & MongoDB Atlas** workshop repository, then evolved into an independent product with document processing, retrieval evaluation, source evidence, privacy controls, and a deployable cloud chat.
 
-## Local Demo
+![Cloud and local RAG evidence](public/streamlit-answer.png)
 
-This is a fully local AI demo. The portfolio data, vector database, embedding model, and LLM runtime all run on the local machine.
+## What It Demonstrates
 
-- No cloud deployment is required.
-- No online LLM API key is required.
-- Requires local Docker/MongoDB Local Atlas and Ollama.
-- Answers are grounded in the curated knowledge base at `data/portfolio_docs.json`.
+1. **Ingestion:** parse JSON, Markdown, TXT, CSV, DOCX, and PDF; clean, deduplicate, chunk, embed, and index.
+2. **Retrieval:** semantic Top-K search with an optional score threshold and public/private scope.
+3. **Grounded generation:** pass only selected chunks to the LLM; return a clear fallback when evidence is insufficient.
+4. **Evaluation:** inspect scores and snippets in a Retrieval Lab instead of treating RAG as a black box.
+5. **Privacy:** local private documents are Git ignored; the cloud seed accepts only curated public data.
 
-## Vercel Showcase
+## Architecture
 
-This repository also includes a deployable static showcase page:
-
-- `index.html`
-- `styles.css`
-- `script.js`
-- `vercel.json`
-
-The Vercel page is a bilingual project presentation, not the cloud-hosted RAG backend. Use the language toggle in the header to switch between English and Chinese, or open:
-
-- `/?lang=en`
-- `/?lang=zh`
-
-Deploy with Vercel from the repository root. No build command is required because the showcase is plain HTML/CSS/JavaScript.
-
-## Demo Questions
-
-Try questions like:
-
-- What are Junyi Chen's strongest AI and data projects?
-- What MongoDB experience does Junyi have?
-- Summarize Junyi for a full-stack role.
-- Which projects show LLM or AI application experience?
-
-## Example Answer
-
-For an AI/data project question, the assistant retrieves Junyi's strongest matching portfolio entries and summarizes projects such as the Accessibility Testing QA Engine, QANet question answering work, PulseScape emotion-aware recommender, diabetes prediction, and spatial resource accessibility analysis. The response is generated from local portfolio context rather than a generic resume prompt.
-
-## Tech Stack
-
-- Python
-- MongoDB Local Atlas and MongoDB Vector Search
-- `voyageai/voyage-4-nano` local embeddings
-- Ollama-hosted Gemma model
-- Streamlit UI
-- Jupyter notebook for experimentation
-
-## Project Structure
-
-```text
-.
-|-- app.py
-|-- assets/
-|   |-- streamlit-answer.png
-|   `-- streamlit-home.png
-|-- data/
-|   `-- portfolio_docs.json
-|-- docs/
-|   `-- architecture.md
-|-- notebooks/
-|   `-- rag_pipeline.ipynb
-|-- scripts/
-|   |-- ingest.py
-|   `-- smoke_test.py
-|-- src/
-|   `-- portfolio_rag.py
-|-- index.html
-|-- script.js
-|-- styles.css
-|-- vercel.json
-|-- .env.example
-|-- pyproject.toml
-`-- uv.lock
+```mermaid
+flowchart LR
+  subgraph Local[Local private mode]
+    LP[Private files] --> DP[Parse, clean, chunk]
+    DP --> SE[SentenceTransformers]
+    SE --> ML[MongoDB Local Atlas]
+    QL[Question] --> ML --> OL[Ollama] --> SL[Streamlit answer + sources]
+  end
+  subgraph Cloud[Cloud public mode]
+    PJ[portfolio_docs.json] --> GS[Validated seed]
+    GS --> GE[Gemini document embeddings]
+    GE --> MA[MongoDB Atlas public collection]
+    QC[Question] --> V[Vercel Function]
+    V --> GQ[Gemini query embedding] --> MA --> GG[Gemini generation] --> NX[Next.js streaming chat]
+  end
 ```
 
-## Setup
+The two modes use separate collections and indexes because their embedding models differ:
 
-Copy the environment file:
+| Mode | Collection | Embedding | Generation |
+|---|---|---|---|
+| Local | `portfolio_knowledge_local` | `voyageai/voyage-4-nano` | Ollama (`qwen2.5:3b` or Gemma) |
+| Cloud | `portfolio_knowledge_public` | `gemini-embedding-001` | Gemini Flash |
+
+## Local Private Mode
+
+### Prerequisites
+
+- Python 3.10 or 3.11
+- Docker Desktop
+- MongoDB Local Atlas container
+- Ollama container or desktop service
 
 ```powershell
 Copy-Item .env.example .env
+uv sync
 ```
 
-Update `MONGODB_URI` if your Local Atlas port is different:
+Configure `.env`:
 
 ```dotenv
-MONGODB_URI=mongodb://localhost:62262/?directConnection=true
+LOCAL_MONGODB_URI=mongodb://localhost:62262/?directConnection=true
+LOCAL_COLLECTION_NAME=portfolio_knowledge_local
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=qwen2.5:3b
 ```
 
-Install dependencies:
-
-```powershell
-uv sync
-```
-
-## Required Local Services
-
-MongoDB Local Atlas should be running, for example:
-
-```powershell
-atlas local start local-rag
-atlas local connect local-rag --connectWith connectionString
-```
-
-Ollama should expose port `11434` and include the model named in `.env`:
-
-```powershell
-docker ps
-curl http://localhost:11434/api/tags
-```
-
-For Chinese-first local Q&A, this project recommends Qwen:
-
-```powershell
-docker exec compassionate_turing ollama pull qwen2.5:3b
-```
-
-You can still switch back to the original workshop-style Gemma model by changing `.env`:
-
-```dotenv
-OLLAMA_MODEL=gemma:2b
-```
-
-Use `qwen2.5:3b` for stronger Chinese answers and `gemma:2b` if you want to stay closer to the original workshop template.
-
-## Ingest Portfolio Data
-
-Run:
-
-```powershell
-uv run python scripts/ingest.py
-```
-
-If `uv run` cannot access the local cache on Windows, use the project virtual environment directly:
+Build the index and run tests:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\ingest.py
-```
-
-This loads `data/portfolio_docs.json`, chunks the documents, creates embeddings, inserts them into MongoDB, and creates the vector index.
-
-## Optional: Build a Local Private Knowledge Base
-
-The committed knowledge base is intentionally curated and safe to show on GitHub. For local-only use, you can let the assistant read richer private materials from your machine:
-
-- `C:\简历投递\Company-resume\最近的project 和活动来一直更新`
-- `C:\简历投递\Company-resume\resumes`
-- `C:\Users\20430\.agents\skills\ranking-jobs-from-resume`
-
-Generate the private local knowledge file:
-
-```powershell
-.\.venv\Scripts\python.exe scripts\build_local_private_docs.py
-```
-
-This writes:
-
-```text
-data/local_private_docs.json
-data/local_private_docs.summary.json
-```
-
-Both files are ignored by Git. They are for your local RAG only and should not be uploaded to GitHub because they may include resume drafts, project notes, private evidence, or role-tailoring material.
-
-After generating the private docs, re-run ingestion:
-
-```powershell
-.\.venv\Scripts\python.exe scripts\ingest.py
-```
-
-`scripts/ingest.py` will automatically merge `data/portfolio_docs.json` and `data/local_private_docs.json` when the private file exists.
-
-## Run a Smoke Test
-
-```powershell
-uv run python scripts/smoke_test.py
-```
-
-Or:
-
-```powershell
 .\.venv\Scripts\python.exe scripts\smoke_test.py
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-## Run the Chat UI
-
-```powershell
-uv run streamlit run app.py
-```
-
-Or:
+Launch the three-page local application:
 
 ```powershell
 .\.venv\Scripts\python.exe -m streamlit run app.py --server.port 8505
 ```
 
-Then open:
+Open [http://localhost:8505](http://localhost:8505). The sidebar exposes **Chat**, **Knowledge Studio**, and **Retrieval Lab**.
 
-```text
-http://localhost:8505
+## Cloud Public Mode
+
+```powershell
+npm install
+npm test
+npm run build
 ```
 
-The local Streamlit UI supports Chinese and English interface switching. Chinese is the recommended mode if you are preparing for China-based roles.
+Server-only variables:
+
+```dotenv
+MONGODB_URI=mongodb+srv://...
+GEMINI_API_KEY=...
+CLOUD_DB_NAME=portfolio_rag
+CLOUD_COLLECTION_NAME=portfolio_knowledge_public
+CLOUD_VECTOR_INDEX_NAME=vector_index_public
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001
+GEMINI_CHAT_MODEL=gemini-3.5-flash
+```
+
+Validate and publish the curated data separately from the web deployment:
+
+```powershell
+node scripts/seed-atlas.mjs --validate
+npm run seed:atlas
+npm run dev
+```
+
+The Vercel application provides:
+
+- `/` streaming bilingual Chat with expandable sources.
+- `/lab` read-only Retrieval Lab for Top-K and threshold inspection.
+- `/architecture` privacy boundaries, runtime evidence, and screenshots.
+- `/api/health` Atlas, Gemini, and vector index status without secret values.
+
+## Demo Questions
+
+- `Junyi 最有代表性的 AI 和数据项目有哪些？`
+- `Junyi 有哪些 MongoDB 相关经验？`
+- `Which projects demonstrate LLM or RAG application experience?`
+- `Why is Junyi a strong fit for a full-stack role?`
+
+## Privacy Guarantees
+
+- `data/portfolio_docs.json` is the only cloud seed source.
+- `data/local_private_docs.json`, `data/local_uploads/`, `.env*`, and local evaluation data are Git ignored.
+- Cloud retrieval always filters `visibility: public` and maps results through an allowlisted `Source` contract.
+- Chat messages are sent for generation but are not persisted by the cloud app.
+- Uploaded documents must be previewed and explicitly approved before public publication.
+
+## Verification
+
+```powershell
+.\.venv\Scripts\python.exe -m py_compile src\portfolio_rag.py src\document_processing.py src\ingestion.py src\retrieval.py app.py
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+npm test
+npm run build
+node scripts/seed-atlas.mjs --validate
+```
 
 ## Resume Description
 
-- Built a fully local RAG portfolio assistant using MongoDB Atlas Vector Search, local `voyageai/voyage-4-nano` embeddings, and Ollama-hosted Gemma; implemented document ingestion, chunking, vector indexing, semantic retrieval, local LLM answer generation, smoke testing, and a Streamlit chat interface for private portfolio Q&A.
+**Dual-mode Portfolio RAG Assistant | Python, Next.js, MongoDB Vector Search, SentenceTransformers, Ollama, Gemini, Vercel**
 
-## Next Customization Steps
+- Built an end-to-end bilingual RAG system covering document parsing, configurable chunking, embedding generation, Top-K vector retrieval, grounded prompting, source citation, and retrieval evaluation.
+- Separated a local private workflow using MongoDB Local Atlas and Ollama from a shareable Vercel demo using MongoDB Atlas Vector Search and Gemini, with isolated collections and explicit public-data validation.
+- Implemented a Streamlit Knowledge Studio and Retrieval Lab plus a responsive Next.js chat with SSE responses, score thresholds, no-recall safeguards, health checks, and MongoDB-backed IP rate limiting.
 
-- Expand `data/portfolio_docs.json` with more accurate personal resume, internship, certificate, and project details.
-- Add screenshots or a short demo video to the README.
-- Replace `gemma:2b` with a stronger Gemma model if your machine can run it.
-- Add deployment notes if you later convert this from a local-only app to a cloud demo.
+## Repository Layout
+
+```text
+app.py                         Local Streamlit Chat
+pages/                         Knowledge Studio and Retrieval Lab
+src/                           Python processing, ingestion, retrieval, generation
+data/portfolio_docs.json       Curated public knowledge source
+app/                           Next.js pages and Vercel route handlers
+components/                    Chat, evidence, navigation, retrieval UI
+lib/cloud-rag/                 Atlas, Gemini, validation, prompt, rate limit, SSE
+scripts/ingest.py              Local index build
+scripts/seed-atlas.mjs         Validated public Atlas seed
+tests/                         Python and TypeScript unit tests
+```
