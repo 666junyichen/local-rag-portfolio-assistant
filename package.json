@@ -1,0 +1,13 @@
+{
+  "name": "local-rag-portfolio-assistant-showcase",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "seed:atlas": "node scripts/seed-atlas.mjs"
+  },
+  "dependencies": {
+    "mongodb": "^6.20.0"
+  },
+  "devDependencies": {}
+}

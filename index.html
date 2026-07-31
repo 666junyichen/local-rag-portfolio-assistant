@@ -21,8 +21,9 @@
       </a>
       <nav class="nav-links" aria-label="Main navigation">
         <a href="#architecture" data-i18n="navArchitecture">Architecture</a>
-        <a href="#demo" data-i18n="navDemo">Demo</a>
-        <a href="#run" data-i18n="navRun">Run locally</a>
+        <a href="#chat" data-i18n="navChat">Ask AI</a>
+        <a href="#demo" data-i18n="navDemo">Evidence</a>
+        <a href="#run" data-i18n="navRun">Implementation</a>
       </nav>
       <div class="language-toggle" aria-label="Language selector">
         <button class="lang-button active" type="button" data-lang="en">EN</button>
@@ -33,14 +34,14 @@
     <main id="top">
       <section class="hero section-band">
         <div class="hero-copy">
-          <p class="eyebrow" data-i18n="heroEyebrow">Fully local RAG portfolio demo</p>
-          <h1 data-i18n="heroTitle">A private AI assistant that answers questions about my portfolio.</h1>
+          <p class="eyebrow" data-i18n="heroEyebrow">Local-first RAG assistant / Portfolio Q&A</p>
+          <h1 data-i18n="heroTitle">A local RAG assistant that answers recruiter questions from a curated portfolio knowledge base.</h1>
           <p class="hero-lede" data-i18n="heroLede">
-            This project turns a Google and MongoDB local RAG workshop into a recruiter-friendly portfolio assistant. It retrieves curated resume and project facts from MongoDB Vector Search, then answers with a local Ollama-hosted Gemma model.
+            This project adapts a Google and MongoDB local RAG workshop into a portfolio-focused AI assistant. It ingests structured resume and project facts, retrieves relevant context with MongoDB Vector Search, and generates grounded answers through a local Ollama-hosted LLM.
           </p>
           <div class="hero-actions">
             <a class="primary-action" href="https://github.com/666junyichen/local-rag-portfolio-assistant" data-i18n="viewGithub">View GitHub repo</a>
-            <a class="secondary-action" href="#demo" data-i18n="viewDemo">View screenshots</a>
+            <a class="secondary-action" href="#demo" data-i18n="viewDemo">View evidence screenshots</a>
           </div>
         </div>
         <figure class="hero-visual" aria-label="Streamlit answer screenshot">
@@ -65,8 +66,8 @@
 
       <section id="architecture" class="section-grid">
         <div class="section-heading">
-          <p class="eyebrow" data-i18n="architectureEyebrow">How it works</p>
-          <h2 data-i18n="architectureTitle">Local RAG architecture with a public showcase layer.</h2>
+          <p class="eyebrow" data-i18n="architectureEyebrow">System design</p>
+          <h2 data-i18n="architectureTitle">A recruiter-facing showcase for a private local RAG system.</h2>
         </div>
         <div class="pipeline" aria-label="RAG pipeline">
           <article>
@@ -92,12 +93,39 @@
         </div>
       </section>
 
+      <section id="chat" class="chat-section section-band">
+        <div class="section-heading">
+          <p class="eyebrow" data-i18n="chatEyebrow">Online RAG demo</p>
+          <h2 data-i18n="chatTitle">Ask the portfolio assistant a recruiter-style question.</h2>
+          <p data-i18n="chatText">
+            This chat panel is designed for the cloud version: Vercel calls a serverless API, retrieves context from MongoDB Atlas Vector Search, and uses a cloud LLM to answer from Junyi's curated portfolio knowledge base.
+          </p>
+        </div>
+        <div class="chat-panel">
+          <div class="prompt-row" aria-label="Example questions">
+            <button type="button" data-question="What are Junyi Chen's strongest AI and data projects?" data-i18n="sampleQuestionOne">Strongest AI/data projects?</button>
+            <button type="button" data-question="What MongoDB and RAG experience does Junyi have?" data-i18n="sampleQuestionTwo">MongoDB and RAG experience?</button>
+            <button type="button" data-question="Please summarize in Chinese why Junyi fits data-agent product intern roles." data-i18n="sampleQuestionThree">Chinese role-fit summary</button>
+          </div>
+          <div class="chat-log" data-chat-log>
+            <article class="chat-message assistant">
+              <strong>Assistant</strong>
+              <p data-i18n="chatWelcome">Ask about Junyi's projects, AI/RAG experience, MongoDB work, internships, or portfolio evidence.</p>
+            </article>
+          </div>
+          <form class="chat-form" data-chat-form>
+            <input data-chat-input type="text" data-i18n="chatPlaceholder" data-i18n-placeholder placeholder="Ask a recruiter-style question about Junyi's portfolio..." />
+            <button type="submit" data-i18n="chatSubmit">Ask</button>
+          </form>
+          <p class="chat-status" data-chat-status data-i18n="chatStatus">Cloud RAG needs MongoDB Atlas and a cloud LLM key to answer online.</p>
+        </div>
+      </section>
       <section id="demo" class="demo-section section-band">
         <div class="section-heading">
-          <p class="eyebrow" data-i18n="demoEyebrow">Demo preview</p>
-          <h2 data-i18n="demoTitle">The deployed page explains the project; the AI assistant runs locally.</h2>
+          <p class="eyebrow" data-i18n="demoEyebrow">Evidence preview</p>
+          <h2 data-i18n="demoTitle">The public page shows the system, screenshots, and workflow; the interactive assistant runs locally.</h2>
           <p data-i18n="demoText">
-            Vercel hosts this bilingual showcase. The private RAG assistant stays local because it depends on Docker, MongoDB Local Atlas, and Ollama.
+            The deployed Vercel page is a stable portfolio showcase. The live RAG chat is intentionally local because the current version depends on local MongoDB, local embeddings, and Ollama rather than a cloud LLM service.
           </p>
         </div>
         <div class="screenshot-grid">
@@ -114,8 +142,8 @@
 
       <section id="run" class="run-section">
         <div class="section-heading">
-          <p class="eyebrow" data-i18n="runEyebrow">Run locally</p>
-          <h2 data-i18n="runTitle">Reproduce the RAG assistant on your machine.</h2>
+          <p class="eyebrow" data-i18n="runEyebrow">Implementation proof</p>
+          <h2 data-i18n="runTitle">The project includes reproducible setup, ingestion, smoke test, and Streamlit chat commands.</h2>
         </div>
         <div class="command-layout">
           <pre><code>docker ps
@@ -124,9 +152,9 @@ curl http://localhost:11434/api/tags
 .\.venv\Scripts\python.exe scripts\smoke_test.py
 .\.venv\Scripts\python.exe -m streamlit run app.py --server.port 8505</code></pre>
           <div class="resume-note">
-            <h3 data-i18n="resumeTitle">Resume-ready impact</h3>
+            <h3 data-i18n="resumeTitle">Project value for reviewers</h3>
             <p data-i18n="resumeText">
-              Built a fully local RAG portfolio assistant using MongoDB Atlas Vector Search, local embeddings, Ollama-hosted Gemma, ingestion scripts, smoke tests, and a Streamlit chat UI.
+              This project demonstrates an end-to-end RAG workflow: document curation, chunking, embedding generation, vector indexing, semantic retrieval, prompt assembly, local LLM response generation, chat history storage, smoke testing, and a bilingual Streamlit UI.
             </p>
           </div>
         </div>
@@ -134,10 +162,11 @@ curl http://localhost:11434/api/tags
     </main>
 
     <footer class="site-footer">
-      <span data-i18n="footerText">Built as a local-first AI portfolio project by Junyi Chen.</span>
+      <span data-i18n="footerText">Local-first RAG portfolio assistant by Junyi Chen.</span>
       <a href="https://github.com/666junyichen/local-rag-portfolio-assistant">GitHub</a>
     </footer>
 
-    <script src="script.js?v=2"></script>
+    <script src="script.js?v=4"></script>
+    <script src="chat.js?v=1"></script>
   </body>
 </html>

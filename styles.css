@@ -408,3 +408,124 @@ code {
     font-size: clamp(2.5rem, 15vw, 4.2rem);
   }
 }
+
+.chat-section {
+  padding: clamp(3rem, 7vw, 6rem) 0;
+  border-top: 1px solid var(--line);
+}
+
+.chat-panel {
+  display: grid;
+  gap: 1rem;
+  margin-top: 2rem;
+  border: 1px solid rgba(23, 75, 63, 0.18);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: var(--shadow);
+  padding: clamp(1rem, 3vw, 1.4rem);
+}
+
+.prompt-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.prompt-row button,
+.chat-form button {
+  border: 0;
+  border-radius: 999px;
+  background: var(--forest);
+  color: #f6fffb;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  padding: 0.72rem 0.95rem;
+}
+
+.prompt-row button {
+  background: rgba(23, 75, 63, 0.08);
+  border: 1px solid rgba(23, 75, 63, 0.16);
+  color: var(--forest);
+}
+
+.chat-log {
+  display: grid;
+  gap: 0.85rem;
+  max-height: 520px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(243, 248, 246, 0.78);
+  padding: 1rem;
+}
+
+.chat-message {
+  max-width: min(760px, 92%);
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+  background: #ffffff;
+  border: 1px solid rgba(23, 75, 63, 0.12);
+}
+
+.chat-message.user {
+  justify-self: end;
+  background: #12201c;
+  color: #f6fffb;
+}
+
+.chat-message strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.chat-message p {
+  margin: 0;
+}
+
+.source-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+.source-list span {
+  border-radius: 999px;
+  background: rgba(232, 93, 79, 0.1);
+  color: var(--forest);
+  font-size: 0.76rem;
+  font-weight: 800;
+  padding: 0.28rem 0.55rem;
+}
+
+.chat-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+}
+
+.chat-form input {
+  min-height: 3.2rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+  padding: 0 1rem;
+}
+
+.chat-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+@media (max-width: 560px) {
+  .chat-form {
+    grid-template-columns: 1fr;
+  }
+}
