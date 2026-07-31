@@ -36,7 +36,12 @@ export async function POST(request: Request) {
           }
           send("done", {});
         } catch (error) {
-          send("error", { message: error instanceof Error ? error.message : "Generation failed" });
+          console.error("Cloud RAG generation failed", error);
+          send("error", {
+            message: body.language === "zh"
+              ? "AI 生成服务暂时繁忙，检索结果已经保留，请稍后重试。"
+              : "The AI generation service is temporarily busy. Retrieved evidence is preserved; please retry shortly.",
+          });
         } finally {
           controller.close();
         }
