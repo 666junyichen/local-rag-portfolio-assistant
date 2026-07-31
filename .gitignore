@@ -17,3 +17,4 @@ data/local_private_docs.json
 data/local_private_docs.summary.json
 data/local_catalog.json
 data/local_uploads/
+data/local_eval_questions.json
