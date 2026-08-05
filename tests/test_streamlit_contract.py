@@ -51,6 +51,35 @@ class StreamlitContractTests(unittest.TestCase):
             ["baseline", "hybrid", "hybrid-rerank"],
         )
 
+    def test_knowledge_studio_uses_an_editable_clean_body_as_chunk_source(self) -> None:
+        source = (ROOT / "pages" / "1_Knowledge_Studio.py").read_text(encoding="utf-8")
+
+        self.assertIn('st.text_area("清洗正文"', source)
+        self.assertIn("replace_document_body(document, clean_body)", source)
+        self.assertNotIn('st.code(document["body"][:12000]', source)
+
+    def test_knowledge_studio_syncs_raw_edits_and_rechunks_clean_edits(self) -> None:
+        app = AppTest.from_file(
+            str(ROOT / "pages" / "1_Knowledge_Studio.py"),
+            default_timeout=90,
+        ).run()
+        app.file_uploader[0].upload(
+            "editor-contract.txt",
+            b"Original evidence only.",
+            "text/plain",
+        ).run()
+
+        raw_editor = next(item for item in app.text_area if item.label == "解析正文")
+        raw_editor.set_value("<p>Updated RAG evidence.</p>\n\nFinal version.").run()
+        clean_editor = next(item for item in app.text_area if item.label == "清洗正文")
+
+        self.assertEqual(clean_editor.value, "Updated RAG evidence.\n\nFinal version.")
+
+        clean_editor.set_value("Manually redacted evidence.").run()
+        self.assertTrue(any(item.label == "Chunk 1 · 27 chars" for item in app.expander))
+        self.assertTrue(any(item.value == "Manually redacted evidence." for item in app.markdown))
+        self.assertEqual(list(app.exception), [])
+
 
 if __name__ == "__main__":
     unittest.main()

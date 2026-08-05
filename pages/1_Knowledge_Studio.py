@@ -15,11 +15,13 @@ sys.path.insert(0, str(ROOT))
 from src.document_processing import (  # noqa: E402
     ChunkConfig,
     chunk_metrics,
+    clean_text,
     detect_pii,
     normalize_document,
     persist_and_parse_upload,
     rank_preview_chunks,
     recommend_chunk_config,
+    replace_document_body,
     split_document,
 )
 from src.ingestion import build_chunk_records, ensure_local_catalog  # noqa: E402
@@ -111,7 +113,25 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
         format_func=lambda index: parsed[index]["title"],
     )
     document = parsed[selected_index]
-    recommended = recommend_chunk_config(document)
+    editor_id = str(document["doc_id"])
+    raw_key = f"upload_raw_body_{editor_id}"
+    clean_key = f"upload_clean_body_{editor_id}"
+    clean_source_key = f"upload_clean_source_{editor_id}"
+    if raw_key not in st.session_state:
+        st.session_state[raw_key] = document["body"]
+    if clean_key not in st.session_state:
+        st.session_state[clean_key] = clean_text(str(st.session_state[raw_key]))
+        st.session_state[clean_source_key] = str(st.session_state[raw_key])
+    elif st.session_state.get(clean_source_key) != st.session_state[raw_key]:
+        st.session_state[clean_key] = clean_text(str(st.session_state[raw_key]))
+        st.session_state[clean_source_key] = str(st.session_state[raw_key])
+
+    clean_body = clean_text(str(st.session_state[clean_key]))
+    if st.session_state[clean_key] != clean_body:
+        st.session_state[clean_key] = clean_body
+    edited_document = replace_document_body(document, clean_body) if clean_body else None
+
+    recommended = recommend_chunk_config(edited_document or document)
     mode = st.segmented_control("切片配置", ["Auto recommended", "Manual"], default="Auto recommended")
     if mode == "Manual":
         strategy = st.selectbox("切片策略", ["recursive", "markdown", "paragraph"])
@@ -124,7 +144,7 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
             f"推荐配置：{config.strategy} / chunk {config.chunk_size} / overlap {config.chunk_overlap}"
         )
 
-    chunks = chunk_document(document, config)
+    chunks = chunk_document(edited_document, config) if edited_document else []
     metrics = chunk_metrics(chunks)
     metric_columns = st.columns(5)
     metric_columns[0].metric("文档", len(parsed))
@@ -135,16 +155,18 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
     for warning in metrics["warnings"]:
         st.warning(warning)
 
-    findings = detect_pii(document["body"])
+    findings = detect_pii(clean_body)
     if findings:
         kinds = ", ".join(sorted({item["type"] for item in findings}))
         st.warning(f"检测到可能的个人敏感信息：{kinds}。保存为私有资料不受影响，公开前请脱敏。")
 
     raw_tab, clean_tab, chunks_tab, recall_tab = st.tabs(["解析正文", "清洗正文", "切片预览", "临时召回测试"])
     with raw_tab:
-        st.text_area("解析正文", document["body"], height=360, label_visibility="collapsed")
+        st.caption("修改后会自动重新生成清洗正文，并更新切片预览。")
+        st.text_area("解析正文", height=360, label_visibility="collapsed", key=raw_key)
     with clean_tab:
-        st.code(document["body"][:12000], language="text")
+        st.caption("这是进入切片、召回和索引的最终正文，可以继续人工修改或脱敏。")
+        st.text_area("清洗正文", height=360, label_visibility="collapsed", key=clean_key)
     with chunks_tab:
         for chunk in chunks:
             with st.expander(f"Chunk {chunk['chunk_index'] + 1} · {len(chunk['body'])} chars"):
@@ -158,11 +180,17 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
                         st.write(result["body"])
 
     save_columns = st.columns(2)
-    if save_columns[0].button("保存为本地私有资料", type="primary", use_container_width=True):
+    if save_columns[0].button(
+        "保存为本地私有资料",
+        type="primary",
+        use_container_width=True,
+        disabled=edited_document is None,
+    ):
         rows = []
         active_ids = set()
-        for item in parsed:
-            item_config = config if item is document else recommend_chunk_config(item)
+        for index, original_item in enumerate(parsed):
+            item = edited_document if index == selected_index else original_item
+            item_config = config if index == selected_index else recommend_chunk_config(item)
             source_name = str((item.get("metadata") or {}).get("source") or item["title"])
             enriched = {
                 **item,
@@ -189,13 +217,13 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
     pii_override = not findings or st.checkbox("正文仍含 PII；我确认这些内容可以公开")
     if save_columns[1].button(
         "发布当前文档为公开资料",
-        disabled=not publish_confirm or not pii_override,
+        disabled=edited_document is None or not publish_confirm or not pii_override,
         use_container_width=True,
     ):
         public_document = {
-            **document,
+            **edited_document,
             "metadata": {
-                **(document.get("metadata") or {}),
+                **(edited_document.get("metadata") or {}),
                 "chunking": {
                     "strategy": config.strategy,
                     "chunk_size": config.chunk_size,

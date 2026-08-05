@@ -19,6 +19,7 @@ from src.document_processing import (
     persist_and_parse_upload,
     rank_preview_chunks,
     recommend_chunk_config,
+    replace_document_body,
     split_document,
 )
 
@@ -116,6 +117,30 @@ class DocumentProcessingTests(unittest.TestCase):
     def test_normalize_document_defaults_new_uploads_to_private(self) -> None:
         doc = normalize_document({"title": "Draft", "body": "Private draft body."})
         self.assertEqual(doc["visibility"], "private")
+
+    def test_replace_document_body_preserves_identity_and_rebuilds_chunks(self) -> None:
+        original = normalize_document(
+            {
+                "title": "Editable resume",
+                "body": "Old MongoDB project evidence.",
+                "metadata": {"file_type": "docx"},
+            }
+        )
+
+        edited = replace_document_body(
+            original,
+            "<p>Updated RAG project evidence.</p>\n\n\nAvailable for interviews.",
+        )
+        chunks = split_document(edited, ChunkConfig(chunk_size=200, chunk_overlap=20))
+
+        self.assertEqual(edited["doc_id"], original["doc_id"])
+        self.assertNotEqual(edited["content_hash"], original["content_hash"])
+        self.assertEqual(
+            edited["body"],
+            "Updated RAG project evidence.\n\nAvailable for interviews.",
+        )
+        self.assertIn("Updated RAG project evidence", chunks[0]["body"])
+        self.assertNotIn("Old MongoDB project evidence", chunks[0]["body"])
 
     def test_chunk_config_rejects_excessive_overlap(self) -> None:
         with self.assertRaisesRegex(ValueError, "25%"):

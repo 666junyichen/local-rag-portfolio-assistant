@@ -55,6 +55,7 @@ def clean_text(value: str) -> str:
     value = re.sub(r"<style[\s\S]*?</style>", " ", value, flags=re.IGNORECASE)
     value = re.sub(r"<[^>]+>", " ", value)
     value = re.sub(r"[\t\f\v ]+", " ", value)
+    value = re.sub(r" *\n *", "\n", value)
     value = re.sub(r"\n{3,}", "\n\n", value)
     return value.strip()
 
@@ -181,6 +182,18 @@ def normalize_document(
         "content_hash": content_hash,
         "metadata": metadata,
     }
+
+
+def replace_document_body(document: dict[str, Any], body: str) -> dict[str, Any]:
+    """Return an edited document while keeping its stable source identity."""
+    return normalize_document(
+        {
+            **document,
+            "doc_id": document.get("doc_id"),
+            "body": body,
+        },
+        default_visibility=str(document.get("visibility") or "private"),
+    )
 
 
 def _recursive_parts(text: str, config: ChunkConfig) -> list[str]:
