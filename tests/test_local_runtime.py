@@ -129,6 +129,7 @@ class LocalRuntimeTests(unittest.TestCase):
         self.assertIn("scripts\\check_streamlit_pages.py", script)
         self.assertIn("git branch --show-current", script)
         self.assertIn("git rev-parse --short HEAD", script)
+        self.assertIn("--server.fileWatcherType none", script)
 
 
 if __name__ == "__main__":

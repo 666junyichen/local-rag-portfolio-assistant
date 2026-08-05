@@ -148,4 +148,4 @@ if (-not $SkipSmokeTest) {
 Write-Step "Starting Streamlit"
 Write-Host "Open http://localhost:8505" -ForegroundColor Green
 Write-Host "Keep this terminal open. Press Ctrl+C to stop Streamlit." -ForegroundColor DarkGray
-& $Python -m streamlit run app.py --server.port 8505
+& $Python -m streamlit run app.py --server.port 8505 --server.fileWatcherType none
