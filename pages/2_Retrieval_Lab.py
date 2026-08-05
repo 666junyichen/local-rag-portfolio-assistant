@@ -14,8 +14,8 @@ from src.portfolio_rag import (  # noqa: E402
     generate_answer_with_sources,
     get_collections,
     load_embedding_model,
-    load_reranker,
     load_settings,
+    try_load_reranker,
     vector_search,
 )
 from src.evaluation import evaluate_rankings, load_benchmark  # noqa: E402
@@ -74,7 +74,14 @@ if saved_questions:
 if run or generate:
     try:
         settings, collection, model = runtime()
-        reranker = load_reranker(settings) if mode == "hybrid-rerank" else None
+        reranker, reranker_warning = (
+            try_load_reranker(settings) if mode == "hybrid-rerank" else (None, None)
+        )
+        if reranker_warning:
+            st.warning(
+                "Cross-Encoder 暂时不可用，已自动回退到 hybrid 检索。"
+                f"\n\n详细信息：{reranker_warning}"
+            )
         results = vector_search(
             collection,
             model,
@@ -114,7 +121,14 @@ st.caption("使用固定的 50 条中英文标注问题计算 hit、recall、MRR
 if st.button("运行当前模式评测", use_container_width=True):
     try:
         settings, collection, model = runtime()
-        reranker = load_reranker(settings) if mode == "hybrid-rerank" else None
+        reranker, reranker_warning = (
+            try_load_reranker(settings) if mode == "hybrid-rerank" else (None, None)
+        )
+        if reranker_warning:
+            st.warning(
+                "Cross-Encoder 暂时不可用，本次评测已自动回退到 hybrid。"
+                f"\n\n详细信息：{reranker_warning}"
+            )
         cases = load_benchmark(BENCHMARK_PATH)
         rankings = {}
         latencies = {}

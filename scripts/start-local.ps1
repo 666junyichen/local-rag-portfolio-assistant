@@ -71,6 +71,34 @@ if ($LASTEXITCODE -ne 0) {
 if (-not (Test-Path $Python)) {
     throw "Python environment is missing at .venv. Create it with 'uv sync' before starting the app."
 }
+
+$Listener = Get-NetTCPConnection -LocalPort 8505 -State Listen -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+if ($Listener) {
+    $ListenerProcess = Get-Process -Id $Listener.OwningProcess -ErrorAction SilentlyContinue
+    $ProcessName = if ($ListenerProcess) { $ListenerProcess.ProcessName } else { "unknown" }
+    $Hint = if ($ProcessName -match "python|streamlit") {
+        "This is likely an older Streamlit process. Stop its terminal with Ctrl+C, then run this script again."
+    } else {
+        "The script will not stop an unknown process automatically. Close it or configure another port."
+    }
+    throw "Port 8505 is already used by PID $($Listener.OwningProcess) ($ProcessName). $Hint"
+}
+
+$Branch = git branch --show-current 2>$null
+$Commit = git rev-parse --short HEAD 2>$null
+if ($LASTEXITCODE -eq 0 -and $Commit) {
+    Write-Host "Source version: $Branch@$Commit" -ForegroundColor Green
+} else {
+    Write-Host "Source version: Git metadata unavailable; continuing with the current files." -ForegroundColor Yellow
+}
+
+Write-Step "Checking Streamlit page imports"
+& $Python scripts\check_streamlit_pages.py
+if ($LASTEXITCODE -ne 0) {
+    throw "Streamlit UI preflight failed. Fix the reported import or render error before starting local services."
+}
+
 if (-not (Test-Path $EnvFile)) {
     Copy-Item -LiteralPath $EnvExample -Destination $EnvFile
 }

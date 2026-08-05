@@ -316,6 +316,18 @@ def load_reranker(settings: Settings) -> Any:
     return CrossEncoder(settings.reranker_model_id)
 
 
+def try_load_reranker(
+    settings: Settings,
+    *,
+    loader: Callable[[Settings], Any] = load_reranker,
+) -> tuple[Any | None, str | None]:
+    """Load the optional precision reranker without breaking retrieval."""
+    try:
+        return loader(settings), None
+    except Exception as error:
+        return None, str(error)
+
+
 def vector_search(
     collection: Collection,
     model: SentenceTransformer,

@@ -120,6 +120,16 @@ class LocalRuntimeTests(unittest.TestCase):
         app_source = (Path(__file__).resolve().parents[1] / "app.py").read_text(encoding="utf-8")
         self.assertNotIn('icon="✓"', app_source)
 
+    def test_start_script_guards_against_stale_streamlit_and_runs_ui_preflight(self) -> None:
+        script = (
+            Path(__file__).resolve().parents[1] / "scripts" / "start-local.ps1"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("Get-NetTCPConnection -LocalPort 8505", script)
+        self.assertIn("scripts\\check_streamlit_pages.py", script)
+        self.assertIn("git branch --show-current", script)
+        self.assertIn("git rev-parse --short HEAD", script)
+
 
 if __name__ == "__main__":
     unittest.main()

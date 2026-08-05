@@ -12,7 +12,7 @@ The project began with the Google for Developers and MongoDB **Building with RAG
 ## What It Demonstrates
 
 1. **Ingestion:** parse JSON, Markdown, TXT, CSV, DOCX, and PDF; clean, deduplicate, chunk, embed, and index.
-2. **Retrieval:** independent Vector Search and BM25 candidate pools, RRF fusion, and an optional local Cross-Encoder reranker.
+2. **Retrieval:** local mode uses independent Vector Search and BM25 candidate pools, RRF fusion, and an optional Cross-Encoder reranker; the deployed cloud mode uses stable public-only Vector Search.
 3. **Context engineering:** token-aware chunks store raw evidence separately from title, project, source, and update-date retrieval prefixes.
 4. **Grounded generation:** combine traceable profile fact cards with selected raw evidence and return a clear fallback when evidence is insufficient.
 5. **Evaluation:** compare baseline, hybrid, and reranked retrieval on a fixed 50-question bilingual benchmark using hit/recall@k, MRR, nDCG, privacy, no-answer, and latency metrics.
@@ -34,7 +34,7 @@ flowchart LR
   subgraph Cloud[Cloud public mode]
     PJ[portfolio_docs.json] --> GS[Validated seed]
     GS --> GE[Gemini document embeddings]
-    GE --> MA[MongoDB Atlas vector + text indexes]
+    GE --> MA[MongoDB Atlas public vector index]
     QC[Question] --> V[Vercel Function]
     V --> GQ[Gemini query embedding] --> MA --> GG[Gemini generation] --> NX[Next.js streaming chat]
   end
@@ -47,7 +47,7 @@ The two modes use separate collections and indexes because their embedding model
 | Local | `portfolio_knowledge_local` | multilingual MiniLM (default) or `voyageai/voyage-4-nano` | Ollama (`qwen2.5:3b` or Gemma) |
 | Cloud | `portfolio_knowledge_public` | `gemini-embedding-001` | Gemini Flash |
 
-Both modes keep Vector Search and text-search indexes separate, then fuse their rankings with RRF. The local mode may add a multilingual Cross-Encoder after fusion; Vercel stays lightweight and uses hybrid retrieval without a server-side reranker.
+Local mode keeps Vector Search and text-search indexes separate, fuses their rankings with RRF, and may add a multilingual Cross-Encoder. The current Vercel deployment stays lightweight and uses public-only Vector Search because the Atlas free tier has no spare full-text search index slot. Cloud BM25 code remains an optional capability and must not be described as active until a text index is provisioned and verified.
 
 ### Measured retrieval baseline
 
@@ -92,6 +92,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
 ```
 
 The script creates persistent MongoDB Atlas Local and Ollama containers, downloads the configured model when needed, builds the vector index on first use, runs the smoke test, and starts Streamlit. Open [http://localhost:8505](http://localhost:8505). Keep the terminal open while using Streamlit.
+
+Before starting services, the script prints the current Git branch/commit, rejects a stale process already using port `8505`, and runs a real Streamlit import/render preflight for all three pages. Run that preflight by itself with:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\check_streamlit_pages.py
+```
 
 The first startup downloads container images and the Ollama model and can take several minutes. Later starts reuse the named Docker volumes. To inspect the stack or stop its containers without deleting data:
 
@@ -158,6 +164,8 @@ Default chunk recommendations are `600/60` for DOCX/resumes, `800/80` for Markdo
 | `localhost:62262` refuses the connection | MongoDB Atlas Local is not running | Run the startup script and inspect `docker logs portfolio-rag-mongodb` |
 | The configured model is missing | Ollama is available but the `.env` model has not been downloaded | The startup script automatically runs `ollama pull` |
 | Streamlit loads but chat is disabled | One or more runtime checks failed | Read the MongoDB, Embedding, and Ollama diagnostics shown in the page |
+| Port `8505` is already in use | An older Streamlit or another process is still listening | Stop the old terminal with `Ctrl+C`; the startup script reports its PID and never kills unknown processes automatically |
+| Retrieval Lab reports a reranker warning | Cross-Encoder is unavailable or its first download failed | Retrieval automatically falls back to hybrid; restore network access and retry high-precision mode later |
 | Index rebuild spends many minutes generating embeddings | `voyageai/voyage-4-nano` is too heavy for the current CPU or the private scan contains too many low-value files | Use the multilingual MiniLM default; ingestion curates project README/docs and master resume evidence while preserving the full private source file locally |
 
 For Chinese-first answers keep `OLLAMA_MODEL=qwen2.5:3b`. To reproduce the workshop with the smaller Gemma model, set `OLLAMA_MODEL=gemma:2b` and run the startup script again.
@@ -219,7 +227,8 @@ The Vercel application provides:
 
 ```powershell
 .\.venv\Scripts\python.exe -m py_compile src\portfolio_rag.py src\document_processing.py src\ingestion.py src\retrieval.py app.py
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe scripts\check_streamlit_pages.py
 .\.venv\Scripts\python.exe scripts\evaluate_retrieval.py --mode baseline
 .\.venv\Scripts\python.exe scripts\evaluate_retrieval.py --mode hybrid
 npm test

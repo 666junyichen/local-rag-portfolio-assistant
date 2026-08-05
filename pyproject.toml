@@ -13,3 +13,8 @@ dependencies = [
     "tqdm",
     "jupyter",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]

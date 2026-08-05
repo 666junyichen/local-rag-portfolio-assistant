@@ -13,9 +13,9 @@ from src.portfolio_rag import (  # noqa: E402
     generate_answer_with_sources,
     get_collections,
     load_embedding_model,
-    load_reranker,
     load_settings,
     store_message,
+    try_load_reranker,
 )
 from src.local_runtime import check_ollama  # noqa: E402
 from src.ui import apply_streamlit_theme, render_source  # noqa: E402
@@ -83,7 +83,7 @@ def load_embeddings(settings):
 
 @st.cache_resource
 def load_precision_reranker(settings):
-    return load_reranker(settings)
+    return try_load_reranker(settings)
 
 
 if "language" not in st.session_state:
@@ -203,7 +203,14 @@ if query:
         st.write(query)
     with st.chat_message("assistant"):
         with st.spinner(text["thinking"]):
-            reranker = load_precision_reranker(settings) if use_reranker else None
+            reranker, reranker_warning = (
+                load_precision_reranker(settings) if use_reranker else (None, None)
+            )
+            if reranker_warning:
+                st.warning(
+                    "Cross-Encoder 暂时不可用，已自动回退到 hybrid 检索。"
+                    f"\n\n详细信息：{reranker_warning}"
+                )
             answer, sources = generate_answer_with_sources(
                 collection,
                 model,
