@@ -5,7 +5,7 @@ This project turns Junyi Chen's portfolio data into a local Retrieval-Augmented 
 ```mermaid
 flowchart TD
     A["data/portfolio_docs.json"] --> B["Chunk documents"]
-    B --> C["voyageai/voyage-4-nano embeddings"]
+    B --> C["Configurable SentenceTransformers embeddings"]
     C --> D["MongoDB Local Atlas"]
     D --> E["MongoDB Vector Search"]
     F["User question"] --> C

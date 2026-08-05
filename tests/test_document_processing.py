@@ -1,19 +1,97 @@
 from __future__ import annotations
 
 import json
+import io
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
+
+import numpy as np
 
 from src.document_processing import (
     ChunkConfig,
+    chunk_metrics,
+    detect_pii,
     normalize_document,
     parse_uploaded_file,
+    persist_and_parse_upload,
+    rank_preview_chunks,
+    recommend_chunk_config,
     split_document,
 )
 
 
 class DocumentProcessingTests(unittest.TestCase):
+    def test_recommends_resume_chunking_from_docx_metadata(self) -> None:
+        document = normalize_document(
+            {
+                "title": "Master Resume",
+                "body": "Resume evidence. " * 500,
+                "metadata": {"file_type": "docx", "source": "Master Resume.docx"},
+            }
+        )
+        config = recommend_chunk_config(document)
+        self.assertEqual(config, ChunkConfig("recursive", 600, 60))
+
+    def test_recommends_markdown_and_short_json_chunking(self) -> None:
+        markdown = normalize_document(
+            {"title": "README", "body": "# Project\n" + "Evidence. " * 200, "metadata": {"file_type": "md"}}
+        )
+        short_json = normalize_document(
+            {"title": "Summary", "body": "Short public summary.", "metadata": {"file_type": "json"}}
+        )
+        self.assertEqual(recommend_chunk_config(markdown), ChunkConfig("markdown", 800, 80))
+        self.assertEqual(recommend_chunk_config(short_json), ChunkConfig("recursive", 800, 0))
+
+    def test_csv_rows_never_add_chunk_overlap(self) -> None:
+        document = normalize_document(
+            {"title": "Experience rows", "body": "Structured row. " * 100, "metadata": {"file_type": "csv"}}
+        )
+        self.assertEqual(recommend_chunk_config(document), ChunkConfig("recursive", 800, 0))
+
+    def test_chunk_metrics_flag_fragmented_content(self) -> None:
+        metrics = chunk_metrics([{"body": "a" * 40}, {"body": "b" * 400}])
+        self.assertEqual(metrics["count"], 2)
+        self.assertEqual(metrics["min_length"], 40)
+        self.assertEqual(metrics["max_length"], 400)
+        self.assertEqual(metrics["too_short_ratio"], 0.5)
+        self.assertTrue(metrics["warnings"])
+
+    def test_detect_pii_finds_email_and_phone(self) -> None:
+        findings = detect_pii("Email me at person@example.com or call 13776680803.")
+        self.assertEqual({item["type"] for item in findings}, {"email", "phone"})
+
+    def test_preview_retrieval_ranks_the_most_similar_chunk_first(self) -> None:
+        class FakeModel:
+            def encode_query(self, values):
+                return np.array([[1.0, 0.0] for _ in values])
+
+            def encode_document(self, values):
+                return np.array([[1.0, 0.0] if "MongoDB" in value else [0.0, 1.0] for value in values])
+
+        chunks = [{"body": "Frontend UI"}, {"body": "MongoDB vector search"}]
+        results = rank_preview_chunks(chunks, "database experience", FakeModel(), top_k=2)
+        self.assertEqual(results[0]["body"], "MongoDB vector search")
+        self.assertEqual(results[0]["score"], 1.0)
+
+    def test_persist_and_parse_upload_keeps_a_stable_docx_result(self) -> None:
+        document_xml = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:body><w:p><w:r><w:t>Portfolio evidence from DOCX.</w:t></w:r></w:p></w:body>
+        </w:document>'''
+        with tempfile.TemporaryDirectory() as temp_dir:
+            uploads_dir = Path(temp_dir)
+            buffer = io.BytesIO()
+            with zipfile.ZipFile(buffer, "w") as archive:
+                archive.writestr("word/document.xml", document_xml)
+
+            first = persist_and_parse_upload("resume.docx", buffer.getvalue(), uploads_dir)
+            second = persist_and_parse_upload("resume.docx", buffer.getvalue(), uploads_dir)
+
+        self.assertEqual(first, second)
+        self.assertEqual(first[0]["body"], "Portfolio evidence from DOCX.")
+
     def test_normalize_document_adds_stable_identity_and_public_visibility(self) -> None:
         raw = {
             "title": "RAG Assistant",

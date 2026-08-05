@@ -43,12 +43,12 @@
   },
   {
     "title": "Local RAG Portfolio Assistant",
-    "body": "Local RAG Portfolio Assistant is Junyi Chen's local AI portfolio assistant project. It adapts a Google and MongoDB RAG workshop into a personal portfolio assistant that answers questions about Junyi's projects, skills, internships, awards, and technical background. The system uses Python, MongoDB Local Atlas, MongoDB Vector Search, voyageai/voyage-4-nano embeddings, Ollama-hosted Gemma, reusable RAG modules, ingestion scripts, smoke tests, Jupyter notebooks, and a Streamlit chat UI. It demonstrates document ingestion, chunking, embedding generation, vector indexing, semantic retrieval, local LLM answer generation, and private portfolio Q&A.",
+    "body": "Local RAG Portfolio Assistant is Junyi Chen's bilingual AI portfolio assistant project. It adapts a Google and MongoDB RAG workshop into a dual-mode product that answers questions about Junyi's projects, skills, internships, awards, and technical background. The local private mode uses Python, MongoDB Local Atlas, MongoDB Vector Search, configurable SentenceTransformers embeddings with multilingual MiniLM as the CPU-friendly default, Ollama-hosted Qwen or Gemma, ingestion scripts, smoke tests, and a Streamlit UI. The cloud public mode uses Next.js, Vercel Functions, MongoDB Atlas Vector Search, and Gemini. It demonstrates document ingestion, chunking, embedding generation, vector indexing, semantic retrieval, grounded answer generation, source evidence, and privacy-separated portfolio Q&A.",
     "url": "https://github.com/666junyichen/local-rag-portfolio-assistant",
     "updated": "2026-06-17",
     "metadata": {
       "category": "project",
-      "stack": ["Python", "MongoDB Vector Search", "Ollama", "Gemma", "voyage-4-nano", "Streamlit", "RAG"],
+      "stack": ["Python", "MongoDB Vector Search", "SentenceTransformers", "Ollama", "Qwen", "Gemma", "Streamlit", "Next.js", "Gemini", "RAG"],
       "source": "new project implementation"
     }
   },

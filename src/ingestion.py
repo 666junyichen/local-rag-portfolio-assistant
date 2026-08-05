@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from src.document_processing import ChunkConfig, normalize_document, split_document
+from src.local_catalog import LocalCatalog, stable_document_id
 
 
 def _load_json_list(path: Path) -> list[dict[str, Any]]:
@@ -14,15 +15,108 @@ def _load_json_list(path: Path) -> list[dict[str, Any]]:
     return [dict(item) for item in payload]
 
 
+def _project_document_priority(document: dict[str, Any]) -> tuple[int, str]:
+    relative_path = str(document.get("relative_path") or document.get("path") or "")
+    normalized = relative_path.replace("/", "\\")
+    name = normalized.rsplit("\\", 1)[-1].lower()
+    if name.startswith("readme"):
+        rank = 0
+    elif "\\docs\\" in f"\\{normalized.lower()}\\" and name.endswith(".md"):
+        rank = 1
+    elif name in {"package.json", "pyproject.toml", "requirements.txt", "architecture.md"}:
+        rank = 2
+    elif name.endswith((".md", ".py", ".ts", ".tsx", ".js")):
+        rank = 3
+    else:
+        rank = 4
+    return rank, normalized.lower()
+
+
+def _resume_document_priority(document: dict[str, Any]) -> tuple[int, str]:
+    relative_path = str(document.get("relative_path") or document.get("path") or "")
+    normalized = relative_path.replace("/", "\\").lower()
+    name = normalized.rsplit("\\", 1)[-1]
+    if "master" in normalized and name.endswith(".docx"):
+        rank = 0
+    elif "master" in normalized and name.endswith(".md"):
+        rank = 1
+    elif name.endswith(".docx"):
+        rank = 2
+    elif name.endswith(".md"):
+        rank = 3
+    else:
+        rank = 4
+    return rank, normalized
+
+
+def select_private_documents(
+    rows: Iterable[dict[str, Any]],
+    *,
+    per_project_limit: int = 2,
+    resume_limit: int = 12,
+) -> list[dict[str, Any]]:
+    """Keep private resumes/uploads and a useful, bounded sample per project."""
+    always_include: list[dict[str, Any]] = []
+    resumes: list[dict[str, Any]] = []
+    projects: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        document = dict(row)
+        source = document.get("source")
+        if source == "resume_root":
+            relative_path = str(document.get("relative_path") or document.get("path") or "").lower()
+            noisy_parts = ("phpstudy_pro", "\\extensions\\", "\\errorpages\\", "\\www\\error\\")
+            if not any(part in relative_path for part in noisy_parts):
+                resumes.append(document)
+            continue
+        if source != "project_activity_root" or per_project_limit <= 0:
+            always_include.append(document)
+            continue
+        relative_path = str(document.get("relative_path") or document.get("path") or "unknown")
+        project_name = relative_path.replace("/", "\\").split("\\", 1)[0]
+        projects.setdefault(project_name, []).append(document)
+
+    selected = list(always_include)
+    selected.extend(sorted(resumes, key=_resume_document_priority)[:resume_limit])
+    for project_name in sorted(projects):
+        selected.extend(sorted(projects[project_name], key=_project_document_priority)[:per_project_limit])
+    return selected
+
+
+def ensure_local_catalog(
+    data_dir: Path,
+    *,
+    per_project_limit: int = 2,
+    resume_limit: int = 12,
+) -> LocalCatalog:
+    catalog = LocalCatalog(data_dir / "local_catalog.sqlite3")
+    private_path = data_dir / "local_private_docs.json"
+    if catalog.count() == 0 and private_path.exists():
+        rows = _load_json_list(private_path)
+        selected = select_private_documents(
+            rows,
+            per_project_limit=per_project_limit,
+            resume_limit=resume_limit,
+        )
+        active_ids = {stable_document_id(row) for row in selected}
+        catalog.upsert_documents(rows, active_ids=active_ids)
+    return catalog
+
+
 def load_knowledge_documents(data_dir: Path, *, include_private: bool = True) -> list[dict[str, Any]]:
     public_path = data_dir / "portfolio_docs.json"
     documents = [normalize_document(item, default_visibility="public") for item in _load_json_list(public_path)]
 
-    private_path = data_dir / "local_private_docs.json"
-    if include_private and private_path.exists():
-        documents.extend(
-            normalize_document(item, default_visibility="private") for item in _load_json_list(private_path)
-        )
+    if include_private:
+        catalog_path = data_dir / "local_catalog.sqlite3"
+        if catalog_path.exists():
+            documents.extend(LocalCatalog(catalog_path).active_documents())
+        else:
+            private_path = data_dir / "local_private_docs.json"
+            if private_path.exists():
+                private_rows = select_private_documents(_load_json_list(private_path))
+                documents.extend(
+                    normalize_document(item, default_visibility="private") for item in private_rows
+                )
     return documents
 
 
@@ -39,5 +133,17 @@ def build_chunk_records(
         if document["content_hash"] in seen_hashes:
             continue
         seen_hashes.add(document["content_hash"])
-        chunks.extend(split_document(document, config))
+        configured = (document.get("metadata") or {}).get("chunking") or {}
+        document_config = config
+        if configured:
+            document_config = ChunkConfig(
+                strategy=str(configured.get("strategy") or config.strategy),
+                chunk_size=int(configured.get("chunk_size") or config.chunk_size),
+                chunk_overlap=int(
+                    configured.get("chunk_overlap")
+                    if configured.get("chunk_overlap") is not None
+                    else config.chunk_overlap
+                ),
+            )
+        chunks.extend(split_document(document, document_config))
     return chunks

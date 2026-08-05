@@ -20,7 +20,7 @@ def main() -> None:
     if results:
         print(f"top_title={results[0].get('title')}")
 
-    answer = generate_answer(collection, model, settings, query, top_k=3)
+    answer = generate_answer(collection, model, settings, query, top_k=3, max_tokens=24)
     print("answer_preview=" + answer[:500].replace("\n", " "))
     print("smoke_test=OK")
 

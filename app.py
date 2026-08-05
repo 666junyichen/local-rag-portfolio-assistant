@@ -16,6 +16,7 @@ from src.portfolio_rag import (  # noqa: E402
     load_settings,
     store_message,
 )
+from src.local_runtime import check_ollama  # noqa: E402
 from src.ui import apply_streamlit_theme, render_source  # noqa: E402
 
 
@@ -70,10 +71,13 @@ apply_streamlit_theme()
 
 
 @st.cache_resource
-def load_runtime():
-    settings = load_settings(ROOT / ".env")
-    _, knowledge, history = get_collections(settings)
-    return settings, knowledge, history, load_embedding_model(settings)
+def load_database(settings):
+    return get_collections(settings)
+
+
+@st.cache_resource
+def load_embeddings(settings):
+    return load_embedding_model(settings)
 
 
 if "language" not in st.session_state:
@@ -113,17 +117,58 @@ st.title(text["title"])
 st.write(text["intro"])
 
 question_cols = st.columns(2)
-for index, question in enumerate(QUESTIONS[language]):
-    with question_cols[index % 2]:
-        if st.button(question, key=f"question-{language}-{index}", use_container_width=True):
-            st.session_state.pending_query = question
+settings = collection = history_collection = model = None
+runtime_errors: list[str] = []
+runtime_details: list[str] = []
 
 try:
-    settings, collection, history_collection, model = load_runtime()
-    st.success(f"Connected · {settings.ollama_model} · {settings.collection_name}", icon="✓")
+    settings = load_settings(ROOT / ".env")
 except Exception as error:
-    st.error(f"Local runtime unavailable: {error}")
-    st.stop()
+    runtime_errors.append(f"Configuration: {error}")
+
+if settings:
+    try:
+        _, collection, history_collection = load_database(settings)
+        runtime_details.append(f"MongoDB: connected to {settings.collection_name}")
+    except Exception as error:
+        runtime_errors.append(f"MongoDB: {error}")
+
+    if collection is not None:
+        try:
+            model = load_embeddings(settings)
+            runtime_details.append(f"Embedding: {settings.embedding_model_id}")
+        except Exception as error:
+            runtime_errors.append(f"Embedding: {error}")
+    else:
+        runtime_details.append("Embedding: waiting for MongoDB before loading")
+
+    ollama = check_ollama(settings.ollama_base_url, settings.ollama_model)
+    if ollama.available:
+        runtime_details.append(ollama.detail)
+    else:
+        runtime_errors.append(ollama.detail)
+
+runtime_ready = not runtime_errors and all(
+    value is not None for value in (settings, collection, history_collection, model)
+)
+if runtime_ready:
+    st.success("Local runtime ready · " + " · ".join(runtime_details), icon="✅")
+else:
+    st.error("Local runtime is not ready. The page remains available for diagnostics.")
+    for error in runtime_errors:
+        st.write(f"- {error}")
+    st.caption("Open Docker Desktop, then run the one-command local startup script:")
+    st.code("powershell -ExecutionPolicy Bypass -File .\\scripts\\start-local.ps1", language="powershell")
+
+for index, question in enumerate(QUESTIONS[language]):
+    with question_cols[index % 2]:
+        if st.button(
+            question,
+            key=f"question-{language}-{index}",
+            use_container_width=True,
+            disabled=not runtime_ready,
+        ):
+            st.session_state.pending_query = question
 
 if not st.session_state.messages:
     with st.chat_message("assistant"):
@@ -137,7 +182,9 @@ for message in st.session_state.messages:
                 for source in message["sources"]:
                     render_source(source)
 
-query = st.session_state.pop("pending_query", None) or st.chat_input(text["input"])
+query = st.session_state.pop("pending_query", None) or st.chat_input(
+    text["input"], disabled=not runtime_ready
+)
 if query:
     st.session_state.messages.append({"role": "user", "content": query})
     store_message(history_collection, st.session_state.session_id, "user", query)

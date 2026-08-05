@@ -7,6 +7,7 @@ import os
 import re
 import sys
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 from xml.etree import ElementTree
 
@@ -32,6 +33,8 @@ SOURCE_ROOTS = [
 
 TEXT_EXTENSIONS = {".csv", ".html", ".htm", ".js", ".json", ".md", ".py", ".txt", ".ts", ".tsx"}
 DOCX_EXTENSIONS = {".docx"}
+PDF_EXTENSIONS = {".pdf"}
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
 SKIP_DIRS = {
     ".git",
@@ -94,7 +97,8 @@ def should_skip(path: Path) -> bool:
     if path.name in SKIP_FILE_NAMES or path.name.startswith(".env"):
         return True
     try:
-        return path.stat().st_size > MAX_FILE_BYTES
+        limit = 20_000_000 if path.suffix.lower() in IMAGE_EXTENSIONS | PDF_EXTENSIONS else MAX_FILE_BYTES
+        return path.stat().st_size > limit
     except OSError:
         return True
 
@@ -112,20 +116,41 @@ def iter_source_files(source_root: Path) -> list[Path]:
             if should_skip(path):
                 continue
             suffix = path.suffix.lower()
-            if suffix in TEXT_EXTENSIONS or suffix in DOCX_EXTENSIONS:
+            if suffix in TEXT_EXTENSIONS or suffix in DOCX_EXTENSIONS or suffix in PDF_EXTENSIONS or suffix in IMAGE_EXTENSIONS:
                 files.append(path)
     return sorted(files)
 
 
-def build_doc(path: Path, source_name: str, source_description: str, base: Path) -> dict[str, str] | None:
+def read_pdf(path: Path) -> str:
+    from pypdf import PdfReader
+
+    return "\n\n".join(page.extract_text() or "" for page in PdfReader(str(path)).pages)
+
+
+def build_doc(path: Path, source_name: str, source_description: str, base: Path) -> dict[str, str | int] | None:
     suffix = path.suffix.lower()
+    parse_status = "ready"
+    parse_message = ""
     try:
-        text = read_docx(path) if suffix in DOCX_EXTENSIONS else read_text_file(path)
-    except (OSError, KeyError, zipfile.BadZipFile, ElementTree.ParseError):
-        return None
+        if suffix in IMAGE_EXTENSIONS:
+            text = f"Image file {path.name}. OCR not enabled."
+            parse_status = "needs_ocr"
+            parse_message = "OCR not enabled"
+        elif suffix in PDF_EXTENSIONS:
+            text = read_pdf(path)
+            if len(clean_text(text)) < 80:
+                text = f"Scanned PDF {path.name}. OCR not enabled."
+                parse_status = "needs_ocr"
+                parse_message = "PDF contains no extractable text"
+        else:
+            text = read_docx(path) if suffix in DOCX_EXTENSIONS else read_text_file(path)
+    except Exception as error:
+        text = f"Could not parse {path.name}: {type(error).__name__}."
+        parse_status = "parse_error"
+        parse_message = str(error)[:500]
 
     body = clean_text(text)
-    if len(body) < 80:
+    if len(body) < 80 and parse_status == "ready":
         return None
 
     try:
@@ -133,6 +158,7 @@ def build_doc(path: Path, source_name: str, source_description: str, base: Path)
     except ValueError:
         relative_path = str(path)
 
+    stat = path.stat()
     return {
         "title": f"{source_description}: {path.stem}",
         "category": "local_private_source",
@@ -140,6 +166,11 @@ def build_doc(path: Path, source_name: str, source_description: str, base: Path)
         "path": str(path),
         "relative_path": relative_path,
         "body": body[:MAX_BODY_CHARS],
+        "file_type": suffix.lstrip("."),
+        "size_bytes": stat.st_size,
+        "modified_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+        "parse_status": parse_status,
+        "parse_message": parse_message,
     }
 
 
@@ -170,9 +201,16 @@ def main() -> None:
     output_path.write_text(json.dumps(docs, ensure_ascii=False, indent=2), encoding="utf-8")
     summary_path.write_text(json.dumps(summary_rows, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    sys.path.insert(0, str(ROOT))
+    from src.local_catalog import LocalCatalog
+
+    catalog = LocalCatalog(ROOT / "data" / "local_catalog.sqlite3")
+    catalog.upsert_documents(docs)
+
     print(f"Wrote private docs: {len(docs)}")
     print(f"Output: {output_path}")
     print(f"Summary: {summary_path}")
+    print(f"SQLite catalog: {catalog.path} ({catalog.count()} records)")
     writer = csv.DictWriter(sys.stdout, fieldnames=["source", "candidate_files", "included_docs", "path"])
     writer.writeheader()
     writer.writerows(summary_rows)

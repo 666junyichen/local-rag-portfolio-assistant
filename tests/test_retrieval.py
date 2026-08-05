@@ -2,10 +2,22 @@ from __future__ import annotations
 
 import unittest
 
-from src.retrieval import RetrievalSettings, select_results
+from src.retrieval import RetrievalSettings, apply_keyword_rerank, select_results
 
 
 class RetrievalTests(unittest.TestCase):
+    def test_keyword_rerank_promotes_explicit_technical_terms(self) -> None:
+        rows = [
+            {"title": "Generic profile", "body": "General AI experience", "score": 0.82},
+            {"title": "Local RAG", "body": "MongoDB Vector Search RAG assistant", "score": 0.78},
+        ]
+
+        reranked = apply_keyword_rerank(rows, "RAG and MongoDB experience")
+        selected = select_results(reranked, RetrievalSettings(top_k=1))
+
+        self.assertEqual(selected[0]["title"], "Local RAG")
+        self.assertEqual(selected[0]["score"], 0.78)
+
     def test_settings_enforce_top_k_range(self) -> None:
         with self.assertRaises(ValueError):
             RetrievalSettings(top_k=11)

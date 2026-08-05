@@ -40,7 +40,7 @@ The two modes use separate collections and indexes because their embedding model
 
 | Mode | Collection | Embedding | Generation |
 |---|---|---|---|
-| Local | `portfolio_knowledge_local` | `voyageai/voyage-4-nano` | Ollama (`qwen2.5:3b` or Gemma) |
+| Local | `portfolio_knowledge_local` | multilingual MiniLM (default) or `voyageai/voyage-4-nano` | Ollama (`qwen2.5:3b` or Gemma) |
 | Cloud | `portfolio_knowledge_public` | `gemini-embedding-001` | Gemini Flash |
 
 ## Local Private Mode
@@ -49,8 +49,7 @@ The two modes use separate collections and indexes because their embedding model
 
 - Python 3.10 or 3.11
 - Docker Desktop
-- MongoDB Local Atlas container
-- Ollama container or desktop service
+- A local Python environment created with `uv sync`
 
 ```powershell
 Copy-Item .env.example .env
@@ -64,9 +63,37 @@ LOCAL_MONGODB_URI=mongodb://localhost:62262/?directConnection=true
 LOCAL_COLLECTION_NAME=portfolio_knowledge_local
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=qwen2.5:3b
+EMBEDDING_MODEL_ID=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 ```
 
-Build the index and run tests:
+### One-command startup
+
+Open Docker Desktop and wait until it shows **Engine running**, then run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
+```
+
+The script creates persistent MongoDB Atlas Local and Ollama containers, downloads the configured model when needed, builds the vector index on first use, runs the smoke test, and starts Streamlit. Open [http://localhost:8505](http://localhost:8505). Keep the terminal open while using Streamlit.
+
+The first startup downloads container images and the Ollama model and can take several minutes. Later starts reuse the named Docker volumes. To inspect the stack or stop its containers without deleting data:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-local.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\stop-local.ps1
+```
+
+The image downloads run sequentially and retry transient failures. If Docker reports a CDN `TLS handshake timeout`, Docker Desktop's engine/proxy cannot currently reach the image layer; wait for the network to recover or restart Docker Desktop, then run the same startup command again. Completed layers are reused.
+
+Force a new embedding and Vector Search index after changing the knowledge base:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1 -Reindex
+```
+
+### Manual development commands
+
+Once the containers and model are ready, these commands remain available:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\ingest.py
@@ -81,6 +108,40 @@ Launch the three-page local application:
 ```
 
 Open [http://localhost:8505](http://localhost:8505). The sidebar exposes **Chat**, **Knowledge Studio**, and **Retrieval Lab**.
+
+`scripts/ingest.py` is not a normal startup step. Run it only on the first setup, after changing public/private documents, after changing the embedding model, or when explicitly rebuilding the index.
+
+### Knowledge Studio library manager
+
+Knowledge Studio keeps the complete private document catalog in the Git-ignored `data/local_catalog.sqlite3`. The original files and the existing `local_private_docs.json` scan are not deleted. Run the one-time migration manually when needed:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\migrate_local_catalog.py
+```
+
+The four tabs support:
+
+- **Upload & Chunk:** automatic per-file recommendations, manual overrides, PII warnings, chunk metrics, previews, and a temporary Top-5 retrieval test that does not write to MongoDB.
+- **Library:** search, filters, pagination, full-text and chunk inspection, RAG summary overrides, public JSON editing, and private document activation/exclusion. Exclusion never deletes the original file.
+- **Versions & Duplicates:** exact duplicate groups and human-confirmed resume/upload version recommendations.
+- **Index Maintenance:** active document counts, stale-index detection, visible ingestion progress, and the separate Atlas cloud-sync reminder.
+
+Default chunk recommendations are `600/60` for DOCX/resumes, `800/80` for Markdown, `700/70` for TXT, `800/100` for text PDFs, `800/0` for short JSON/CSV, and `900/80` for code. Each document persists its own strategy, chunk size, and overlap, so preview and ingestion use the same boundaries. Images and scanned PDFs are marked `needs_ocr`; OCR is intentionally not enabled in this version.
+
+### Local troubleshooting
+
+| Symptom | Meaning | Action |
+|---|---|---|
+| Docker Desktop is open but `docker ps` is empty | The engine is running but the project services have not been created | Run `scripts/start-local.ps1` |
+| `localhost:11434` refuses the connection | Ollama is not running | Run the startup script and inspect `docker logs portfolio-rag-ollama` |
+| `localhost:62262` refuses the connection | MongoDB Atlas Local is not running | Run the startup script and inspect `docker logs portfolio-rag-mongodb` |
+| The configured model is missing | Ollama is available but the `.env` model has not been downloaded | The startup script automatically runs `ollama pull` |
+| Streamlit loads but chat is disabled | One or more runtime checks failed | Read the MongoDB, Embedding, and Ollama diagnostics shown in the page |
+| Index rebuild spends many minutes generating embeddings | `voyageai/voyage-4-nano` is too heavy for the current CPU or the private scan contains too many low-value files | Use the multilingual MiniLM default; ingestion curates project README/docs and master resume evidence while preserving the full private source file locally |
+
+For Chinese-first answers keep `OLLAMA_MODEL=qwen2.5:3b`. To reproduce the workshop with the smaller Gemma model, set `OLLAMA_MODEL=gemma:2b` and run the startup script again.
+
+The original workshop-compatible `voyageai/voyage-4-nano` embedding remains configurable, but the default multilingual MiniLM model is substantially faster on CPU and supports Chinese and English retrieval. Changing embedding models always requires a complete reindex.
 
 ## Cloud Public Mode
 

@@ -3,8 +3,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from tqdm import tqdm
-
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
@@ -19,28 +17,40 @@ from src.ingestion import build_chunk_records, load_knowledge_documents  # noqa:
 
 
 def main() -> None:
-    settings = load_settings(ROOT / ".env")
-    docs = load_knowledge_documents(ROOT / "data", include_private=True)
+    def report(message: str) -> None:
+        print(f"[ingest] {message}", flush=True)
 
+    report("Loading local configuration...")
+    settings = load_settings(ROOT / ".env")
+    report("Reading public and private source documents...")
+    docs = load_knowledge_documents(ROOT / "data", include_private=True)
+    report(f"Loaded source documents: {len(docs)}")
+
+    report("Connecting to MongoDB Local Atlas...")
     _, collection, history = get_collections(settings)
+    report(f"Loading embedding model: {settings.embedding_model_id}")
     model = load_embedding_model(settings)
     dimensions = model.encode_query(["hello"]).shape[1]
+    report(f"Embedding dimensions: {dimensions}")
 
     chunks = build_chunk_records(docs)
+    report(f"Prepared chunks: {len(chunks)}")
     texts = [chunk["body"] for chunk in chunks]
+    report("Generating document embeddings. This is the longest step on CPU...")
     embeddings = embed_texts(model, texts, input_type="document")
-    for chunk, embedding in tqdm(list(zip(chunks, embeddings)), desc="Attaching embeddings"):
+    for chunk, embedding in zip(chunks, embeddings):
         chunk["embedding"] = embedding
+    report("Embeddings generated.")
 
+    report("Replacing local knowledge collection...")
     collection.delete_many({})
     result = collection.insert_many(chunks)
+    report(f"Inserted chunks: {len(result.inserted_ids)}")
     history.create_index([("session_id", 1), ("timestamp", 1)])
-    create_vector_index(collection, settings, dimensions)
+    create_vector_index(collection, settings, dimensions, progress=report)
 
-    print(f"Loaded source documents: {len(docs)}")
-    print(f"Inserted chunks: {len(result.inserted_ids)}")
-    print(f"Vector index: {settings.vector_index_name}")
-    print("Ingestion complete.")
+    report(f"Vector index: {settings.vector_index_name}")
+    report("Ingestion complete.")
 
 
 if __name__ == "__main__":

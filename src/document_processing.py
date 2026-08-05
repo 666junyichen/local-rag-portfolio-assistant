@@ -13,9 +13,11 @@ from typing import Any
 from xml.etree import ElementTree
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+import numpy as np
 
 
 SUPPORTED_EXTENSIONS = {".json", ".md", ".txt", ".csv", ".docx", ".pdf"}
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
 
 @dataclass(frozen=True)
@@ -43,6 +45,94 @@ def clean_text(value: str) -> str:
     value = re.sub(r"[\t\f\v ]+", " ", value)
     value = re.sub(r"\n{3,}", "\n\n", value)
     return value.strip()
+
+
+def recommend_chunk_config(document: dict[str, Any]) -> ChunkConfig:
+    metadata = document.get("metadata") or {}
+    source = str(metadata.get("source") or document.get("path") or document.get("relative_path") or "")
+    file_type = str(metadata.get("file_type") or Path(source).suffix.lstrip(".")).lower()
+    title = str(document.get("title") or "").lower()
+    body_length = len(str(document.get("body") or ""))
+    if file_type == "docx" or "resume" in title or "简历" in title:
+        return ChunkConfig("recursive", 600, 60)
+    if file_type in {"md", "markdown"} or title.startswith("readme"):
+        return ChunkConfig("markdown", 800, 80)
+    if file_type == "txt":
+        return ChunkConfig("paragraph", 700, 70)
+    if file_type == "pdf":
+        return ChunkConfig("recursive", 800, 100)
+    if file_type == "csv":
+        return ChunkConfig("recursive", 800, 0)
+    if file_type == "json" and body_length <= 800:
+        return ChunkConfig("recursive", 800, 0)
+    if file_type in {"py", "js", "ts", "tsx", "html", "htm"}:
+        return ChunkConfig("recursive", 900, 80)
+    return ChunkConfig()
+
+
+def chunk_metrics(chunks: list[dict[str, Any]]) -> dict[str, Any]:
+    lengths = [len(str(chunk.get("body") or "")) for chunk in chunks]
+    if not lengths:
+        return {
+            "count": 0,
+            "average_length": 0,
+            "min_length": 0,
+            "max_length": 0,
+            "too_short_ratio": 0.0,
+            "warnings": ["No chunks were generated."],
+        }
+    too_short_ratio = sum(length < 100 for length in lengths) / len(lengths)
+    warnings = []
+    if too_short_ratio >= 0.25:
+        warnings.append("Many chunks are shorter than 100 characters; increase chunk size.")
+    if max(lengths) > 1600:
+        warnings.append("Some chunks are very long; retrieval may include unrelated context.")
+    return {
+        "count": len(lengths),
+        "average_length": round(sum(lengths) / len(lengths)),
+        "min_length": min(lengths),
+        "max_length": max(lengths),
+        "too_short_ratio": round(too_short_ratio, 3),
+        "warnings": warnings,
+    }
+
+
+def detect_pii(text: str) -> list[dict[str, str]]:
+    patterns = {
+        "email": r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
+        "phone": r"(?<!\d)(?:\+?86[- ]?)?1[3-9]\d{9}(?!\d)",
+    }
+    findings = []
+    for finding_type, pattern in patterns.items():
+        for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+            findings.append({"type": finding_type, "value": match.group(0)})
+    return findings
+
+
+def rank_preview_chunks(
+    chunks: list[dict[str, Any]],
+    query: str,
+    model: Any,
+    *,
+    top_k: int = 5,
+) -> list[dict[str, Any]]:
+    if not chunks or not query.strip():
+        return []
+    query_vector = np.asarray(model.encode_query([query.strip()]), dtype=float)[0]
+    document_vectors = np.asarray(
+        model.encode_document([str(chunk.get("body") or "") for chunk in chunks]),
+        dtype=float,
+    )
+    query_norm = np.linalg.norm(query_vector) or 1.0
+    document_norms = np.linalg.norm(document_vectors, axis=1)
+    document_norms[document_norms == 0] = 1.0
+    scores = (document_vectors @ query_vector) / (document_norms * query_norm)
+    ranked = sorted(
+        ({**chunk, "score": round(float(score), 4)} for chunk, score in zip(chunks, scores)),
+        key=lambda item: item["score"],
+        reverse=True,
+    )
+    return ranked[: max(1, min(top_k, len(ranked)))]
 
 
 def _digest(value: str, length: int = 20) -> str:
@@ -194,3 +284,12 @@ def parse_uploaded_file(path: Path) -> list[dict[str, Any]]:
     if suffix == ".pdf":
         return [_text_document(path, _read_pdf(path))]
     return [_text_document(path, path.read_text(encoding="utf-8-sig"))]
+
+
+def persist_and_parse_upload(name: str, data: bytes, uploads_dir: Path) -> list[dict[str, Any]]:
+    """Persist an upload locally and return a stable parsed representation."""
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    target = uploads_dir / Path(name).name
+    if not target.exists() or target.read_bytes() != data:
+        target.write_bytes(data)
+    return parse_uploaded_file(target)

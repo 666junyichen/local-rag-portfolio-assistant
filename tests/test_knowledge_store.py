@@ -5,7 +5,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.knowledge_store import publish_document, remove_document, save_private_documents
+from src.knowledge_store import (
+    archive_public_document,
+    publish_document,
+    remove_document,
+    save_private_documents,
+    update_public_document,
+)
 
 
 class KnowledgeStoreTests(unittest.TestCase):
@@ -42,6 +48,38 @@ class KnowledgeStoreTests(unittest.TestCase):
             saved = json.loads(path.read_text(encoding="utf-8"))
         self.assertTrue(removed)
         self.assertEqual([item["doc_id"] for item in saved], ["keep"])
+
+    def test_archive_public_document_removes_public_record_and_keeps_local_backup(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            public_path = root / "portfolio_docs.json"
+            archive_path = root / "archive" / "public_docs.json"
+            public_path.write_text(
+                json.dumps([{"doc_id": "drop", "title": "Drop", "body": "Public body."}]),
+                encoding="utf-8",
+            )
+            self.assertTrue(archive_public_document(public_path, archive_path, "drop"))
+            self.assertEqual(json.loads(public_path.read_text(encoding="utf-8")), [])
+            archived = json.loads(archive_path.read_text(encoding="utf-8"))
+            self.assertEqual(archived[0]["doc_id"], "drop")
+            self.assertIn("archived_at", archived[0])
+
+    def test_update_public_document_preserves_id_and_changes_summary_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "portfolio_docs.json"
+            path.write_text(
+                json.dumps([{"doc_id": "project", "title": "Old", "body": "Old body.", "metadata": {"category": "project"}}]),
+                encoding="utf-8",
+            )
+            updated = update_public_document(
+                path,
+                "project",
+                {"title": "New", "body": "New body.", "url": "https://example.com", "category": "summary", "updated": "2026-08-04"},
+            )
+            self.assertTrue(updated)
+            saved = json.loads(path.read_text(encoding="utf-8"))[0]
+            self.assertEqual(saved["doc_id"], "project")
+            self.assertEqual(saved["metadata"]["category"], "summary")
 
 
 if __name__ == "__main__":

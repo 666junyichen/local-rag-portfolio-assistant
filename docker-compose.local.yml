@@ -1,0 +1,36 @@
+name: portfolio-rag-local
+
+services:
+  mongodb:
+    image: mongodb/mongodb-atlas-local:latest
+    container_name: portfolio-rag-mongodb
+    hostname: portfolio-rag-mongodb
+    ports:
+      - "127.0.0.1:62262:27017"
+    volumes:
+      - portfolio-rag-mongodb-data:/data/db
+      - portfolio-rag-mongodb-config:/data/configdb
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: portfolio-rag-ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - portfolio-rag-ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  portfolio-rag-mongodb-data:
+    name: portfolio-rag-mongodb-data
+  portfolio-rag-mongodb-config:
+    name: portfolio-rag-mongodb-config
+  portfolio-rag-ollama-data:
+    name: portfolio-rag-ollama-data
