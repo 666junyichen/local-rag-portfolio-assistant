@@ -19,6 +19,34 @@ import numpy as np
 SUPPORTED_EXTENSIONS = {".json", ".md", ".txt", ".csv", ".docx", ".pdf"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
+RESUME_SECTION_HEADINGS = {
+    "个人简历": ("profile", "基本信息"),
+    "基本信息": ("profile", "基本信息"),
+    "education": ("education", "Education"),
+    "教育背景": ("education", "教育背景"),
+    "个人简介": ("summary", "个人简介"),
+    "profile": ("summary", "Profile"),
+    "实习经历": ("internship", "实习经历"),
+    "工作经历": ("internship", "工作经历"),
+    "experience": ("internship", "Experience"),
+    "项目经验": ("project", "项目经验"),
+    "projects": ("project", "Projects"),
+    "获奖与校园经历": ("award", "获奖与校园经历"),
+    "获奖经历": ("award", "获奖经历"),
+    "awards": ("award", "Awards"),
+    "专业技能": ("skill", "专业技能"),
+    "skills": ("skill", "Skills"),
+}
+RESUME_SKILL_HEADINGS = {
+    "编程与开发",
+    "ai与数据能力",
+    "ai 与数据能力",
+    "工具与协作",
+    "programming and development",
+    "ai and data",
+    "tools and collaboration",
+}
+
 
 @dataclass(frozen=True)
 class ChunkConfig:
@@ -28,8 +56,8 @@ class ChunkConfig:
     unit: str = "characters"
 
     def __post_init__(self) -> None:
-        if self.strategy not in {"recursive", "markdown", "paragraph"}:
-            raise ValueError("strategy must be recursive, markdown, or paragraph")
+        if self.strategy not in {"recursive", "markdown", "paragraph", "resume_semantic"}:
+            raise ValueError("strategy must be recursive, markdown, paragraph, or resume_semantic")
         if not 200 <= self.chunk_size <= 2000:
             raise ValueError("chunk_size must be between 200 and 2000")
         if self.chunk_overlap < 0:
@@ -67,7 +95,7 @@ def recommend_chunk_config(document: dict[str, Any]) -> ChunkConfig:
     title = str(document.get("title") or "").lower()
     body_length = len(str(document.get("body") or ""))
     if file_type == "docx" or "resume" in title or "简历" in title:
-        return ChunkConfig("recursive", 600, 60, unit="tokens")
+        return ChunkConfig("resume_semantic", 320, 0, unit="tokens")
     if file_type in {"md", "markdown"} or title.startswith("readme"):
         return ChunkConfig("markdown", 800, 80, unit="tokens")
     if file_type == "txt":
@@ -85,6 +113,7 @@ def recommend_chunk_config(document: dict[str, Any]) -> ChunkConfig:
 
 def chunk_metrics(chunks: list[dict[str, Any]]) -> dict[str, Any]:
     lengths = [len(str(chunk.get("body") or "")) for chunk in chunks]
+    token_lengths = [count_tokens(str(chunk.get("body") or "")) for chunk in chunks]
     if not lengths:
         return {
             "count": 0,
@@ -92,20 +121,32 @@ def chunk_metrics(chunks: list[dict[str, Any]]) -> dict[str, Any]:
             "min_length": 0,
             "max_length": 0,
             "too_short_ratio": 0.0,
+            "average_tokens": 0,
+            "min_tokens": 0,
+            "max_tokens": 0,
+            "cross_topic_count": 0,
             "warnings": ["No chunks were generated."],
         }
     too_short_ratio = sum(length < 100 for length in lengths) / len(lengths)
     warnings = []
-    if too_short_ratio >= 0.25:
+    is_semantic = any(str(chunk.get("section_type") or "document") != "document" for chunk in chunks)
+    if too_short_ratio >= 0.25 and not is_semantic:
         warnings.append("Many chunks are shorter than 100 characters; increase chunk size.")
     if max(lengths) > 1600:
         warnings.append("Some chunks are very long; retrieval may include unrelated context.")
+    cross_topic_count = sum(len(_section_types_in_text(str(chunk.get("body") or ""))) > 1 for chunk in chunks)
+    if cross_topic_count:
+        warnings.append(f"{cross_topic_count} chunks cross top-level resume sections; use resume semantic chunking.")
     return {
         "count": len(lengths),
         "average_length": round(sum(lengths) / len(lengths)),
         "min_length": min(lengths),
         "max_length": max(lengths),
         "too_short_ratio": round(too_short_ratio, 3),
+        "average_tokens": round(sum(token_lengths) / len(token_lengths)),
+        "min_tokens": min(token_lengths),
+        "max_tokens": max(token_lengths),
+        "cross_topic_count": cross_topic_count,
         "warnings": warnings,
     }
 
@@ -131,10 +172,18 @@ def rank_preview_chunks(
 ) -> list[dict[str, Any]]:
     if not chunks or not query.strip():
         return []
+    preview_chunks = [
+        {
+            **chunk,
+            "chunk_id": chunk.get("chunk_id") or f"preview_{index}",
+            "visibility": chunk.get("visibility") or "private",
+        }
+        for index, chunk in enumerate(chunks)
+    ]
     query_vector = np.asarray(model.encode_query([query.strip()]), dtype=float)[0]
     document_vectors = np.asarray(
         model.encode_document(
-            [str(chunk.get("retrieval_text") or chunk.get("body") or "") for chunk in chunks]
+            [str(chunk.get("retrieval_text") or chunk.get("body") or "") for chunk in preview_chunks]
         ),
         dtype=float,
     )
@@ -142,12 +191,36 @@ def rank_preview_chunks(
     document_norms = np.linalg.norm(document_vectors, axis=1)
     document_norms[document_norms == 0] = 1.0
     scores = (document_vectors @ query_vector) / (document_norms * query_norm)
-    ranked = sorted(
-        ({**chunk, "score": round(float(score), 4)} for chunk, score in zip(chunks, scores)),
+    vector_rows = sorted(
+        ({**chunk, "score": round(float(score), 4)} for chunk, score in zip(preview_chunks, scores)),
         key=lambda item: item["score"],
         reverse=True,
     )
-    return ranked[: max(1, min(top_k, len(ranked)))]
+    from src.retrieval import (
+        RetrievalSettings,
+        apply_section_intent_rerank,
+        bm25_rank,
+        reciprocal_rank_fusion,
+        select_results,
+    )
+
+    sparse_rows = bm25_rank(
+        preview_chunks,
+        query,
+        top_k=min(max(top_k * 4, 20), len(preview_chunks)),
+    )
+    fused = reciprocal_rank_fusion(
+        vector_rows[: min(max(top_k * 4, 20), len(vector_rows))],
+        sparse_rows,
+        vector_weight=1.0,
+        sparse_weight=1.2,
+    )
+    max_bm25 = max((float(row.get("bm25_score", 0)) for row in fused), default=0.0)
+    for row in fused:
+        if row.get("score") is None:
+            row["score"] = float(row.get("bm25_score", 0)) / max_bm25 if max_bm25 else 0.0
+    fused = apply_section_intent_rerank(fused, query)
+    return select_results(fused, RetrievalSettings(top_k=min(max(top_k, 1), 10), scope="all"))
 
 
 def _digest(value: str, length: int = 20) -> str:
@@ -196,6 +269,203 @@ def replace_document_body(document: dict[str, Any], body: str) -> dict[str, Any]
     )
 
 
+def _heading_key(value: str) -> str:
+    return re.sub(r"[\s:*#：]+", "", value).strip().lower()
+
+
+def _section_heading(value: str) -> tuple[str, str] | None:
+    key = _heading_key(value)
+    for heading, section in RESUME_SECTION_HEADINGS.items():
+        if key == _heading_key(heading):
+            return section
+    return None
+
+
+def _section_types_in_text(value: str) -> set[str]:
+    return {
+        section[0]
+        for paragraph in re.split(r"\n+", value)
+        if (section := _section_heading(paragraph.strip())) is not None
+    }
+
+
+def _looks_like_entity_start(
+    paragraph: str,
+    next_paragraph: str,
+    section_type: str,
+) -> bool:
+    lowered = paragraph.lower()
+    next_lowered = next_paragraph.lower()
+    has_date = bool(re.search(r"(?:19|20)\d{2}(?:[./-]\d{1,2})?", paragraph))
+    if section_type == "education":
+        return has_date and any(term in lowered for term in ("大学", "university", "college"))
+    if section_type == "internship":
+        return has_date and (
+            any(term in lowered for term in ("公司", "实习", "顾问", "intern", "consultant"))
+            or "｜" in paragraph
+            or "|" in paragraph
+        )
+    if section_type == "project":
+        return (
+            next_lowered.startswith(("技术栈", "tech stack"))
+            or "github / demo" in lowered
+            or "github/demo" in lowered
+            or (has_date and ("｜" in paragraph or "|" in paragraph) and not paragraph.startswith("-"))
+        )
+    if section_type == "award":
+        return has_date and not paragraph.startswith("-")
+    return False
+
+
+def _skill_entity_start(paragraph: str) -> bool:
+    key = _heading_key(paragraph)
+    if key in {_heading_key(value) for value in RESUME_SKILL_HEADINGS}:
+        return True
+    return bool(re.match(r"^[^：:\n]{2,24}[：:]", paragraph)) and not paragraph.startswith("-")
+
+
+def _unit_group_id(document_id: str, section_type: str, entity_title: str) -> str:
+    basis = f"{document_id}\n{section_type}\n{_heading_key(entity_title)}"
+    return f"group_{_digest(basis, 20)}"
+
+
+def _resume_semantic_units(document: dict[str, Any]) -> list[dict[str, Any]]:
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", document["body"]) if part.strip()]
+    units: list[dict[str, Any]] = []
+    section_type = "profile"
+    section_label = "基本信息"
+    current: list[str] = []
+    current_title = "基本信息"
+    current_priority = "primary"
+    summary_index = 0
+    has_structured_skill_group = False
+    in_secondary_skill_tail = False
+
+    def flush() -> None:
+        nonlocal current
+        if not current:
+            return
+        title = current_title or section_label
+        priority = current_priority
+        group_title = title
+        if section_type == "summary":
+            priority = "primary" if summary_index == 1 else "secondary"
+            group_title = section_label
+        units.append(
+            {
+                "paragraphs": current,
+                "section_type": section_type,
+                "section_label": section_label,
+                "entity_title": title,
+                "semantic_group_id": _unit_group_id(document["doc_id"], section_type, group_title),
+                "retrieval_priority": priority,
+            }
+        )
+        current = []
+
+    for index, paragraph in enumerate(paragraphs):
+        next_paragraph = paragraphs[index + 1] if index + 1 < len(paragraphs) else ""
+        heading = _section_heading(paragraph)
+        if heading:
+            flush()
+            section_type, section_label = heading
+            current_title = section_label
+            current_priority = "primary"
+            in_secondary_skill_tail = False
+            continue
+        if section_type == "summary":
+            flush()
+            summary_index += 1
+            current_title = f"{section_label} {summary_index}"
+            current = [paragraph]
+            flush()
+            continue
+        starts_entity = _looks_like_entity_start(paragraph, next_paragraph, section_type)
+        is_structured_skill_group = False
+        if section_type == "skill":
+            is_structured_skill_group = _heading_key(paragraph) in {
+                _heading_key(value) for value in RESUME_SKILL_HEADINGS
+            }
+            if is_structured_skill_group:
+                starts_entity = True
+            elif has_structured_skill_group:
+                starts_entity = not in_secondary_skill_tail
+            else:
+                starts_entity = _skill_entity_start(paragraph)
+        if starts_entity:
+            flush()
+            current_title = paragraph
+            if section_type == "skill":
+                if is_structured_skill_group:
+                    current_priority = "primary"
+                    has_structured_skill_group = True
+                    in_secondary_skill_tail = False
+                elif has_structured_skill_group:
+                    current_title = "Additional skill variants"
+                    current_priority = "secondary"
+                    in_secondary_skill_tail = True
+                else:
+                    current_priority = "primary"
+            else:
+                current_priority = "primary"
+            current = [paragraph]
+        else:
+            if not current:
+                current_title = section_label
+            current.append(paragraph)
+    flush()
+    return units
+
+
+def _split_to_budget(value: str, budget: int, unit: str) -> list[str]:
+    splitter = RecursiveCharacterTextSplitter(
+        separators=["\n\n", "\n", "。", ". ", " ", ""],
+        chunk_size=max(budget, 40),
+        chunk_overlap=0,
+        length_function=count_tokens if unit == "tokens" else len,
+    )
+    return [part.strip() for part in splitter.split_text(value) if part.strip()]
+
+
+def _split_resume_unit(unit: dict[str, Any], config: ChunkConfig) -> list[dict[str, Any]]:
+    paragraphs = list(unit["paragraphs"])
+    entity_title = str(unit["entity_title"])
+    combined = "\n\n".join(paragraphs)
+    if _measure(combined, config) <= config.chunk_size:
+        return [{**unit, "body": combined}]
+
+    title_is_body = bool(paragraphs and paragraphs[0] == entity_title)
+    content = paragraphs[1:] if title_is_body else paragraphs
+    title_cost = _measure(entity_title, config) + 2
+    body_budget = max(config.chunk_size - title_cost, 40)
+    parts: list[str] = []
+    for paragraph in content:
+        if _measure(paragraph, config) > body_budget:
+            parts.extend(_split_to_budget(paragraph, body_budget, config.unit))
+        else:
+            parts.append(paragraph)
+
+    results: list[dict[str, Any]] = []
+    current: list[str] = []
+    for part in parts:
+        candidate = "\n\n".join([entity_title, *current, part])
+        if current and _measure(candidate, config) > config.chunk_size:
+            results.append({**unit, "body": "\n\n".join([entity_title, *current])})
+            current = [part]
+        else:
+            current.append(part)
+    if current:
+        results.append({**unit, "body": "\n\n".join([entity_title, *current])})
+    return results
+
+
+def _resume_semantic_parts(document: dict[str, Any], config: ChunkConfig) -> list[dict[str, Any]]:
+    parts: list[dict[str, Any]] = []
+    for unit in _resume_semantic_units(document):
+        parts.extend(_split_resume_unit(unit, config))
+    return parts
+
+
 def _recursive_parts(text: str, config: ChunkConfig) -> list[str]:
     separators = ["\n#{1,6} ", "\n\n", "\n", "。", ". ", " ", ""]
     splitter = RecursiveCharacterTextSplitter(
@@ -233,7 +503,11 @@ def _markdown_parts(text: str, config: ChunkConfig) -> list[str]:
     return parts
 
 
-def build_context_prefix(document: dict[str, Any], section_path: str = "") -> str:
+def build_context_prefix(
+    document: dict[str, Any],
+    section_path: str = "",
+    entity_title: str = "",
+) -> str:
     metadata = document.get("metadata") or {}
     values = [f"Document: {document.get('title', 'Untitled')}"]
     project = metadata.get("project") or document.get("project")
@@ -243,6 +517,8 @@ def build_context_prefix(document: dict[str, Any], section_path: str = "") -> st
         values.append(f"Project: {project}")
     if section_path:
         values.append(f"Section: {section_path}")
+    if entity_title and entity_title not in section_path:
+        values.append(f"Entity: {entity_title}")
     if source:
         values.append(f"Source: {source}")
     if updated:
@@ -253,7 +529,11 @@ def build_context_prefix(document: dict[str, Any], section_path: str = "") -> st
 def split_document(document: dict[str, Any], config: ChunkConfig | None = None) -> list[dict[str, Any]]:
     config = config or ChunkConfig()
     normalized = normalize_document(document, default_visibility=document.get("visibility", "private"))
-    if config.strategy == "markdown":
+    semantic_parts: list[dict[str, Any]] | None = None
+    if config.strategy == "resume_semantic":
+        semantic_parts = _resume_semantic_parts(normalized, config)
+        bodies = [part["body"] for part in semantic_parts]
+    elif config.strategy == "markdown":
         bodies = _markdown_parts(normalized["body"], config)
     elif config.strategy == "paragraph":
         bodies = _paragraph_parts(normalized["body"], config)
@@ -262,9 +542,15 @@ def split_document(document: dict[str, Any], config: ChunkConfig | None = None) 
 
     chunks: list[dict[str, Any]] = []
     for index, body in enumerate(filter(None, (part.strip() for part in bodies))):
+        semantic = semantic_parts[index] if semantic_parts is not None else {}
         heading = re.match(r"^#{1,6}\s+(.+)", body)
-        section_path = heading.group(1).strip() if heading else ""
-        context_prefix = build_context_prefix(normalized, section_path)
+        entity_title = str(semantic.get("entity_title") or (heading.group(1).strip() if heading else ""))
+        section_label = str(semantic.get("section_label") or "")
+        section_path = str(
+            semantic.get("section_path")
+            or (f"{section_label} > {entity_title}" if section_label and entity_title else entity_title)
+        )
+        context_prefix = build_context_prefix(normalized, section_path, entity_title)
         retrieval_text = f"{context_prefix}\n{body}"
         chunk_id = f"{normalized['doc_id']}_chunk_{index}_{_digest(body, 10)}"
         chunks.append({
@@ -276,6 +562,11 @@ def split_document(document: dict[str, Any], config: ChunkConfig | None = None) 
             "retrieval_text": retrieval_text,
             "context_prefix": context_prefix,
             "section_path": section_path,
+            "section_type": semantic.get("section_type") or "document",
+            "entity_title": entity_title or normalized["title"],
+            "semantic_group_id": semantic.get("semantic_group_id") or chunk_id,
+            "retrieval_priority": semantic.get("retrieval_priority") or "primary",
+            "token_count": count_tokens(body),
             "source_updated_at": normalized.get("updated")
             or (normalized.get("metadata") or {}).get("modified_at"),
             "validity_status": normalized.get("validity_status") or "active",

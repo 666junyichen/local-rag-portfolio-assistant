@@ -32,7 +32,13 @@ from src.knowledge_store import (  # noqa: E402
 )
 from src.local_catalog import LocalCatalog, stable_document_id  # noqa: E402
 from src.local_runtime import run_command_streaming  # noqa: E402
-from src.portfolio_rag import get_collections, load_embedding_model, load_settings  # noqa: E402
+from src.portfolio_rag import (  # noqa: E402
+    get_collections,
+    load_embedding_model,
+    load_settings,
+    try_load_reranker,
+)
+from src.retrieval import rerank_with_cross_encoder  # noqa: E402
 from src.ui import apply_streamlit_theme  # noqa: E402
 
 
@@ -134,24 +140,26 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
     recommended = recommend_chunk_config(edited_document or document)
     mode = st.segmented_control("切片配置", ["Auto recommended", "Manual"], default="Auto recommended")
     if mode == "Manual":
-        strategy = st.selectbox("切片策略", ["recursive", "markdown", "paragraph"])
+        strategy = st.selectbox("切片策略", ["resume_semantic", "recursive", "markdown", "paragraph"])
         chunk_size = st.slider("Chunk size", 200, 2000, recommended.chunk_size, 50)
         overlap = st.slider("Overlap", 0, int(chunk_size * 0.25), min(recommended.chunk_overlap, int(chunk_size * 0.25)), 10)
         config = ChunkConfig(strategy, chunk_size, overlap, unit=recommended.unit)
     else:
         config = recommended
+        strategy_label = "Resume semantic" if config.strategy == "resume_semantic" else config.strategy
         st.success(
-            f"推荐配置：{config.strategy} / chunk {config.chunk_size} / overlap {config.chunk_overlap}"
+            f"推荐配置：{strategy_label} / {config.chunk_size} {config.unit} / overlap {config.chunk_overlap}"
         )
 
     chunks = chunk_document(edited_document, config) if edited_document else []
     metrics = chunk_metrics(chunks)
-    metric_columns = st.columns(5)
+    metric_columns = st.columns(6)
     metric_columns[0].metric("文档", len(parsed))
     metric_columns[1].metric("片段", metrics["count"])
-    metric_columns[2].metric("平均长度", metrics["average_length"])
-    metric_columns[3].metric("最短 / 最长", f"{metrics['min_length']} / {metrics['max_length']}")
-    metric_columns[4].metric("过短比例", f"{metrics['too_short_ratio']:.0%}")
+    metric_columns[2].metric("平均字符", metrics["average_length"])
+    metric_columns[3].metric("字符范围", f"{metrics['min_length']} / {metrics['max_length']}")
+    metric_columns[4].metric("平均 tokens", metrics["average_tokens"])
+    metric_columns[5].metric("Token 范围", f"{metrics['min_tokens']} / {metrics['max_tokens']}")
     for warning in metrics["warnings"]:
         st.warning(warning)
 
@@ -169,14 +177,56 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
         st.text_area("清洗正文", height=360, label_visibility="collapsed", key=clean_key)
     with chunks_tab:
         for chunk in chunks:
-            with st.expander(f"Chunk {chunk['chunk_index'] + 1} · {len(chunk['body'])} chars"):
+            section_type = str(chunk.get("section_type") or "document")
+            entity_title = str(chunk.get("entity_title") or chunk.get("title") or "Untitled")
+            with st.expander(
+                f"Chunk {chunk['chunk_index'] + 1} · {section_type} · "
+                f"{chunk.get('token_count', 0)} tokens / {len(chunk['body'])} chars · {entity_title}"
+            ):
+                st.caption(
+                    f"{chunk.get('section_path') or entity_title} · "
+                    f"priority: {chunk.get('retrieval_priority') or 'primary'}"
+                )
                 st.write(chunk["body"])
     with recall_tab:
         query = st.text_input("测试问题", placeholder="例如：Junyi 有哪些 MongoDB 项目经验？")
+        use_preview_reranker = st.toggle(
+            "使用本地 Cross-Encoder 重排",
+            value=False,
+            help="先取向量 Top-10，再用本地 reranker 选出 Top-5；首次启用可能需要加载模型。",
+        )
         if st.button("对当前预览片段运行 Top-5", disabled=not query.strip()):
             with st.spinner("正在计算当前文档片段的相似度…"):
-                for rank, result in enumerate(rank_preview_chunks(chunks, query, embedding_model()), 1):
-                    with st.expander(f"#{rank} · score {result['score']:.4f}", expanded=rank == 1):
+                candidate_count = 10 if use_preview_reranker else 5
+                preview_results = rank_preview_chunks(
+                    chunks,
+                    query,
+                    embedding_model(),
+                    top_k=candidate_count,
+                )
+                if use_preview_reranker:
+                    settings = load_settings(ROOT / ".env")
+                    reranker, warning = try_load_reranker(settings)
+                    if warning:
+                        st.warning(f"Cross-Encoder 不可用，继续显示向量结果。\n\n{warning}")
+                    elif reranker is not None:
+                        preview_results = rerank_with_cross_encoder(
+                            preview_results,
+                            query,
+                            reranker,
+                            top_k=5,
+                        )
+                for rank, result in enumerate(preview_results[:5], 1):
+                    score = result.get(
+                        "reranker_score",
+                        result.get("intent_score", result.get("fusion_score", result.get("score", 0.0))),
+                    )
+                    with st.expander(
+                        f"#{rank} · {result.get('section_type') or 'document'} · "
+                        f"{result.get('entity_title') or result.get('title')} · score {score:.4f}",
+                        expanded=rank == 1,
+                    ):
+                        st.caption(result.get("section_path") or "")
                         st.write(result["body"])
 
     save_columns = st.columns(2)
@@ -326,12 +376,28 @@ def private_library(local_catalog: LocalCatalog, indexed: dict[str, set[str]]) -
         )
         preview_doc = {"doc_id": item["doc_id"], "title": item["title"], "body": item["summary"] or item["body"], "visibility": "private"}
         for chunk in split_document(preview_doc, config):
-            with st.expander(f"Chunk {chunk['chunk_index'] + 1} · {len(chunk['body'])} chars"):
+            section_type = chunk.get("section_type") or "document"
+            entity_title = chunk.get("entity_title") or item["title"]
+            with st.expander(
+                f"Chunk {chunk['chunk_index'] + 1} · {section_type} · "
+                f"{chunk['token_count']} tokens / {len(chunk['body'])} chars"
+            ):
+                st.caption(
+                    f"{entity_title} · {chunk.get('section_path') or '-'} · "
+                    f"priority: {chunk.get('retrieval_priority') or 'primary'}"
+                )
                 st.write(chunk["body"])
     with override_tab:
         summary = st.text_area("专用于 RAG 的摘要（留空则使用完整正文）", item["summary"], height=180)
         config_columns = st.columns(3)
-        strategy = config_columns[0].selectbox("策略", ["recursive", "markdown", "paragraph"], index=["recursive", "markdown", "paragraph"].index(item["chunk_strategy"]), key=f"strategy-{detail_id}")
+        strategy_options = ["resume_semantic", "recursive", "markdown", "paragraph"]
+        current_strategy = item["chunk_strategy"] if item["chunk_strategy"] in strategy_options else "recursive"
+        strategy = config_columns[0].selectbox(
+            "策略",
+            strategy_options,
+            index=strategy_options.index(current_strategy),
+            key=f"strategy-{detail_id}",
+        )
         size = config_columns[1].number_input("Chunk size", 200, 2000, item["chunk_size"], 50, key=f"size-{detail_id}")
         overlap = config_columns[2].number_input("Overlap", 0, int(size * 0.25), min(item["chunk_overlap"], int(size * 0.25)), 10, key=f"overlap-{detail_id}")
         if st.button("保存摘要与切片配置"):
@@ -341,7 +407,7 @@ def private_library(local_catalog: LocalCatalog, indexed: dict[str, set[str]]) -
                 strategy,
                 int(size),
                 int(overlap),
-                unit=item.get("chunk_unit") or "characters",
+                unit="tokens" if strategy == "resume_semantic" else (item.get("chunk_unit") or "characters"),
             )
             st.success("已保存。索引状态将在重建前显示为 outdated。")
 

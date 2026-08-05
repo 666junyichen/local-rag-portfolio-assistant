@@ -155,6 +155,58 @@ def apply_keyword_rerank(rows: Iterable[dict[str, Any]], query: str) -> list[dic
     return reranked
 
 
+SECTION_INTENT_MARKERS = {
+    "education": ("课程", "教育", "学校", "大学", "学过", "course", "education", "university"),
+    "internship": ("实习", "工作经历", "公司经历", "internship", "intern", "work experience"),
+    "award": ("获奖", "奖项", "奖", "award", "prize"),
+    "skill": ("技能", "技术栈", "能力", "skill", "tech stack"),
+}
+
+
+def infer_section_intents(query: str) -> set[str]:
+    lowered = query.lower()
+    intended_sections = {
+        section
+        for section, markers in SECTION_INTENT_MARKERS.items()
+        if any(marker in lowered for marker in markers)
+    }
+    asks_for_project_category = (
+        "项目" in lowered
+        and any(marker in lowered for marker in ("哪些", "哪个", "项目经验", "体现"))
+    ) or (
+        "什么项目" in lowered
+    ) or any(
+        marker in lowered
+        for marker in ("which project", "what project", "projects", "project experience", "portfolio")
+    )
+    if asks_for_project_category:
+        intended_sections.add("project")
+    return intended_sections
+
+
+def apply_section_intent_rerank(rows: Iterable[dict[str, Any]], query: str) -> list[dict[str, Any]]:
+    """Apply a small, explainable boost when the question names a resume section."""
+    intended_sections = infer_section_intents(query)
+    reranked: list[dict[str, Any]] = []
+    for raw in rows:
+        item = dict(raw)
+        base_score = float(
+            item.get(
+                "reranker_score",
+                item.get("fusion_score", item.get("rank_score", item.get("score", 0))),
+            )
+        )
+        section_type = str(item.get("section_type") or "document")
+        boost = 0.12 if section_type in intended_sections else 0.0
+        if intended_sections and section_type in {"profile", "summary"}:
+            boost -= 0.03
+        item["intent_score"] = base_score + boost
+        item["matched_section_intent"] = section_type in intended_sections
+        reranked.append(item)
+    reranked.sort(key=lambda item: float(item["intent_score"]), reverse=True)
+    return reranked
+
+
 def select_results(rows: Iterable[dict[str, Any]], settings: RetrievalSettings) -> list[dict[str, Any]]:
     selected = []
     for row in rows:
@@ -165,13 +217,33 @@ def select_results(rows: Iterable[dict[str, Any]], settings: RetrievalSettings) 
         if settings.score_threshold is not None and score < settings.score_threshold:
             continue
         selected.append(row)
-    selected.sort(
-        key=lambda item: float(
+    def result_score(item: dict[str, Any]) -> float:
+        return float(
             item.get(
-                "reranker_score",
-                item.get("fusion_score", item.get("rank_score", item.get("score", 0))),
+                "intent_score",
+                item.get(
+                    "reranker_score",
+                    item.get("fusion_score", item.get("rank_score", item.get("score", 0))),
+                ),
             )
+        )
+
+    selected.sort(
+        key=lambda item: (
+            str(item.get("retrieval_priority") or "primary") != "secondary",
+            result_score(item),
         ),
         reverse=True,
     )
-    return selected[: settings.top_k]
+    diversified: list[dict[str, Any]] = []
+    seen_groups: set[str] = set()
+    for item in selected:
+        group_id = str(item.get("semantic_group_id") or _row_key(item))
+        if group_id and group_id in seen_groups:
+            continue
+        if group_id:
+            seen_groups.add(group_id)
+        diversified.append(item)
+        if len(diversified) >= settings.top_k:
+            break
+    return diversified

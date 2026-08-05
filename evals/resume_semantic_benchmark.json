@@ -1,0 +1,12 @@
+[
+  {"question": "Junyi 有哪些 AI 项目？", "expected_section_type": "project"},
+  {"question": "Junyi 的本地 RAG 项目用了什么技术？", "expected_section_type": "project", "expected_entity_contains": "Local RAG"},
+  {"question": "Junyi 在软通动力做了什么？", "expected_section_type": "internship", "expected_entity_contains": "软通动力"},
+  {"question": "Junyi 在 Study Australia 项目中负责什么？", "expected_section_type": "internship", "expected_entity_contains": "澳大利亚"},
+  {"question": "Junyi 在超星实习做了什么？", "expected_section_type": "internship", "expected_entity_contains": "超星"},
+  {"question": "Junyi 学过哪些数据科学课程？", "expected_section_type": "education"},
+  {"question": "哪个项目体现了 Junyi 的全栈开发能力？", "expected_section_type": "project", "expected_entity_contains": "Owlswap"},
+  {"question": "Junyi 有哪些 RAG、NLP 和模型评估技能？", "expected_section_type": "skill"},
+  {"question": "Junyi 获得过哪些奖项？", "expected_section_type": "award"},
+  {"question": "Junyi 有哪些 MongoDB Vector Search 经验？", "expected_section_type": "project", "expected_entity_contains": "Local RAG"}
+]

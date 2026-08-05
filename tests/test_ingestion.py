@@ -53,6 +53,32 @@ class IngestionTests(unittest.TestCase):
         self.assertTrue(all(count_tokens(chunk["body"]) <= 300 for chunk in chunks))
         self.assertTrue(all(chunk["chunk_unit"] == "tokens" for chunk in chunks))
 
+    def test_build_chunks_upgrades_legacy_resume_default_to_semantic_chunking(self) -> None:
+        document = {
+            "title": "Junyi Chen Resume - Master",
+            "body": "Education\n\nSydney University | 2025 - 2026\n\nProjects\n\nLocal RAG Assistant | 2026\n\nTech stack: Python, MongoDB, Ollama",
+            "visibility": "private",
+            "metadata": {
+                "file_type": "docx",
+                "source": "Junyi Chen Resume - Master.docx",
+                "chunking": {
+                    "strategy": "recursive",
+                    "chunk_size": 600,
+                    "chunk_overlap": 60,
+                    "unit": "characters",
+                },
+            },
+        }
+
+        chunks = build_chunk_records([document])
+
+        self.assertTrue(chunks)
+        self.assertTrue(all(chunk["chunk_unit"] == "tokens" for chunk in chunks))
+        self.assertTrue(any(chunk["section_type"] == "project" for chunk in chunks))
+        self.assertFalse(
+            any("Education" in chunk["body"] and "Local RAG Assistant" in chunk["body"] for chunk in chunks)
+        )
+
     def test_load_documents_marks_committed_data_public_and_private_data_private(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             data_dir = Path(temp_dir)

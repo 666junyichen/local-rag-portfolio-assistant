@@ -38,8 +38,125 @@ class DocumentProcessingTests(unittest.TestCase):
             }
         )
         config = recommend_chunk_config(document)
-        self.assertEqual(config, ChunkConfig("recursive", 600, 60, unit="tokens"))
+        self.assertEqual(config, ChunkConfig("resume_semantic", 320, 0, unit="tokens"))
         self.assertEqual(config.unit, "tokens")
+
+    def test_resume_semantic_chunking_keeps_entities_and_sections_separate(self) -> None:
+        resume = normalize_document(
+            {
+                "title": "Junyi Resume",
+                "body": """个人简历
+
+陈君奕
+
+求职方向：AI应用工程
+
+教育背景
+
+悉尼大学｜数据科学硕士｜2025.02 - 2026.12
+
+相关课程：机器学习、深度学习
+
+个人简介
+
+具备全栈开发、AI 应用和数据分析经验。
+
+面向数据科学岗位的定制个人简介。
+
+实习经历
+
+南京软通动力｜AI实习生｜2025.06 - 2025.07
+
+参与 AI Agent、RAG 和 Dify 工作流实现。
+
+项目经验
+
+本地RAG知识库问答系统｜Local RAG Portfolio Assistant｜2026
+
+技术栈：Python、MongoDB Vector Search、Ollama
+
+构建文档切片、向量检索和回答生成链路。
+
+Owlswap Marketplace｜2026
+
+技术栈：Next.js、TypeScript、MongoDB Atlas
+
+实现商品发布、收藏和后台管理。
+
+专业技能
+
+AI 与数据能力
+
+PyTorch、NLP、RAG、模型评估
+""",
+                "metadata": {"file_type": "docx", "source": "resume.docx"},
+            }
+        )
+
+        chunks = split_document(resume, ChunkConfig("resume_semantic", 320, 0, unit="tokens"))
+        rag_chunk = next(chunk for chunk in chunks if chunk["entity_title"].startswith("本地RAG"))
+        owl_chunk = next(chunk for chunk in chunks if chunk["entity_title"].startswith("Owlswap"))
+        summaries = [chunk for chunk in chunks if chunk["section_type"] == "summary"]
+
+        self.assertIn("MongoDB Vector Search", rag_chunk["body"])
+        self.assertNotIn("Owlswap", rag_chunk["body"])
+        self.assertEqual(rag_chunk["section_type"], "project")
+        self.assertEqual(rag_chunk["section_path"], "项目经验 > 本地RAG知识库问答系统｜Local RAG Portfolio Assistant｜2026")
+        self.assertTrue(rag_chunk["semantic_group_id"])
+        self.assertEqual(rag_chunk["retrieval_priority"], "primary")
+        self.assertGreater(rag_chunk["token_count"], 0)
+        self.assertEqual(owl_chunk["section_type"], "project")
+        self.assertEqual([item["retrieval_priority"] for item in summaries], ["primary", "secondary"])
+        self.assertFalse(any("教育背景" in chunk["body"] and "项目经验" in chunk["body"] for chunk in chunks))
+
+    def test_resume_semantic_chunking_repeats_entity_title_for_oversized_chunks(self) -> None:
+        title = "Large AI Project｜2026"
+        resume = normalize_document(
+            {
+                "title": "Resume",
+                "body": "项目经验\n\n" + title + "\n\n技术栈：Python、MongoDB\n\n" + ("项目成果与模型评估。" * 180),
+                "metadata": {"file_type": "docx"},
+            }
+        )
+
+        chunks = split_document(resume, ChunkConfig("resume_semantic", 200, 0, unit="tokens"))
+
+        self.assertGreater(len(chunks), 1)
+        self.assertTrue(all(chunk["body"].startswith(title) for chunk in chunks))
+        self.assertEqual(len({chunk["semantic_group_id"] for chunk in chunks}), 1)
+        self.assertTrue(all(chunk["token_count"] <= 200 for chunk in chunks))
+
+    def test_resume_semantic_chunking_groups_duplicate_skill_variants_as_secondary(self) -> None:
+        resume = normalize_document(
+            {
+                "title": "Resume",
+                "body": """Skills
+
+Programming and Development
+
+Python, TypeScript, React
+
+AI and Data
+
+RAG, PyTorch, MongoDB Vector Search
+
+Programming: Python, TypeScript, React
+
+AI: RAG, PyTorch, embeddings
+
+Tools: Git, Docker, Vercel""",
+                "metadata": {"file_type": "docx"},
+            }
+        )
+
+        chunks = split_document(resume, ChunkConfig("resume_semantic", 320, 0, unit="tokens"))
+        secondary = [chunk for chunk in chunks if chunk["retrieval_priority"] == "secondary"]
+
+        self.assertTrue(secondary)
+        combined = "\n".join(chunk["body"] for chunk in secondary)
+        self.assertIn("Programming: Python", combined)
+        self.assertIn("Tools: Git", combined)
+        self.assertEqual(len({chunk["semantic_group_id"] for chunk in secondary}), 1)
 
     def test_recommends_markdown_and_short_json_chunking(self) -> None:
         markdown = normalize_document(
@@ -81,6 +198,45 @@ class DocumentProcessingTests(unittest.TestCase):
         results = rank_preview_chunks(chunks, "database experience", FakeModel(), top_k=2)
         self.assertEqual(results[0]["body"], "MongoDB vector search")
         self.assertEqual(results[0]["score"], 1.0)
+
+    def test_preview_retrieval_diversifies_groups_and_prefers_primary_evidence(self) -> None:
+        class FakeModel:
+            def encode_query(self, values):
+                return np.array([[1.0, 0.0] for _ in values])
+
+            def encode_document(self, values):
+                vectors = []
+                for value in values:
+                    if "summary duplicate" in value:
+                        vectors.append([1.0, 0.0])
+                    elif "project evidence" in value:
+                        vectors.append([0.95, 0.05])
+                    else:
+                        vectors.append([0.0, 1.0])
+                return np.array(vectors)
+
+        chunks = [
+            {
+                "body": "summary duplicate one",
+                "semantic_group_id": "summary",
+                "retrieval_priority": "secondary",
+            },
+            {
+                "body": "summary duplicate two",
+                "semantic_group_id": "summary",
+                "retrieval_priority": "secondary",
+            },
+            {
+                "body": "project evidence",
+                "semantic_group_id": "project-rag",
+                "retrieval_priority": "primary",
+            },
+        ]
+
+        results = rank_preview_chunks(chunks, "AI projects", FakeModel(), top_k=3)
+
+        self.assertEqual(results[0]["body"], "project evidence")
+        self.assertEqual(len([row for row in results if row["semantic_group_id"] == "summary"]), 1)
 
     def test_persist_and_parse_upload_keeps_a_stable_docx_result(self) -> None:
         document_xml = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

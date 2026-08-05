@@ -4,7 +4,12 @@ import json
 from pathlib import Path
 from typing import Any, Iterable
 
-from src.document_processing import ChunkConfig, normalize_document, split_document
+from src.document_processing import (
+    ChunkConfig,
+    normalize_document,
+    recommend_chunk_config,
+    split_document,
+)
 from src.local_catalog import LocalCatalog, stable_document_id
 
 
@@ -146,5 +151,14 @@ def build_chunk_records(
                 ),
                 unit=str(configured.get("unit") or "characters"),
             )
+            recommended = recommend_chunk_config(document)
+            is_legacy_resume_default = (
+                recommended.strategy == "resume_semantic"
+                and document_config.strategy == "recursive"
+                and document_config.chunk_size == 600
+                and document_config.chunk_overlap == 60
+            )
+            if is_legacy_resume_default:
+                document_config = recommended
         chunks.extend(split_document(document, document_config))
     return chunks

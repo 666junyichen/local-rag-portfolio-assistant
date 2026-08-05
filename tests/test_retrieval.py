@@ -5,6 +5,7 @@ import unittest
 from src.retrieval import (
     RetrievalSettings,
     apply_keyword_rerank,
+    apply_section_intent_rerank,
     bm25_rank,
     reciprocal_rank_fusion,
     rerank_with_cross_encoder,
@@ -13,6 +14,66 @@ from src.retrieval import (
 
 
 class RetrievalTests(unittest.TestCase):
+
+    def test_section_intent_promotes_project_evidence_for_project_questions(self) -> None:
+        rows = [
+            {"chunk_id": "internship", "section_type": "internship", "score": 0.56},
+            {"chunk_id": "project-one", "section_type": "project", "score": 0.49},
+            {"chunk_id": "project-two", "section_type": "project", "score": 0.47},
+            {"chunk_id": "summary", "section_type": "summary", "score": 0.53},
+        ]
+
+        reranked = apply_section_intent_rerank(rows, "Junyi 有哪些 AI 项目？")
+        selected = select_results(reranked, RetrievalSettings(top_k=3, scope="all"))
+
+        self.assertEqual([row["section_type"] for row in selected[:2]], ["project", "project"])
+        self.assertGreater(selected[0]["intent_score"], rows[0]["score"])
+
+    def test_named_project_question_does_not_force_project_section(self) -> None:
+        rows = [
+            {"chunk_id": "consulting", "section_type": "internship", "score": 0.50},
+            {"chunk_id": "other-project", "section_type": "project", "score": 0.51},
+        ]
+
+        reranked = apply_section_intent_rerank(rows, "在 Study Australia 项目中负责什么？")
+
+        self.assertFalse(any(row["matched_section_intent"] for row in reranked))
+
+    def test_select_results_deduplicates_semantic_groups_and_prefers_primary_evidence(self) -> None:
+        rows = [
+            {
+                "chunk_id": "summary-secondary",
+                "semantic_group_id": "summary-group",
+                "retrieval_priority": "secondary",
+                "visibility": "public",
+                "score": 0.99,
+            },
+            {
+                "chunk_id": "project-rag",
+                "semantic_group_id": "project-rag",
+                "retrieval_priority": "primary",
+                "visibility": "public",
+                "score": 0.80,
+            },
+            {
+                "chunk_id": "project-rag-continuation",
+                "semantic_group_id": "project-rag",
+                "retrieval_priority": "primary",
+                "visibility": "public",
+                "score": 0.79,
+            },
+            {
+                "chunk_id": "project-qa",
+                "semantic_group_id": "project-qa",
+                "retrieval_priority": "primary",
+                "visibility": "public",
+                "score": 0.75,
+            },
+        ]
+
+        selected = select_results(rows, RetrievalSettings(top_k=3))
+
+        self.assertEqual([item["chunk_id"] for item in selected], ["project-rag", "project-qa", "summary-secondary"])
     def test_bm25_can_recall_an_exact_term_missing_from_semantic_candidates(self) -> None:
         rows = [
             {"chunk_id": "generic", "body": "General machine learning project"},

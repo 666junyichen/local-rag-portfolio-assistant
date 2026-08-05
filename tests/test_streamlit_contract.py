@@ -76,7 +76,12 @@ class StreamlitContractTests(unittest.TestCase):
         self.assertEqual(clean_editor.value, "Updated RAG evidence.\n\nFinal version.")
 
         clean_editor.set_value("Manually redacted evidence.").run()
-        self.assertTrue(any(item.label == "Chunk 1 · 27 chars" for item in app.expander))
+        self.assertTrue(
+            any(
+                "Chunk 1" in item.label and "tokens" in item.label and "27 chars" in item.label
+                for item in app.expander
+            )
+        )
         self.assertTrue(any(item.value == "Manually redacted evidence." for item in app.markdown))
         self.assertEqual(list(app.exception), [])
 

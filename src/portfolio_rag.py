@@ -22,6 +22,7 @@ from src.query_planning import plan_query, should_refuse_without_retrieval
 from src.retrieval import (
     RetrievalSettings,
     apply_keyword_rerank,
+    apply_section_intent_rerank,
     bm25_rank,
     reciprocal_rank_fusion,
     rerank_with_cross_encoder,
@@ -302,10 +303,12 @@ def hybrid_search(
         score_threshold=score_threshold,
         scope=scope,
     )
+    fused = apply_section_intent_rerank(fused, query)
     selected = select_results(fused, settings_filter)
     if reranker is not None:
         candidate_count = min(len(fused), max(top_k, settings.reranker_candidate_limit))
         selected = rerank_with_cross_encoder(fused[:candidate_count], query, reranker, top_k=top_k)
+        selected = apply_section_intent_rerank(selected, query)
         selected = select_results(selected, settings_filter)
     return selected
 
@@ -356,6 +359,7 @@ def vector_search(
         vector_candidates(collection, model, settings, query, top_k=min(top_k * 5, 50), scope=scope),
         query,
     )
+    candidates = apply_section_intent_rerank(candidates, query)
     return select_results(
         candidates,
         RetrievalSettings(top_k=top_k, score_threshold=score_threshold, scope=scope),

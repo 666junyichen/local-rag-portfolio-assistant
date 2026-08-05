@@ -51,12 +51,12 @@ Local mode keeps Vector Search and text-search indexes separate, fuses their ran
 
 ### Measured retrieval baseline
 
-The tracked 50-question bilingual benchmark separates answerable, exact-term, cross-document, freshness, no-answer, and privacy cases. Results measured locally on the current curated 111-document / 478-chunk index:
+The tracked 50-question bilingual benchmark separates answerable, exact-term, cross-document, freshness, no-answer, and privacy cases. Results measured locally on the current curated 111-document / 400-chunk index:
 
 | Mode | Hit@5 | Recall@5 | MRR | No-answer | Privacy violations | Avg retrieval latency |
 |---|---:|---:|---:|---:|---:|---:|
-| Vector baseline | 0.925 | 0.838 | 0.906 | 1.000* | 0 | ~80 ms |
-| Hybrid + multilingual reranker | **0.975** | **0.946** | **0.923** | **1.000** | **0** | ~1.79 s |
+| Vector baseline | 0.925 | 0.838 | 0.906 | 1.000* | 0 | ~69 ms |
+| Hybrid + multilingual reranker | **0.975** | **0.946** | **0.923** | **1.000** | **0** | ~1.41 s |
 
 `*` No-answer and sensitive-private cases are rejected by a deterministic pre-retrieval safety gate. The fast hybrid mode remains the default UI path; the higher-latency reranker is an explicit local toggle and Retrieval Lab experiment.
 
@@ -148,12 +148,18 @@ Knowledge Studio keeps the complete private document catalog in the Git-ignored 
 
 The four tabs support:
 
-- **Upload & Chunk:** automatic per-file recommendations, manual overrides, PII warnings, chunk metrics, previews, and a temporary Top-5 retrieval test that does not write to MongoDB.
+- **Upload & Chunk:** automatic per-file recommendations, manual overrides, PII warnings, character/token metrics, semantic-section previews, and an in-memory Vector + BM25 + RRF Top-5 test that does not write to MongoDB.
 - **Library:** search, filters, pagination, full-text and chunk inspection, RAG summary overrides, public JSON editing, and private document activation/exclusion. Exclusion never deletes the original file.
 - **Versions & Duplicates:** exact duplicate groups and human-confirmed resume/upload version recommendations.
 - **Index Maintenance:** active document counts, stale-index detection, visible ingestion progress, and the separate Atlas cloud-sync reminder.
 
-Default chunk recommendations are `600/60` for DOCX/resumes, `800/80` for Markdown, `700/70` for TXT, `800/100` for text PDFs, `800/0` for short JSON/CSV, and `900/80` for code. Each document persists its own strategy, chunk size, and overlap, so preview and ingestion use the same boundaries. Images and scanned PDFs are marked `needs_ocr`; OCR is intentionally not enabled in this version.
+DOCX resumes now default to deterministic `resume_semantic / 320 tokens / overlap 0`. Education, internship, project, award, and skill entities are isolated; an oversized entity is split only inside itself and repeats its title. Repeated summaries and skill variants remain available as secondary evidence but share a semantic group so they cannot fill Top-K. Other defaults are `800/80` for Markdown, `700/70` for TXT, `800/100` for text PDFs, `800/0` for short JSON/CSV, and `900/80` for code. Each document persists its own strategy, chunk size, and overlap, so preview and ingestion use the same boundaries. Images and scanned PDFs are marked `needs_ocr`; OCR is intentionally not enabled in this version.
+
+The local Master resume currently produces 28 semantic chunks with zero cross-section warnings. Its separate 10-question resume benchmark scores `Hit@5 = 1.000` and `MRR = 0.850`:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\evaluate_resume_chunks.py
+```
 
 ### Local troubleshooting
 
@@ -231,6 +237,8 @@ The Vercel application provides:
 .\.venv\Scripts\python.exe scripts\check_streamlit_pages.py
 .\.venv\Scripts\python.exe scripts\evaluate_retrieval.py --mode baseline
 .\.venv\Scripts\python.exe scripts\evaluate_retrieval.py --mode hybrid
+$env:HF_HUB_OFFLINE='1'; $env:TRANSFORMERS_OFFLINE='1'; .\.venv\Scripts\python.exe scripts\evaluate_retrieval.py --mode hybrid-rerank
+.\.venv\Scripts\python.exe scripts\evaluate_resume_chunks.py
 npm test
 npm run build
 node scripts/seed-atlas.mjs --validate
@@ -240,7 +248,7 @@ node scripts/seed-atlas.mjs --validate
 
 **Dual-mode Portfolio RAG Assistant | Python, Next.js, MongoDB Vector/Search, BM25, RRF, SentenceTransformers, Ollama, Gemini, Vercel**
 
-- Built an end-to-end bilingual RAG system with token-aware contextual chunking, independent dense/BM25 retrieval, RRF fusion, optional Cross-Encoder reranking, grounded prompting, and traceable citations.
+- Built an end-to-end bilingual RAG system with resume-aware semantic chunking, token budgets, independent dense/BM25 retrieval, RRF fusion, optional Cross-Encoder reranking, grounded prompting, and traceable citations.
 - Separated a local private workflow using MongoDB Local Atlas and Ollama from a shareable Vercel demo using MongoDB Atlas Vector Search and Gemini, with isolated collections and explicit public-data validation.
 - Added a 50-question bilingual benchmark with hit/recall@k, MRR, nDCG, no-answer and privacy checks, plus bounded multi-query routing for comparison and summary questions.
 
@@ -253,10 +261,12 @@ src/                           Python processing, ingestion, retrieval, generati
 data/portfolio_docs.json       Curated public knowledge source
 data/portfolio_profile.json    Traceable structured public facts
 evals/rag_benchmark.json       Fixed bilingual retrieval benchmark
+evals/resume_semantic_benchmark.json  Private-resume semantic retrieval cases
 app/                           Next.js pages and Vercel route handlers
 components/                    Chat, evidence, navigation, retrieval UI
 lib/cloud-rag/                 Atlas, Gemini, validation, prompt, rate limit, SSE
 scripts/ingest.py              Local index build
+scripts/evaluate_resume_chunks.py  In-memory semantic-resume evaluation
 scripts/seed-atlas.mjs         Validated public Atlas seed
 tests/                         Python and TypeScript unit tests
 ```
