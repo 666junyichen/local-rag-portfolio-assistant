@@ -12,6 +12,7 @@ import numpy as np
 from src.document_processing import (
     ChunkConfig,
     chunk_metrics,
+    count_tokens,
     detect_pii,
     normalize_document,
     parse_uploaded_file,
@@ -23,6 +24,10 @@ from src.document_processing import (
 
 
 class DocumentProcessingTests(unittest.TestCase):
+    def test_token_counter_handles_english_terms_and_chinese_characters(self) -> None:
+        self.assertEqual(count_tokens("MongoDB Vector Search"), 3)
+        self.assertEqual(count_tokens("中文检索"), 4)
+
     def test_recommends_resume_chunking_from_docx_metadata(self) -> None:
         document = normalize_document(
             {
@@ -32,7 +37,8 @@ class DocumentProcessingTests(unittest.TestCase):
             }
         )
         config = recommend_chunk_config(document)
-        self.assertEqual(config, ChunkConfig("recursive", 600, 60))
+        self.assertEqual(config, ChunkConfig("recursive", 600, 60, unit="tokens"))
+        self.assertEqual(config.unit, "tokens")
 
     def test_recommends_markdown_and_short_json_chunking(self) -> None:
         markdown = normalize_document(
@@ -41,14 +47,14 @@ class DocumentProcessingTests(unittest.TestCase):
         short_json = normalize_document(
             {"title": "Summary", "body": "Short public summary.", "metadata": {"file_type": "json"}}
         )
-        self.assertEqual(recommend_chunk_config(markdown), ChunkConfig("markdown", 800, 80))
-        self.assertEqual(recommend_chunk_config(short_json), ChunkConfig("recursive", 800, 0))
+        self.assertEqual(recommend_chunk_config(markdown), ChunkConfig("markdown", 800, 80, unit="tokens"))
+        self.assertEqual(recommend_chunk_config(short_json), ChunkConfig("recursive", 800, 0, unit="tokens"))
 
     def test_csv_rows_never_add_chunk_overlap(self) -> None:
         document = normalize_document(
             {"title": "Experience rows", "body": "Structured row. " * 100, "metadata": {"file_type": "csv"}}
         )
-        self.assertEqual(recommend_chunk_config(document), ChunkConfig("recursive", 800, 0))
+        self.assertEqual(recommend_chunk_config(document), ChunkConfig("recursive", 800, 0, unit="tokens"))
 
     def test_chunk_metrics_flag_fragmented_content(self) -> None:
         metrics = chunk_metrics([{"body": "a" * 40}, {"body": "b" * 400}])
@@ -132,6 +138,10 @@ class DocumentProcessingTests(unittest.TestCase):
         self.assertEqual(chunks[0]["chunk_index"], 0)
         self.assertNotEqual(chunks[0]["chunk_id"], chunks[1]["chunk_id"])
         self.assertEqual(chunks[0]["visibility"], "public")
+        self.assertEqual(chunks[0]["body"], chunks[0]["raw_body"])
+        self.assertIn("Long project", chunks[0]["context_prefix"])
+        self.assertTrue(chunks[0]["retrieval_text"].endswith(chunks[0]["raw_body"]))
+        self.assertEqual(chunks[0]["chunk_unit"], "characters")
 
     def test_parse_json_and_csv_uploads(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

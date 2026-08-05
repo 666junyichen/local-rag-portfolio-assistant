@@ -29,7 +29,15 @@ def render_source(source: dict[str, Any]) -> None:
     title = source.get("title") or "Untitled"
     category = metadata.get("category") or source.get("category") or "portfolio"
     score = float(source.get("score") or 0)
-    body = source.get("body") or source.get("snippet") or ""
-    st.markdown(f"**{title}** · `{category}` · score `{score:.3f}`")
+    body = source.get("raw_body") or source.get("body") or source.get("snippet") or ""
+    channels = source.get("retrieval_channels") or source.get("retrievalChannels") or []
+    channel_label = "+".join(channels) if channels else "vector"
+    fusion = source.get("fusion_score") or source.get("fusionScore")
+    reranker = source.get("reranker_score")
+    diagnostics = [f"score `{score:.3f}`", f"channel `{channel_label}`"]
+    if fusion is not None:
+        diagnostics.append(f"RRF `{float(fusion):.4f}`")
+    if reranker is not None:
+        diagnostics.append(f"reranker `{float(reranker):.3f}`")
+    st.markdown(f"**{title}** · `{category}` · " + " · ".join(diagnostics))
     st.caption(body[:320] + ("…" if len(body) > 320 else ""))
-

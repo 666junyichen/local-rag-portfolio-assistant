@@ -1,7 +1,7 @@
 import { buildPrompt } from "@/lib/cloud-rag/prompt";
 import { generateText } from "@/lib/cloud-rag/gemini";
 import { enforceRateLimit } from "@/lib/cloud-rag/rate-limit";
-import { retrieve } from "@/lib/cloud-rag/retrieval";
+import { retrieveForQuestion } from "@/lib/cloud-rag/retrieval";
 import { sse } from "@/lib/cloud-rag/sse";
 import { chatRequestSchema } from "@/lib/cloud-rag/validation";
 
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     if (!(await enforceRateLimit(ip))) {
       return Response.json({ error: "Too many requests. Please try again in one minute." }, { status: 429 });
     }
-    const sources = await retrieve(body.question, body.settings);
+    const sources = await retrieveForQuestion(body.question, body.settings);
     const stream = new ReadableStream({
       async start(controller) {
         const send = (event: string, payload: unknown) => controller.enqueue(encoder.encode(sse(event, payload)));

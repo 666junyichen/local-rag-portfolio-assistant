@@ -144,6 +144,7 @@ def build_chunk_records(
                     if configured.get("chunk_overlap") is not None
                     else config.chunk_overlap
                 ),
+                unit=str(configured.get("unit") or "characters"),
             )
         chunks.extend(split_document(document, document_config))
     return chunks

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapSource } from "../lib/cloud-rag/retrieval";
+import { mapSource, reciprocalRankFusion } from "../lib/cloud-rag/retrieval";
 import { sse } from "../lib/cloud-rag/sse";
 import { chatRequestSchema } from "../lib/cloud-rag/validation";
 
@@ -23,5 +23,16 @@ describe("cloud RAG contracts", () => {
 
   it("formats custom SSE events", () => {
     expect(sse("token", { text: "hello" })).toBe('event: token\ndata: {"text":"hello"}\n\n');
+  });
+
+  it("fuses independent vector and Atlas Search candidates with RRF", () => {
+    const rows = reciprocalRankFusion(
+      [{ chunk_id: "dense", score: 0.9 }, { chunk_id: "both", score: 0.8 }],
+      [{ chunk_id: "exact", bm25_score: 8 }, { chunk_id: "both", bm25_score: 7 }],
+    );
+    expect(rows[0].chunk_id).toBe("both");
+    expect(rows[0].retrieval_channels).toEqual(["vector", "bm25"]);
+    expect(rows[0].vector_rank).toBe(2);
+    expect(rows[0].bm25_rank).toBe(2);
   });
 });

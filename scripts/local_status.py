@@ -20,7 +20,8 @@ def main() -> None:
     try:
         settings = load_settings(ROOT / ".env")
         _, collection, _ = get_collections(settings)
-        print(collection_status(collection, settings.vector_index_name))
+        print(f"vector={collection_status(collection, settings.vector_index_name)}")
+        print(f"text={collection_status(collection, settings.text_index_name)}")
     except Exception as error:
         print(f"Local knowledge index unavailable ({type(error).__name__}).", file=sys.stderr)
         raise SystemExit(1) from None

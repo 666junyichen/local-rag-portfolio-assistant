@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.document_processing import ChunkConfig
+from src.document_processing import ChunkConfig, count_tokens
 from src.ingestion import (
     build_chunk_records,
     ensure_local_catalog,
@@ -45,12 +45,13 @@ class IngestionTests(unittest.TestCase):
             "body": "Project evidence and technical result. " * 80,
             "visibility": "private",
             "metadata": {
-                "chunking": {"strategy": "recursive", "chunk_size": 300, "chunk_overlap": 30}
+                "chunking": {"strategy": "recursive", "chunk_size": 300, "chunk_overlap": 30, "unit": "tokens"}
             },
         }
         chunks = build_chunk_records([document])
         self.assertGreater(len(chunks), 1)
-        self.assertTrue(all(len(chunk["body"]) <= 300 for chunk in chunks))
+        self.assertTrue(all(count_tokens(chunk["body"]) <= 300 for chunk in chunks))
+        self.assertTrue(all(chunk["chunk_unit"] == "tokens" for chunk in chunks))
 
     def test_load_documents_marks_committed_data_public_and_private_data_private(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

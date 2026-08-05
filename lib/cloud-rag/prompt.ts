@@ -1,4 +1,5 @@
 import type { ChatTurn, Language, Source } from "./types";
+import { publicProfileContext } from "./profile";
 
 export function buildPrompt(question: string, sources: Source[], history: ChatTurn[], language: Language): string {
   const context = sources.map((source, index) => `[${index + 1}] ${source.title}\n${source.snippet}`).join("\n\n");
@@ -10,6 +11,7 @@ export function buildPrompt(question: string, sources: Source[], history: ChatTu
     language === "zh" ? "Answer in concise, natural Chinese. Keep useful technical terms in English." : "Answer in concise professional English.",
     "Cite evidence with [1], [2], and so on. If evidence is insufficient, state that clearly.",
     recent ? `Recent conversation:\n${recent}` : "",
+    `Structured public profile facts (overview only; verify details against retrieved evidence):\n${publicProfileContext()}`,
     `Retrieved evidence:\n${context}`,
     `Question: ${question}`,
   ].filter(Boolean).join("\n\n");

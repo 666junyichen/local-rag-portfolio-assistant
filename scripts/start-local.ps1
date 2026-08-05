@@ -97,16 +97,18 @@ if (-not ($InstalledModels | Select-String -SimpleMatch $Model -Quiet)) {
     if ($LASTEXITCODE -ne 0) { throw "Ollama could not download $Model." }
 }
 
-Write-Step "Checking the local vector index"
+Write-Step "Checking the local vector and text indexes"
 $IndexState = & $Python scripts\local_status.py
 if ($LASTEXITCODE -ne 0) { throw "Could not inspect the local MongoDB collection." }
-$NeedsIndex = $Reindex -or -not ($IndexState | Select-String -Pattern "^[1-9][0-9]*\|READY$" -Quiet)
+$VectorReady = $IndexState | Select-String -Pattern "^vector=[1-9][0-9]*\|READY$" -Quiet
+$TextReady = $IndexState | Select-String -Pattern "^text=[1-9][0-9]*\|READY$" -Quiet
+$NeedsIndex = $Reindex -or -not ($VectorReady -and $TextReady)
 if ($NeedsIndex) {
-    Write-Host "Building embeddings and the local Vector Search index." -ForegroundColor Yellow
+    Write-Host "Building embeddings plus Vector Search and BM25 text indexes." -ForegroundColor Yellow
     & $Python scripts\ingest.py
     if ($LASTEXITCODE -ne 0) { throw "Local ingestion failed." }
 } else {
-    Write-Host "Existing local vector index is ready ($($IndexState | Select-Object -Last 1))." -ForegroundColor Green
+    Write-Host "Existing local retrieval indexes are ready ($($IndexState -join ', '))." -ForegroundColor Green
 }
 
 if (-not $SkipSmokeTest) {

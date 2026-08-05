@@ -13,6 +13,7 @@ from src.portfolio_rag import (  # noqa: E402
     generate_answer_with_sources,
     get_collections,
     load_embedding_model,
+    load_reranker,
     load_settings,
     store_message,
 )
@@ -80,6 +81,11 @@ def load_embeddings(settings):
     return load_embedding_model(settings)
 
 
+@st.cache_resource
+def load_precision_reranker(settings):
+    return load_reranker(settings)
+
+
 if "language" not in st.session_state:
     st.session_state.language = "zh"
 if "session_id" not in st.session_state:
@@ -109,6 +115,11 @@ with st.sidebar:
     top_k = st.slider("Top-K", 1, 10, 5)
     use_threshold = st.toggle(text["threshold"], value=False)
     threshold = st.slider("Score threshold", 0.0, 1.0, 0.55, 0.01, disabled=not use_threshold)
+    use_reranker = st.toggle(
+        "高精度 reranker / High precision",
+        value=False,
+        help="更准确但会增加约 1–2 秒本地检索延迟；首次使用需要下载模型。",
+    )
     st.divider()
     st.info(f"{text['local']}\n\n`data/portfolio_docs.json` + ignored private documents")
 
@@ -192,6 +203,7 @@ if query:
         st.write(query)
     with st.chat_message("assistant"):
         with st.spinner(text["thinking"]):
+            reranker = load_precision_reranker(settings) if use_reranker else None
             answer, sources = generate_answer_with_sources(
                 collection,
                 model,
@@ -200,6 +212,7 @@ if query:
                 top_k=top_k,
                 score_threshold=threshold if use_threshold else None,
                 scope=scope,
+                reranker=reranker,
             )
         st.write(answer)
         if sources:

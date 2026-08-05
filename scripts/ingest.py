@@ -8,6 +8,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.portfolio_rag import (  # noqa: E402
     create_vector_index,
+    create_text_index,
     embed_texts,
     get_collections,
     load_embedding_model,
@@ -35,7 +36,7 @@ def main() -> None:
 
     chunks = build_chunk_records(docs)
     report(f"Prepared chunks: {len(chunks)}")
-    texts = [chunk["body"] for chunk in chunks]
+    texts = [chunk.get("retrieval_text") or chunk["body"] for chunk in chunks]
     report("Generating document embeddings. This is the longest step on CPU...")
     embeddings = embed_texts(model, texts, input_type="document")
     for chunk, embedding in zip(chunks, embeddings):
@@ -48,8 +49,10 @@ def main() -> None:
     report(f"Inserted chunks: {len(result.inserted_ids)}")
     history.create_index([("session_id", 1), ("timestamp", 1)])
     create_vector_index(collection, settings, dimensions, progress=report)
+    create_text_index(collection, settings, progress=report)
 
     report(f"Vector index: {settings.vector_index_name}")
+    report(f"Text index: {settings.text_index_name}")
     report("Ingestion complete.")
 
 

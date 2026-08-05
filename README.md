@@ -12,10 +12,12 @@ The project began with the Google for Developers and MongoDB **Building with RAG
 ## What It Demonstrates
 
 1. **Ingestion:** parse JSON, Markdown, TXT, CSV, DOCX, and PDF; clean, deduplicate, chunk, embed, and index.
-2. **Retrieval:** semantic Top-K search with an optional score threshold and public/private scope.
-3. **Grounded generation:** pass only selected chunks to the LLM; return a clear fallback when evidence is insufficient.
-4. **Evaluation:** inspect scores and snippets in a Retrieval Lab instead of treating RAG as a black box.
-5. **Privacy:** local private documents are Git ignored; the cloud seed accepts only curated public data.
+2. **Retrieval:** independent Vector Search and BM25 candidate pools, RRF fusion, and an optional local Cross-Encoder reranker.
+3. **Context engineering:** token-aware chunks store raw evidence separately from title, project, source, and update-date retrieval prefixes.
+4. **Grounded generation:** combine traceable profile fact cards with selected raw evidence and return a clear fallback when evidence is insufficient.
+5. **Evaluation:** compare baseline, hybrid, and reranked retrieval on a fixed 50-question bilingual benchmark using hit/recall@k, MRR, nDCG, privacy, no-answer, and latency metrics.
+6. **Bounded Agentic RAG:** simple questions use one retrieval; comparison and summary questions use at most three subqueries and two rounds.
+7. **Privacy:** local private documents are Git ignored; the cloud seed accepts only curated public data.
 
 ## Architecture
 
@@ -24,13 +26,15 @@ flowchart LR
   subgraph Local[Local private mode]
     LP[Private files] --> DP[Parse, clean, chunk]
     DP --> SE[SentenceTransformers]
-    SE --> ML[MongoDB Local Atlas]
-    QL[Question] --> ML --> OL[Ollama] --> SL[Streamlit answer + sources]
+    DP --> BT[BM25 text index]
+    SE --> ML[MongoDB Local Atlas Vector Search]
+    QL[Question] --> ML --> RF[RRF + optional reranker]
+    BT --> RF --> OL[Ollama] --> SL[Streamlit answer + sources]
   end
   subgraph Cloud[Cloud public mode]
     PJ[portfolio_docs.json] --> GS[Validated seed]
     GS --> GE[Gemini document embeddings]
-    GE --> MA[MongoDB Atlas public collection]
+    GE --> MA[MongoDB Atlas vector + text indexes]
     QC[Question] --> V[Vercel Function]
     V --> GQ[Gemini query embedding] --> MA --> GG[Gemini generation] --> NX[Next.js streaming chat]
   end
@@ -42,6 +46,19 @@ The two modes use separate collections and indexes because their embedding model
 |---|---|---|---|
 | Local | `portfolio_knowledge_local` | multilingual MiniLM (default) or `voyageai/voyage-4-nano` | Ollama (`qwen2.5:3b` or Gemma) |
 | Cloud | `portfolio_knowledge_public` | `gemini-embedding-001` | Gemini Flash |
+
+Both modes keep Vector Search and text-search indexes separate, then fuse their rankings with RRF. The local mode may add a multilingual Cross-Encoder after fusion; Vercel stays lightweight and uses hybrid retrieval without a server-side reranker.
+
+### Measured retrieval baseline
+
+The tracked 50-question bilingual benchmark separates answerable, exact-term, cross-document, freshness, no-answer, and privacy cases. Results measured locally on the current curated 111-document / 478-chunk index:
+
+| Mode | Hit@5 | Recall@5 | MRR | No-answer | Privacy violations | Avg retrieval latency |
+|---|---:|---:|---:|---:|---:|---:|
+| Vector baseline | 0.925 | 0.838 | 0.906 | 1.000* | 0 | ~80 ms |
+| Hybrid + multilingual reranker | **0.975** | **0.946** | **0.923** | **1.000** | **0** | ~1.79 s |
+
+`*` No-answer and sensitive-private cases are rejected by a deterministic pre-retrieval safety gate. The fast hybrid mode remains the default UI path; the higher-latency reranker is an explicit local toggle and Retrieval Lab experiment.
 
 ## Local Private Mode
 
@@ -90,6 +107,10 @@ Force a new embedding and Vector Search index after changing the knowledge base:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1 -Reindex
 ```
+
+`-Reindex` now rebuilds both `vector_index` and `text_index`. It is required once after upgrading from the vector-only version because contextual retrieval text and the BM25 index are new.
+
+The optional high-precision reranker downloads `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` on first use. Keep it disabled for the fastest chat response; enable it for accuracy experiments or difficult exact/comparison questions.
 
 ### Manual development commands
 
@@ -189,6 +210,7 @@ The Vercel application provides:
 
 - `data/portfolio_docs.json` is the only cloud seed source.
 - `data/local_private_docs.json`, `data/local_uploads/`, `.env*`, and local evaluation data are Git ignored.
+- `evals/rag_benchmark.json` contains questions and expected document IDs only; generated benchmark reports remain Git ignored.
 - Cloud retrieval always filters `visibility: public` and maps results through an allowlisted `Source` contract.
 - Chat messages are sent for generation but are not persisted by the cloud app.
 - Uploaded documents must be previewed and explicitly approved before public publication.
@@ -198,6 +220,8 @@ The Vercel application provides:
 ```powershell
 .\.venv\Scripts\python.exe -m py_compile src\portfolio_rag.py src\document_processing.py src\ingestion.py src\retrieval.py app.py
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe scripts\evaluate_retrieval.py --mode baseline
+.\.venv\Scripts\python.exe scripts\evaluate_retrieval.py --mode hybrid
 npm test
 npm run build
 node scripts/seed-atlas.mjs --validate
@@ -205,11 +229,11 @@ node scripts/seed-atlas.mjs --validate
 
 ## Resume Description
 
-**Dual-mode Portfolio RAG Assistant | Python, Next.js, MongoDB Vector Search, SentenceTransformers, Ollama, Gemini, Vercel**
+**Dual-mode Portfolio RAG Assistant | Python, Next.js, MongoDB Vector/Search, BM25, RRF, SentenceTransformers, Ollama, Gemini, Vercel**
 
-- Built an end-to-end bilingual RAG system covering document parsing, configurable chunking, embedding generation, Top-K vector retrieval, grounded prompting, source citation, and retrieval evaluation.
+- Built an end-to-end bilingual RAG system with token-aware contextual chunking, independent dense/BM25 retrieval, RRF fusion, optional Cross-Encoder reranking, grounded prompting, and traceable citations.
 - Separated a local private workflow using MongoDB Local Atlas and Ollama from a shareable Vercel demo using MongoDB Atlas Vector Search and Gemini, with isolated collections and explicit public-data validation.
-- Implemented a Streamlit Knowledge Studio and Retrieval Lab plus a responsive Next.js chat with SSE responses, score thresholds, no-recall safeguards, health checks, and MongoDB-backed IP rate limiting.
+- Added a 50-question bilingual benchmark with hit/recall@k, MRR, nDCG, no-answer and privacy checks, plus bounded multi-query routing for comparison and summary questions.
 
 ## Repository Layout
 
@@ -218,6 +242,8 @@ app.py                         Local Streamlit Chat
 pages/                         Knowledge Studio and Retrieval Lab
 src/                           Python processing, ingestion, retrieval, generation
 data/portfolio_docs.json       Curated public knowledge source
+data/portfolio_profile.json    Traceable structured public facts
+evals/rag_benchmark.json       Fixed bilingual retrieval benchmark
 app/                           Next.js pages and Vercel route handlers
 components/                    Chat, evidence, navigation, retrieval UI
 lib/cloud-rag/                 Atlas, Gemini, validation, prompt, rate limit, SSE

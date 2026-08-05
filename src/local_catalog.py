@@ -81,6 +81,7 @@ class LocalCatalog:
                     chunk_strategy TEXT NOT NULL DEFAULT 'recursive',
                     chunk_size INTEGER NOT NULL DEFAULT 800,
                     chunk_overlap INTEGER NOT NULL DEFAULT 80,
+                    chunk_unit TEXT NOT NULL DEFAULT 'characters',
                     metadata_json TEXT NOT NULL DEFAULT '{}',
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
@@ -92,6 +93,11 @@ class LocalCatalog:
                 CREATE INDEX IF NOT EXISTS idx_documents_hash ON documents(content_hash);
                 """
             )
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(documents)").fetchall()}
+            if "chunk_unit" not in columns:
+                connection.execute(
+                    "ALTER TABLE documents ADD COLUMN chunk_unit TEXT NOT NULL DEFAULT 'characters'"
+                )
 
     def _record(self, raw: dict[str, Any], status: str) -> dict[str, Any]:
         normalized = normalize_document(raw, default_visibility="private")
@@ -114,6 +120,7 @@ class LocalCatalog:
         strategy = str(configured.get("strategy") or config.strategy)
         chunk_size = int(configured.get("chunk_size") or config.chunk_size)
         overlap = int(configured.get("chunk_overlap") if configured.get("chunk_overlap") is not None else config.chunk_overlap)
+        unit = str(configured.get("unit") or config.unit)
         now = _utc_now()
         parse_status = str(raw.get("parse_status") or metadata.get("parse_status") or "ready")
         effective_status = parse_status if parse_status in {"parse_error", "needs_ocr"} else status
@@ -141,6 +148,7 @@ class LocalCatalog:
             "chunk_strategy": strategy,
             "chunk_size": chunk_size,
             "chunk_overlap": overlap,
+            "chunk_unit": unit,
             "metadata_json": json.dumps(metadata, ensure_ascii=False),
             "created_at": now,
             "updated_at": now,
@@ -242,21 +250,31 @@ class LocalCatalog:
             )
         return cursor.rowcount > 0
 
-    def update_chunking(self, doc_id: str, strategy: str, chunk_size: int, overlap: int) -> bool:
+    def update_chunking(
+        self,
+        doc_id: str,
+        strategy: str,
+        chunk_size: int,
+        overlap: int,
+        *,
+        unit: str = "characters",
+    ) -> bool:
         if strategy not in {"recursive", "markdown", "paragraph"}:
             raise ValueError(f"Unsupported chunk strategy: {strategy}")
         if not 200 <= chunk_size <= 2000:
             raise ValueError("Chunk size must be between 200 and 2000")
         if overlap < 0 or overlap > chunk_size * 0.25:
             raise ValueError("Overlap must be between 0 and 25% of chunk size")
+        if unit not in {"characters", "tokens"}:
+            raise ValueError("Unit must be characters or tokens")
         with self._connect() as connection:
             cursor = connection.execute(
                 """
                 UPDATE documents
-                SET chunk_strategy = ?, chunk_size = ?, chunk_overlap = ?, updated_at = ?
+                SET chunk_strategy = ?, chunk_size = ?, chunk_overlap = ?, chunk_unit = ?, updated_at = ?
                 WHERE doc_id = ?
                 """,
-                (strategy, chunk_size, overlap, _utc_now(), doc_id),
+                (strategy, chunk_size, overlap, unit, _utc_now(), doc_id),
             )
         return cursor.rowcount > 0
 
@@ -364,6 +382,7 @@ class LocalCatalog:
                         "strategy": item["chunk_strategy"],
                         "chunk_size": item["chunk_size"],
                         "chunk_overlap": item["chunk_overlap"],
+                        "unit": item["chunk_unit"],
                     },
                 }
             )

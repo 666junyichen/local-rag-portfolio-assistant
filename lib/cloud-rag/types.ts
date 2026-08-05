@@ -14,6 +14,10 @@ export type Source = {
   url?: string;
   snippet: string;
   score: number;
+  retrievalChannels?: Array<"vector" | "bm25">;
+  vectorRank?: number;
+  bm25Rank?: number;
+  fusionScore?: number;
 };
 
 export type ChatTurn = { role: "user" | "assistant"; content: string };

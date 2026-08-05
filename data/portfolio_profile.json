@@ -1,0 +1,50 @@
+[
+  {
+    "fact_id": "profile_target_roles",
+    "label": "Target roles",
+    "value": "Full-stack development, AI application engineering, data analysis, product data analysis, and software engineering internships.",
+    "source_doc_ids": ["doc_1e689498c464db0ce97a", "doc_ecd1033aaad6f88b9789"],
+    "updated_at": "2026-06-17",
+    "visibility": "public"
+  },
+  {
+    "fact_id": "profile_education",
+    "label": "Education",
+    "value": "Master of Data Science at the University of Sydney (2025-2026) after a Bachelor of Science in Data Science with a Mathematics minor (2022-2024).",
+    "source_doc_ids": ["doc_4eb37af8975165def871"],
+    "updated_at": "2026-06-17",
+    "visibility": "public"
+  },
+  {
+    "fact_id": "profile_core_stack",
+    "label": "Core technical stack",
+    "value": "Python, JavaScript, TypeScript, React, Next.js, Node.js, MongoDB, SQL, RAG/LLM application development, data analysis, and model evaluation.",
+    "source_doc_ids": ["doc_506293d82c65c6accaac"],
+    "updated_at": "2026-06-17",
+    "visibility": "public"
+  },
+  {
+    "fact_id": "profile_rag_project",
+    "label": "Portfolio RAG project",
+    "value": "A bilingual dual-mode assistant with a local private pipeline and a Vercel public pipeline, grounded answers, citations, and privacy-separated collections.",
+    "source_doc_ids": ["doc_e8c9d4a5b81fff81808f"],
+    "updated_at": "2026-08-05",
+    "visibility": "public"
+  },
+  {
+    "fact_id": "profile_mongodb",
+    "label": "MongoDB experience",
+    "value": "MongoDB is used across full-stack products and RAG systems, including Atlas/Local Atlas, Mongoose data models, Vector Search, ingestion, and retrieval.",
+    "source_doc_ids": ["doc_98adb0fca5783ca96433", "doc_d1216696d7cd67676beb", "doc_e8c9d4a5b81fff81808f"],
+    "updated_at": "2026-06-17",
+    "visibility": "public"
+  },
+  {
+    "fact_id": "profile_ai_experience",
+    "label": "AI application experience",
+    "value": "Includes an AI internship, RAG/LLM applications, recommendation experiments, emotion-aware music recommendation, accessibility QA, and controlled QANet experiments.",
+    "source_doc_ids": ["doc_79a9f3fcf8a2d783a0bc", "doc_32b775004fbe4bc810a7"],
+    "updated_at": "2026-06-17",
+    "visibility": "public"
+  }
+]

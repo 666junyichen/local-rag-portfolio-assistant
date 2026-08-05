@@ -41,8 +41,26 @@ function chunkDocuments(documents, size = 800, overlap = 80) {
   for (const doc of documents) {
     let start = 0; let index = 0;
     while (start < doc.body.length) {
-      const body = doc.body.slice(start, start + size);
-      records.push({ ...doc, body, chunk_index: index, chunk_id: `${doc.doc_id}_chunk_${index}_${digest(body, 10)}` });
+      const rawBody = doc.body.slice(start, start + size);
+      const metadata = doc.metadata || {};
+      const prefixParts = [`Document: ${doc.title}`];
+      if (metadata.project) prefixParts.push(`Project: ${metadata.project}`);
+      if (metadata.category) prefixParts.push(`Category: ${metadata.category}`);
+      if (metadata.source) prefixParts.push(`Source: ${metadata.source}`);
+      if (doc.updated || metadata.modified_at) prefixParts.push(`Updated: ${doc.updated || metadata.modified_at}`);
+      const contextPrefix = `[${prefixParts.join(" | ")}]`;
+      records.push({
+        ...doc,
+        body: rawBody,
+        raw_body: rawBody,
+        retrieval_text: `${contextPrefix}\n${rawBody}`,
+        context_prefix: contextPrefix,
+        section_path: "",
+        source_updated_at: doc.updated || metadata.modified_at || null,
+        validity_status: "active",
+        chunk_index: index,
+        chunk_id: `${doc.doc_id}_chunk_${index}_${digest(rawBody, 10)}`,
+      });
       if (start + size >= doc.body.length) break;
       start += size - overlap; index += 1;
     }
@@ -72,7 +90,7 @@ async function main() {
   if (process.argv.includes("--validate")) return;
   if (!process.env.MONGODB_URI || !process.env.GEMINI_API_KEY) throw new Error("MONGODB_URI and GEMINI_API_KEY are required");
   for (let index = 0; index < chunks.length; index += 1) {
-    chunks[index].embedding = await embedDocument(chunks[index].body);
+    chunks[index].embedding = await embedDocument(chunks[index].retrieval_text);
     console.log(`Embedded ${index + 1}/${chunks.length}`);
   }
   const client = new MongoClient(process.env.MONGODB_URI);
@@ -80,6 +98,7 @@ async function main() {
   const db = client.db(process.env.CLOUD_DB_NAME || "portfolio_rag");
   const collection = db.collection(process.env.CLOUD_COLLECTION_NAME || "portfolio_knowledge_public");
   const indexName = process.env.CLOUD_VECTOR_INDEX_NAME || "vector_index_public";
+  const textIndexName = process.env.CLOUD_TEXT_INDEX_NAME || "text_index_public";
   await collection.deleteMany({});
   await collection.insertMany(chunks.map((chunk) => ({ ...chunk, seeded_at: new Date() })));
   try { await collection.dropSearchIndex(indexName); await new Promise((resolve) => setTimeout(resolve, 5000)); } catch (error) { if (!String(error).includes("not found")) console.warn("Index drop skipped"); }
@@ -89,9 +108,20 @@ async function main() {
     { type: "filter", path: "metadata.category" },
     { type: "filter", path: "metadata.language" },
   ] } });
+  try { await collection.dropSearchIndex(textIndexName); await new Promise((resolve) => setTimeout(resolve, 5000)); } catch (error) { if (!String(error).includes("not found")) console.warn("Text index drop skipped"); }
+  await collection.createSearchIndex({ name: textIndexName, type: "search", definition: { mappings: {
+    dynamic: false,
+    fields: {
+      title: { type: "string" },
+      body: { type: "string" },
+      retrieval_text: { type: "string" },
+      visibility: { type: "token" },
+      metadata: { type: "document", dynamic: true },
+    },
+  } } });
   await collection.createIndex({ visibility: 1, doc_id: 1 });
   await client.close();
-  console.log(`Seeded ${chunks.length} public chunks into ${indexName}. Atlas may need a few minutes to make the index queryable.`);
+  console.log(`Seeded ${chunks.length} public chunks into ${indexName} and ${textIndexName}. Atlas may need a few minutes to make the indexes queryable.`);
 }
 
 main().catch((error) => { console.error(error.message); process.exit(1); });

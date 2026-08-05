@@ -135,9 +135,10 @@ class LocalCatalogTests(unittest.TestCase):
             row = {"source": "resume_root", "relative_path": "resume.docx", "title": "Resume", "body": "Body"}
             doc_id = stable_document_id(row)
             catalog.upsert_documents([row])
-            catalog.update_chunking(doc_id, "recursive", 600, 60)
+            catalog.update_chunking(doc_id, "recursive", 600, 60, unit="tokens")
             saved = catalog.get(doc_id)
             self.assertEqual((saved["chunk_strategy"], saved["chunk_size"], saved["chunk_overlap"]), ("recursive", 600, 60))
+            self.assertEqual(saved["chunk_unit"], "tokens")
 
     def test_image_record_is_marked_needs_ocr_and_not_activated(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

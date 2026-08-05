@@ -25,6 +25,7 @@ class ChunkConfig:
     strategy: str = "recursive"
     chunk_size: int = 800
     chunk_overlap: int = 80
+    unit: str = "characters"
 
     def __post_init__(self) -> None:
         if self.strategy not in {"recursive", "markdown", "paragraph"}:
@@ -35,6 +36,17 @@ class ChunkConfig:
             raise ValueError("chunk_overlap cannot be negative")
         if self.chunk_overlap > self.chunk_size * 0.25:
             raise ValueError("chunk_overlap cannot exceed 25% of chunk_size")
+        if self.unit not in {"characters", "tokens"}:
+            raise ValueError("unit must be characters or tokens")
+
+
+def count_tokens(value: str) -> int:
+    """Fast multilingual token estimate used for deterministic chunk budgets."""
+    return len(re.findall(r"[A-Za-z0-9][A-Za-z0-9.+#:_/-]*|[\u3400-\u9fff]|[^\s]", value))
+
+
+def _measure(value: str, config: ChunkConfig) -> int:
+    return count_tokens(value) if config.unit == "tokens" else len(value)
 
 
 def clean_text(value: str) -> str:
@@ -54,20 +66,20 @@ def recommend_chunk_config(document: dict[str, Any]) -> ChunkConfig:
     title = str(document.get("title") or "").lower()
     body_length = len(str(document.get("body") or ""))
     if file_type == "docx" or "resume" in title or "简历" in title:
-        return ChunkConfig("recursive", 600, 60)
+        return ChunkConfig("recursive", 600, 60, unit="tokens")
     if file_type in {"md", "markdown"} or title.startswith("readme"):
-        return ChunkConfig("markdown", 800, 80)
+        return ChunkConfig("markdown", 800, 80, unit="tokens")
     if file_type == "txt":
-        return ChunkConfig("paragraph", 700, 70)
+        return ChunkConfig("paragraph", 700, 70, unit="tokens")
     if file_type == "pdf":
-        return ChunkConfig("recursive", 800, 100)
+        return ChunkConfig("recursive", 800, 100, unit="tokens")
     if file_type == "csv":
-        return ChunkConfig("recursive", 800, 0)
+        return ChunkConfig("recursive", 800, 0, unit="tokens")
     if file_type == "json" and body_length <= 800:
-        return ChunkConfig("recursive", 800, 0)
+        return ChunkConfig("recursive", 800, 0, unit="tokens")
     if file_type in {"py", "js", "ts", "tsx", "html", "htm"}:
-        return ChunkConfig("recursive", 900, 80)
-    return ChunkConfig()
+        return ChunkConfig("recursive", 900, 80, unit="tokens")
+    return ChunkConfig(unit="tokens")
 
 
 def chunk_metrics(chunks: list[dict[str, Any]]) -> dict[str, Any]:
@@ -120,7 +132,9 @@ def rank_preview_chunks(
         return []
     query_vector = np.asarray(model.encode_query([query.strip()]), dtype=float)[0]
     document_vectors = np.asarray(
-        model.encode_document([str(chunk.get("body") or "") for chunk in chunks]),
+        model.encode_document(
+            [str(chunk.get("retrieval_text") or chunk.get("body") or "") for chunk in chunks]
+        ),
         dtype=float,
     )
     query_norm = np.linalg.norm(query_vector) or 1.0
@@ -175,6 +189,7 @@ def _recursive_parts(text: str, config: ChunkConfig) -> list[str]:
         separators=separators,
         chunk_size=config.chunk_size,
         chunk_overlap=config.chunk_overlap,
+        length_function=lambda value: _measure(value, config),
         is_separator_regex=True,
     )
     return splitter.split_text(text)
@@ -186,7 +201,7 @@ def _paragraph_parts(text: str, config: ChunkConfig) -> list[str]:
     current = ""
     for paragraph in paragraphs:
         candidate = f"{current}\n\n{paragraph}".strip()
-        if current and len(candidate) > config.chunk_size:
+        if current and _measure(candidate, config) > config.chunk_size:
             grouped.extend(_recursive_parts(current, config))
             current = paragraph
         else:
@@ -205,6 +220,23 @@ def _markdown_parts(text: str, config: ChunkConfig) -> list[str]:
     return parts
 
 
+def build_context_prefix(document: dict[str, Any], section_path: str = "") -> str:
+    metadata = document.get("metadata") or {}
+    values = [f"Document: {document.get('title', 'Untitled')}"]
+    project = metadata.get("project") or document.get("project")
+    source = metadata.get("source") or document.get("relative_path") or document.get("source_path")
+    updated = document.get("updated") or metadata.get("modified_at") or document.get("modified_at")
+    if project:
+        values.append(f"Project: {project}")
+    if section_path:
+        values.append(f"Section: {section_path}")
+    if source:
+        values.append(f"Source: {source}")
+    if updated:
+        values.append(f"Updated: {updated}")
+    return "[" + " | ".join(str(value) for value in values) + "]"
+
+
 def split_document(document: dict[str, Any], config: ChunkConfig | None = None) -> list[dict[str, Any]]:
     config = config or ChunkConfig()
     normalized = normalize_document(document, default_visibility=document.get("visibility", "private"))
@@ -217,12 +249,24 @@ def split_document(document: dict[str, Any], config: ChunkConfig | None = None) 
 
     chunks: list[dict[str, Any]] = []
     for index, body in enumerate(filter(None, (part.strip() for part in bodies))):
+        heading = re.match(r"^#{1,6}\s+(.+)", body)
+        section_path = heading.group(1).strip() if heading else ""
+        context_prefix = build_context_prefix(normalized, section_path)
+        retrieval_text = f"{context_prefix}\n{body}"
         chunk_id = f"{normalized['doc_id']}_chunk_{index}_{_digest(body, 10)}"
         chunks.append({
             **{key: value for key, value in normalized.items() if key != "body"},
             "chunk_id": chunk_id,
             "chunk_index": index,
             "body": body,
+            "raw_body": body,
+            "retrieval_text": retrieval_text,
+            "context_prefix": context_prefix,
+            "section_path": section_path,
+            "source_updated_at": normalized.get("updated")
+            or (normalized.get("metadata") or {}).get("modified_at"),
+            "validity_status": normalized.get("validity_status") or "active",
+            "chunk_unit": config.unit,
         })
     return chunks
 

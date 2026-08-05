@@ -117,7 +117,7 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
         strategy = st.selectbox("切片策略", ["recursive", "markdown", "paragraph"])
         chunk_size = st.slider("Chunk size", 200, 2000, recommended.chunk_size, 50)
         overlap = st.slider("Overlap", 0, int(chunk_size * 0.25), min(recommended.chunk_overlap, int(chunk_size * 0.25)), 10)
-        config = ChunkConfig(strategy, chunk_size, overlap)
+        config = ChunkConfig(strategy, chunk_size, overlap, unit=recommended.unit)
     else:
         config = recommended
         st.success(
@@ -176,6 +176,7 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
                         "strategy": item_config.strategy,
                         "chunk_size": item_config.chunk_size,
                         "chunk_overlap": item_config.chunk_overlap,
+                        "unit": item_config.unit,
                     },
                 },
             }
@@ -199,6 +200,7 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
                     "strategy": config.strategy,
                     "chunk_size": config.chunk_size,
                     "chunk_overlap": config.chunk_overlap,
+                    "unit": config.unit,
                 },
             },
         }
@@ -288,7 +290,12 @@ def private_library(local_catalog: LocalCatalog, indexed: dict[str, set[str]]) -
             st.warning("OCR not enabled：图片或扫描版 PDF 暂不进入索引。")
         st.text_area("完整正文", item["body"], height=420, disabled=True, label_visibility="collapsed")
     with chunks_tab:
-        config = ChunkConfig(item["chunk_strategy"], item["chunk_size"], item["chunk_overlap"])
+        config = ChunkConfig(
+            item["chunk_strategy"],
+            item["chunk_size"],
+            item["chunk_overlap"],
+            unit=item.get("chunk_unit") or "characters",
+        )
         preview_doc = {"doc_id": item["doc_id"], "title": item["title"], "body": item["summary"] or item["body"], "visibility": "private"}
         for chunk in split_document(preview_doc, config):
             with st.expander(f"Chunk {chunk['chunk_index'] + 1} · {len(chunk['body'])} chars"):
@@ -301,7 +308,13 @@ def private_library(local_catalog: LocalCatalog, indexed: dict[str, set[str]]) -
         overlap = config_columns[2].number_input("Overlap", 0, int(size * 0.25), min(item["chunk_overlap"], int(size * 0.25)), 10, key=f"overlap-{detail_id}")
         if st.button("保存摘要与切片配置"):
             local_catalog.update_summary(detail_id, summary)
-            local_catalog.update_chunking(detail_id, strategy, int(size), int(overlap))
+            local_catalog.update_chunking(
+                detail_id,
+                strategy,
+                int(size),
+                int(overlap),
+                unit=item.get("chunk_unit") or "characters",
+            )
             st.success("已保存。索引状态将在重建前显示为 outdated。")
 
 
