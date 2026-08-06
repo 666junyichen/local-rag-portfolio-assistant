@@ -71,13 +71,20 @@ class ProcessingProfile:
             raise ValueError(f"unsupported parent_mode: {self.parent_mode}")
         if self.index_mode != "high_quality":
             raise ValueError("index_mode must be high_quality in Phase A")
-        if not isinstance(self.delimiter, str):
-            raise ValueError("delimiter must be a string")
+        if not isinstance(self.delimiter, str) or (
+            not self.delimiter.strip() and self.delimiter != "\n\n"
+        ):
+            raise ValueError("delimiter must be a non-empty string")
         if not isinstance(self.preprocessing, PreprocessingProfile):
             raise ValueError("preprocessing must be a PreprocessingProfile")
 
+        max_tokens_minimum = (
+            MIN_CHILD_TOKENS
+            if self.chunk_mode == "parent_child"
+            else MIN_CHUNK_TOKENS
+        )
         _validate_integer(
-            "max_tokens", self.max_tokens, MIN_CHUNK_TOKENS, MAX_CHUNK_TOKENS
+            "max_tokens", self.max_tokens, max_tokens_minimum, MAX_CHUNK_TOKENS
         )
         _validate_integer(
             "parent_max_tokens",
@@ -116,8 +123,11 @@ class ProcessingProfile:
 
     @classmethod
     def parent_child(cls, **overrides: Any) -> ProcessingProfile:
+        if "chunk_mode" in overrides:
+            raise ValueError("chunk_mode cannot be overridden by parent_child()")
         values: dict[str, Any] = {
             "chunk_mode": "parent_child",
+            "max_tokens": 180,
             "child_max_tokens": 180,
             "parent_max_tokens": 700,
             "overlap_tokens": 20,
@@ -128,6 +138,8 @@ class ProcessingProfile:
 
     @classmethod
     def resume_semantic(cls, **overrides: Any) -> ProcessingProfile:
+        if "chunk_mode" in overrides:
+            raise ValueError("chunk_mode cannot be overridden by resume_semantic()")
         values: dict[str, Any] = {
             "chunk_mode": "resume_semantic",
             "max_tokens": 320,
@@ -173,14 +185,38 @@ def _legacy_token_value(value: int, unit: str, minimum: int) -> int:
     return max(minimum, min(converted, MAX_CHUNK_TOKENS))
 
 
-def _has_resume_identity(*values: object) -> bool:
-    for value in values:
-        normalized = unicodedata.normalize("NFKC", str(value)).casefold()
-        if "简历" in normalized:
-            return True
-        if re.search(r"(?<![a-z0-9])(?:resume|cv)(?![a-z0-9])", normalized):
-            return True
-    return False
+def _normalize_identity(value: object) -> str:
+    decomposed = unicodedata.normalize("NFKD", str(value)).casefold()
+    return "".join(char for char in decomposed if not unicodedata.combining(char))
+
+
+def _basename(value: object) -> str:
+    return re.split(r"[\\/]", str(value))[-1]
+
+
+def _has_resume_marker(value: object) -> bool:
+    normalized = _normalize_identity(value)
+    if "简历" in normalized:
+        return True
+    return bool(
+        re.search(
+            r"(?<![a-z0-9])(?:resume|cv|curriculum[\s_-]+vitae)(?![a-z0-9])",
+            normalized,
+        )
+    )
+
+
+def _is_resume_root(value: object) -> bool:
+    return _normalize_identity(value).strip() == "resume_root"
+
+
+def _validate_legacy_values(chunk_size: int, overlap: int) -> None:
+    _validate_integer(
+        "chunk_size", chunk_size, MIN_CHUNK_TOKENS, MAX_CHUNK_TOKENS
+    )
+    _validate_integer("overlap", overlap, 0, MAX_CHUNK_TOKENS)
+    if overlap > chunk_size * 0.25:
+        raise ValueError("overlap cannot exceed 25% of chunk_size")
 
 
 def profile_from_legacy(
@@ -198,9 +234,10 @@ def profile_from_legacy(
         raise ValueError(f"unsupported legacy strategy: {strategy}")
     if normalized_unit not in {"characters", "tokens"}:
         raise ValueError(f"unsupported legacy unit: {unit}")
-    if normalized_strategy == "resume_semantic" or _has_resume_identity(
-        title, file_type
-    ):
+    _validate_legacy_values(chunk_size, overlap)
+    if normalized_strategy == "resume_semantic" or _has_resume_marker(
+        title
+    ) or _has_resume_marker(_basename(file_type)):
         return ProcessingProfile.resume_semantic()
 
     max_tokens = _legacy_token_value(
@@ -216,24 +253,45 @@ def profile_from_legacy(
 
 
 def _estimated_tokens(value: str) -> int:
-    return len(re.findall(r"[A-Za-z0-9][A-Za-z0-9.+#:_/-]*|[^\s]", value))
+    # Unicode word runs approximate one token; CJK characters remain individual
+    # because whitespace-free CJK text otherwise collapses into a single token.
+    return len(re.findall(r"[\u3400-\u9fff]|[^\W_]+|[^\w\s]", value))
+
+
+def _candidate_values(
+    document: Mapping[str, Any], metadata: Mapping[str, Any], name: str
+) -> list[object]:
+    return [metadata.get(name), document.get(name)]
 
 
 def recommend_processing_profile(document: Mapping[str, Any]) -> ProcessingProfile:
     metadata = document.get("metadata") or {}
     if not isinstance(metadata, Mapping):
         metadata = {}
-    source = str(metadata.get("source") or "")
-    path = str(document.get("path") or "")
-    relative_path = str(document.get("relative_path") or "")
-    source_for_type = source or path or relative_path
-    file_type = str(
-        metadata.get("file_type") or Path(source_for_type).suffix.lstrip(".")
-    ).lower()
+    path_candidates = [
+        value
+        for name in ("source", "path", "relative_path", "file_name")
+        for value in _candidate_values(document, metadata, name)
+        if value
+    ]
+    explicit_file_type = metadata.get("file_type") or document.get("file_type")
+    file_type = str(explicit_file_type or "").lower().lstrip(".")
+    if not file_type:
+        for candidate in path_candidates:
+            suffix = Path(_basename(candidate)).suffix.lstrip(".").lower()
+            if suffix:
+                file_type = suffix
+                break
     title = str(document.get("title") or "")
     body = str(document.get("body") or "")
 
-    if _has_resume_identity(title, source, path, relative_path):
+    source_roots = _candidate_values(document, metadata, "source_root")
+    source_values = _candidate_values(document, metadata, "source")
+    if (
+        any(_is_resume_root(value) for value in source_values + source_roots)
+        or _has_resume_marker(title)
+        or any(_has_resume_marker(_basename(value)) for value in path_candidates)
+    ):
         return ProcessingProfile.resume_semantic()
     if file_type == "csv":
         return ProcessingProfile(max_tokens=800, overlap_tokens=0)

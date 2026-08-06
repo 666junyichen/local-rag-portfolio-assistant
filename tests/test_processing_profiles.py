@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import FrozenInstanceError
 
 import pytest
@@ -42,6 +43,12 @@ def test_processing_profile_validates_modes_and_token_bounds() -> None:
             ProcessingProfile(**values)
 
 
+@pytest.mark.parametrize("delimiter", ["", "   ", "\t\n"])
+def test_processing_profile_rejects_blank_delimiter(delimiter: str) -> None:
+    with pytest.raises(ValueError, match="delimiter"):
+        ProcessingProfile(delimiter=delimiter)
+
+
 def test_parent_child_requires_smaller_child_budget() -> None:
     with pytest.raises(ValueError, match="child_max_tokens"):
         ProcessingProfile(
@@ -60,10 +67,13 @@ def test_parent_child_factory_uses_approved_defaults() -> None:
     profile = ProcessingProfile.parent_child()
 
     assert profile.chunk_mode == "parent_child"
+    assert profile.max_tokens == 180
     assert profile.child_max_tokens == 180
     assert profile.parent_max_tokens == 700
     assert profile.overlap_tokens == 20
     assert profile.parent_mode == "paragraph"
+    assert ProcessingProfile.from_dict(profile.to_dict()) == profile
+    assert profile.digest() == "41211b68e5cd3d92f2b9fbd9856eafa102a1d9aa4a2995e61cd3beb4d8606c95"
 
 
 def test_resume_semantic_factory_uses_approved_defaults() -> None:
@@ -75,6 +85,17 @@ def test_resume_semantic_factory_uses_approved_defaults() -> None:
     assert profile.parent_mode == "semantic_section"
 
 
+@pytest.mark.parametrize(
+    "factory",
+    [ProcessingProfile.parent_child, ProcessingProfile.resume_semantic],
+)
+def test_factories_reject_chunk_mode_overrides(
+    factory: Callable[..., ProcessingProfile],
+) -> None:
+    with pytest.raises(ValueError, match="chunk_mode"):
+        factory(chunk_mode="general")
+
+
 def test_profile_roundtrip_and_digest_are_stable() -> None:
     profile = ProcessingProfile.parent_child(
         preprocessing=PreprocessingProfile(remove_urls=True)
@@ -83,7 +104,7 @@ def test_profile_roundtrip_and_digest_are_stable() -> None:
 
     assert ProcessingProfile.from_dict(payload) == profile
     assert ProcessingProfile.from_dict(profile.to_dict()).digest() == profile.digest()
-    assert profile.digest() == "ddebc81b769ad6bf99f6845effb6d53180fbbfc4399e6d7d945b3faf8119df28"
+    assert profile.digest() == "f34f0284370e0b9c44ce9f847401e0e794fd158aa8de49e05cf7dd479c5e1b2f"
 
 
 def test_old_resume_profile_migrates_to_resume_semantic() -> None:
@@ -100,6 +121,24 @@ def test_existing_resume_semantic_legacy_strategy_maps_to_resume() -> None:
     )
 
     assert profile == ProcessingProfile.resume_semantic()
+
+
+@pytest.mark.parametrize(
+    ("chunk_size", "overlap"),
+    [(True, 60), (600, True), (0, 0), (600, -1), (600, 151)],
+)
+def test_legacy_values_are_validated_before_resume_shortcut(
+    chunk_size: int, overlap: int
+) -> None:
+    with pytest.raises(ValueError):
+        profile_from_legacy(
+            "Candidate Resume",
+            "docx",
+            "recursive",
+            chunk_size,
+            overlap,
+            "tokens",
+        )
 
 
 def test_generic_docx_legacy_profile_does_not_migrate_as_resume() -> None:
@@ -194,6 +233,64 @@ def test_resume_recommendation_uses_title_and_source_identity_markers() -> None:
     assert recommend_processing_profile(chinese_resume) == ProcessingProfile.resume_semantic()
 
 
+@pytest.mark.parametrize(
+    "document",
+    [
+        {
+            "title": "Résumé",
+            "body": "Experience",
+            "metadata": {"file_type": "pdf"},
+        },
+        {
+            "title": "Curriculum Vitae",
+            "body": "Experience",
+            "metadata": {"file_type": "pdf"},
+        },
+        {
+            "title": "Candidate",
+            "body": "Experience",
+            "file_name": "Junyi-CV.pdf",
+            "metadata": {"file_type": "pdf"},
+        },
+        {
+            "title": "README",
+            "body": "Experience",
+            "metadata": {"source": "resume_root", "file_type": "md"},
+        },
+        {
+            "title": "README",
+            "body": "Experience",
+            "source_root": "resume_root",
+            "metadata": {"file_type": "md"},
+        },
+    ],
+)
+def test_resume_recommendation_recognizes_normalized_identity_markers(
+    document: dict[str, object],
+) -> None:
+    assert recommend_processing_profile(document) == ProcessingProfile.resume_semantic()
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "projects/resume-parser/README.md",
+        "archives/curriculum-vitae/notes.md",
+        "uploads/mycv.pdf",
+    ],
+)
+def test_resume_recommendation_ignores_directory_and_partial_markers(
+    source: str,
+) -> None:
+    document = {
+        "title": "README",
+        "body": "Short ordinary document.",
+        "metadata": {"source": source},
+    }
+
+    assert recommend_processing_profile(document) == ProcessingProfile()
+
+
 def test_generic_docx_recommendation_depends_on_document_length() -> None:
     short_docx = {
         "title": "Quarterly report",
@@ -208,3 +305,26 @@ def test_generic_docx_recommendation_depends_on_document_length() -> None:
 
     assert recommend_processing_profile(short_docx) == ProcessingProfile()
     assert recommend_processing_profile(long_docx) == ProcessingProfile.parent_child()
+
+
+def test_file_type_inference_skips_candidates_without_suffixes() -> None:
+    document = {
+        "title": "Rows",
+        "body": "a,b\n1,2",
+        "path": "uploads/rows.csv",
+        "metadata": {"source": "manual upload"},
+    }
+
+    assert recommend_processing_profile(document) == ProcessingProfile(
+        max_tokens=800, overlap_tokens=0
+    )
+
+
+def test_token_estimate_groups_accented_and_cyrillic_words() -> None:
+    document = {
+        "title": "International notes",
+        "body": "développeur разработчик " * 900,
+        "metadata": {"file_type": "pdf"},
+    }
+
+    assert recommend_processing_profile(document) == ProcessingProfile()
