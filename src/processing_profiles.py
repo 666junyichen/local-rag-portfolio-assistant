@@ -17,6 +17,12 @@ MIN_CHUNK_TOKENS = 200
 MAX_CHUNK_TOKENS = 2000
 MIN_CHILD_TOKENS = 1
 LONG_DOCUMENT_TOKENS = 2000
+RESUME_FILE_TYPES = {"docx", "pdf", "md", "markdown", "txt"}
+BASE_TOKEN_PATTERN = re.compile(r"[\u3400-\u9fff]|[^\W_]+|[^\w\s]")
+SCRIPT_RUN_PATTERN = re.compile(
+    r"[\u0e00-\u0e7f\u1100-\u11ff\u3040-\u30ff\u3130-\u318f"
+    r"\u31f0-\u31ff\uac00-\ud7af]+"
+)
 
 
 def _validate_integer(name: str, value: int, minimum: int, maximum: int) -> None:
@@ -57,8 +63,8 @@ class ProcessingProfile:
     max_tokens: int = 800
     overlap_tokens: int = 80
     parent_mode: str = "paragraph"
-    parent_max_tokens: int = 700
-    child_max_tokens: int = 180
+    parent_max_tokens: int = 1200
+    child_max_tokens: int = 800
     preprocessing: PreprocessingProfile = PreprocessingProfile()
     index_mode: str = "high_quality"
 
@@ -71,9 +77,7 @@ class ProcessingProfile:
             raise ValueError(f"unsupported parent_mode: {self.parent_mode}")
         if self.index_mode != "high_quality":
             raise ValueError("index_mode must be high_quality in Phase A")
-        if not isinstance(self.delimiter, str) or (
-            not self.delimiter.strip() and self.delimiter != "\n\n"
-        ):
+        if not isinstance(self.delimiter, str) or self.delimiter == "":
             raise ValueError("delimiter must be a non-empty string")
         if not isinstance(self.preprocessing, PreprocessingProfile):
             raise ValueError("preprocessing must be a PreprocessingProfile")
@@ -99,6 +103,20 @@ class ProcessingProfile:
             MAX_CHUNK_TOKENS,
         )
         _validate_integer("overlap_tokens", self.overlap_tokens, 0, MAX_CHUNK_TOKENS)
+        if (
+            self.chunk_mode == "parent_child"
+            and self.max_tokens != self.child_max_tokens
+        ):
+            raise ValueError(
+                "max_tokens must equal child_max_tokens for parent_child mode"
+            )
+        if (
+            self.chunk_mode == "parent_child"
+            and self.child_max_tokens >= self.parent_max_tokens
+        ):
+            raise ValueError(
+                "child_max_tokens must be smaller than parent_max_tokens"
+            )
         overlap_budget = (
             self.child_max_tokens
             if self.chunk_mode == "parent_child"
@@ -112,13 +130,6 @@ class ProcessingProfile:
             )
             raise ValueError(
                 f"overlap_tokens cannot exceed 25% of {budget_name}"
-            )
-        if (
-            self.chunk_mode == "parent_child"
-            and self.child_max_tokens >= self.parent_max_tokens
-        ):
-            raise ValueError(
-                "child_max_tokens must be smaller than parent_max_tokens"
             )
 
     @classmethod
@@ -253,9 +264,16 @@ def profile_from_legacy(
 
 
 def _estimated_tokens(value: str) -> int:
-    # Unicode word runs approximate one token; CJK characters remain individual
-    # because whitespace-free CJK text otherwise collapses into a single token.
-    return len(re.findall(r"[\u3400-\u9fff]|[^\W_]+|[^\w\s]", value))
+    # Whitespace-free scripts use a deterministic two-characters-per-token
+    # approximation. CJK remains per-character; other Unicode words stay grouped.
+    estimated = 0
+    cursor = 0
+    for match in SCRIPT_RUN_PATTERN.finditer(value):
+        estimated += len(BASE_TOKEN_PATTERN.findall(value[cursor : match.start()]))
+        estimated += math.ceil(len(match.group()) / 2)
+        cursor = match.end()
+    estimated += len(BASE_TOKEN_PATTERN.findall(value[cursor:]))
+    return estimated
 
 
 def _candidate_values(
@@ -285,18 +303,26 @@ def recommend_processing_profile(document: Mapping[str, Any]) -> ProcessingProfi
     title = str(document.get("title") or "")
     body = str(document.get("body") or "")
 
-    source_roots = _candidate_values(document, metadata, "source_root")
-    source_values = _candidate_values(document, metadata, "source")
-    if (
-        any(_is_resume_root(value) for value in source_values + source_roots)
-        or _has_resume_marker(title)
-        or any(_has_resume_marker(_basename(value)) for value in path_candidates)
-    ):
-        return ProcessingProfile.resume_semantic()
     if file_type == "csv":
         return ProcessingProfile(max_tokens=800, overlap_tokens=0)
-    if file_type == "json" and _estimated_tokens(body) <= LONG_DOCUMENT_TOKENS:
-        return ProcessingProfile(max_tokens=800, overlap_tokens=0)
+    if file_type == "json":
+        if _estimated_tokens(body) <= LONG_DOCUMENT_TOKENS:
+            return ProcessingProfile(max_tokens=800, overlap_tokens=0)
+        return ProcessingProfile()
+
+    source_roots = _candidate_values(document, metadata, "source_root")
+    source_values = _candidate_values(document, metadata, "source")
+    resume_filename = any(
+        Path(_basename(value)).suffix.lstrip(".").lower() in RESUME_FILE_TYPES
+        and _has_resume_marker(_basename(value))
+        for value in path_candidates
+    )
+    if file_type in RESUME_FILE_TYPES and (
+        any(_is_resume_root(value) for value in source_values + source_roots)
+        or _has_resume_marker(title)
+        or resume_filename
+    ):
+        return ProcessingProfile.resume_semantic()
     if file_type in {
         "pdf",
         "md",

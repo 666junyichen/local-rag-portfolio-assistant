@@ -43,19 +43,41 @@ def test_processing_profile_validates_modes_and_token_bounds() -> None:
             ProcessingProfile(**values)
 
 
-@pytest.mark.parametrize("delimiter", ["", "   ", "\t\n"])
-def test_processing_profile_rejects_blank_delimiter(delimiter: str) -> None:
+def test_processing_profile_rejects_empty_delimiter() -> None:
     with pytest.raises(ValueError, match="delimiter"):
-        ProcessingProfile(delimiter=delimiter)
+        ProcessingProfile(delimiter="")
+
+
+@pytest.mark.parametrize("delimiter", [" ", "\n", "\n\n", "\r\n\r\n", "\t\n"])
+def test_processing_profile_accepts_any_non_empty_delimiter(delimiter: str) -> None:
+    assert ProcessingProfile(delimiter=delimiter).delimiter == delimiter
 
 
 def test_parent_child_requires_smaller_child_budget() -> None:
     with pytest.raises(ValueError, match="child_max_tokens"):
         ProcessingProfile(
             chunk_mode="parent_child",
+            max_tokens=400,
             parent_max_tokens=400,
             child_max_tokens=400,
         )
+
+
+def test_parent_child_requires_one_canonical_child_budget() -> None:
+    with pytest.raises(ValueError, match="max_tokens"):
+        ProcessingProfile(
+            chunk_mode="parent_child",
+            max_tokens=200,
+            child_max_tokens=180,
+        )
+
+
+def test_direct_parent_child_constructor_has_coherent_defaults() -> None:
+    profile = ProcessingProfile(chunk_mode="parent_child")
+
+    assert profile.max_tokens == profile.child_max_tokens == 800
+    assert profile.child_max_tokens < profile.parent_max_tokens
+    assert ProcessingProfile.from_dict(profile.to_dict()).digest() == profile.digest()
 
 
 def test_parent_child_overlap_is_limited_by_child_budget() -> None:
@@ -72,6 +94,7 @@ def test_parent_child_factory_uses_approved_defaults() -> None:
     assert profile.parent_max_tokens == 700
     assert profile.overlap_tokens == 20
     assert profile.parent_mode == "paragraph"
+    assert profile.max_tokens == profile.child_max_tokens
     assert ProcessingProfile.from_dict(profile.to_dict()) == profile
     assert profile.digest() == "41211b68e5cd3d92f2b9fbd9856eafa102a1d9aa4a2995e61cd3beb4d8606c95"
 
@@ -233,6 +256,37 @@ def test_resume_recommendation_uses_title_and_source_identity_markers() -> None:
     assert recommend_processing_profile(chinese_resume) == ProcessingProfile.resume_semantic()
 
 
+def test_structured_files_never_auto_select_resume_semantic() -> None:
+    csv_resume = {
+        "title": "Candidate Resume",
+        "body": "name,skill\nJunyi,Python",
+        "metadata": {"file_type": "csv"},
+    }
+    json_resume = {
+        "title": "Candidate",
+        "body": '{"skill": "Python"}',
+        "metadata": {"file_type": "json", "source": "master resume"},
+    }
+
+    assert recommend_processing_profile(csv_resume) == ProcessingProfile(
+        max_tokens=800, overlap_tokens=0
+    )
+    assert recommend_processing_profile(json_resume) == ProcessingProfile(
+        max_tokens=800, overlap_tokens=0
+    )
+
+
+@pytest.mark.parametrize("source", ["master resume", "resume-parser"])
+def test_generic_resume_source_label_is_not_a_filename_marker(source: str) -> None:
+    document = {
+        "title": "README",
+        "body": "Short ordinary markdown.",
+        "metadata": {"file_type": "md", "source": source},
+    }
+
+    assert recommend_processing_profile(document) == ProcessingProfile()
+
+
 @pytest.mark.parametrize(
     "document",
     [
@@ -328,3 +382,29 @@ def test_token_estimate_groups_accented_and_cyrillic_words() -> None:
     }
 
     assert recommend_processing_profile(document) == ProcessingProfile()
+
+
+@pytest.mark.parametrize("character", ["한", "あ", "カ", "ก"])
+def test_script_run_estimate_stays_below_long_document_threshold(
+    character: str,
+) -> None:
+    document = {
+        "title": "Language notes",
+        "body": character * 3900,
+        "metadata": {"file_type": "pdf"},
+    }
+
+    assert recommend_processing_profile(document) == ProcessingProfile()
+
+
+@pytest.mark.parametrize("character", ["한", "あ", "カ", "ก"])
+def test_script_run_estimate_crosses_long_document_threshold(
+    character: str,
+) -> None:
+    document = {
+        "title": "Language notes",
+        "body": character * 4100,
+        "metadata": {"file_type": "pdf"},
+    }
+
+    assert recommend_processing_profile(document) == ProcessingProfile.parent_child()
