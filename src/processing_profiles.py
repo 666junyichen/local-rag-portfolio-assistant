@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import re
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -91,8 +92,20 @@ class ProcessingProfile:
             MAX_CHUNK_TOKENS,
         )
         _validate_integer("overlap_tokens", self.overlap_tokens, 0, MAX_CHUNK_TOKENS)
-        if self.overlap_tokens > self.max_tokens * 0.25:
-            raise ValueError("overlap_tokens cannot exceed 25% of max_tokens")
+        overlap_budget = (
+            self.child_max_tokens
+            if self.chunk_mode == "parent_child"
+            else self.max_tokens
+        )
+        if self.overlap_tokens > overlap_budget * 0.25:
+            budget_name = (
+                "child_max_tokens"
+                if self.chunk_mode == "parent_child"
+                else "max_tokens"
+            )
+            raise ValueError(
+                f"overlap_tokens cannot exceed 25% of {budget_name}"
+            )
         if (
             self.chunk_mode == "parent_child"
             and self.child_max_tokens >= self.parent_max_tokens
@@ -160,6 +173,16 @@ def _legacy_token_value(value: int, unit: str, minimum: int) -> int:
     return max(minimum, min(converted, MAX_CHUNK_TOKENS))
 
 
+def _has_resume_identity(*values: object) -> bool:
+    for value in values:
+        normalized = unicodedata.normalize("NFKC", str(value)).casefold()
+        if "简历" in normalized:
+            return True
+        if re.search(r"(?<![a-z0-9])(?:resume|cv)(?![a-z0-9])", normalized):
+            return True
+    return False
+
+
 def profile_from_legacy(
     title: str,
     file_type: str,
@@ -170,17 +193,13 @@ def profile_from_legacy(
 ) -> ProcessingProfile:
     normalized_strategy = strategy.strip().lower()
     normalized_unit = unit.strip().lower()
-    normalized_type = file_type.strip().lower().lstrip(".")
-    normalized_title = title.strip().lower()
 
     if normalized_strategy not in LEGACY_STRATEGIES:
         raise ValueError(f"unsupported legacy strategy: {strategy}")
     if normalized_unit not in {"characters", "tokens"}:
         raise ValueError(f"unsupported legacy unit: {unit}")
-    if (
-        normalized_strategy == "resume_semantic"
-        or normalized_type == "docx"
-        or "resume" in normalized_title
+    if normalized_strategy == "resume_semantic" or _has_resume_identity(
+        title, file_type
     ):
         return ProcessingProfile.resume_semantic()
 
@@ -204,25 +223,32 @@ def recommend_processing_profile(document: Mapping[str, Any]) -> ProcessingProfi
     metadata = document.get("metadata") or {}
     if not isinstance(metadata, Mapping):
         metadata = {}
-    source = str(
-        metadata.get("source")
-        or document.get("path")
-        or document.get("relative_path")
-        or ""
-    )
+    source = str(metadata.get("source") or "")
+    path = str(document.get("path") or "")
+    relative_path = str(document.get("relative_path") or "")
+    source_for_type = source or path or relative_path
     file_type = str(
-        metadata.get("file_type") or Path(source).suffix.lstrip(".")
+        metadata.get("file_type") or Path(source_for_type).suffix.lstrip(".")
     ).lower()
-    title = str(document.get("title") or "").lower()
+    title = str(document.get("title") or "")
     body = str(document.get("body") or "")
 
-    if file_type == "docx" or "resume" in title:
+    if _has_resume_identity(title, source, path, relative_path):
         return ProcessingProfile.resume_semantic()
     if file_type == "csv":
         return ProcessingProfile(max_tokens=800, overlap_tokens=0)
     if file_type == "json" and _estimated_tokens(body) <= LONG_DOCUMENT_TOKENS:
         return ProcessingProfile(max_tokens=800, overlap_tokens=0)
-    if file_type in {"pdf", "md", "markdown", "txt", "doc", "odt", "rtf"}:
+    if file_type in {
+        "pdf",
+        "md",
+        "markdown",
+        "txt",
+        "doc",
+        "docx",
+        "odt",
+        "rtf",
+    }:
         if _estimated_tokens(body) > LONG_DOCUMENT_TOKENS:
             return ProcessingProfile.parent_child()
     return ProcessingProfile()

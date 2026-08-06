@@ -51,6 +51,11 @@ def test_parent_child_requires_smaller_child_budget() -> None:
         )
 
 
+def test_parent_child_overlap_is_limited_by_child_budget() -> None:
+    with pytest.raises(ValueError, match="child_max_tokens"):
+        ProcessingProfile.parent_child(overlap_tokens=100)
+
+
 def test_parent_child_factory_uses_approved_defaults() -> None:
     profile = ProcessingProfile.parent_child()
 
@@ -89,10 +94,25 @@ def test_old_resume_profile_migrates_to_resume_semantic() -> None:
     assert profile == ProcessingProfile.resume_semantic()
 
 
-@pytest.mark.parametrize("strategy", ["resume_semantic", "recursive"])
-def test_resume_semantic_legacy_strategy_or_docx_type_maps_to_resume(strategy: str) -> None:
+def test_existing_resume_semantic_legacy_strategy_maps_to_resume() -> None:
     profile = profile_from_legacy(
-        "Candidate profile", "docx", strategy, 800, 80, "tokens"
+        "Candidate profile", "docx", "resume_semantic", 800, 80, "tokens"
+    )
+
+    assert profile == ProcessingProfile.resume_semantic()
+
+
+def test_generic_docx_legacy_profile_does_not_migrate_as_resume() -> None:
+    profile = profile_from_legacy(
+        "Quarterly report", "docx", "recursive", 600, 60, "tokens"
+    )
+
+    assert profile == ProcessingProfile(max_tokens=600, overlap_tokens=60)
+
+
+def test_legacy_cv_identity_migrates_known_old_profile() -> None:
+    profile = profile_from_legacy(
+        "Junyi CV", "docx", "recursive", 600, 60, "tokens"
     )
 
     assert profile == ProcessingProfile.resume_semantic()
@@ -122,7 +142,7 @@ def test_character_legacy_values_use_conservative_four_to_one_conversion() -> No
 
 def test_recommendations_match_document_shape() -> None:
     resume = {
-        "title": "Candidate",
+        "title": "Candidate Resume",
         "body": "Experience",
         "metadata": {"file_type": "docx"},
     }
@@ -156,3 +176,35 @@ def test_recommendations_match_document_shape() -> None:
     assert recommend_processing_profile(short_json) == ProcessingProfile(
         max_tokens=800, overlap_tokens=0
     )
+
+
+def test_resume_recommendation_uses_title_and_source_identity_markers() -> None:
+    cv_pdf = {
+        "title": "Candidate document",
+        "body": "Experience",
+        "metadata": {"file_type": "pdf", "source": "uploads/Junyi-CV.pdf"},
+    }
+    chinese_resume = {
+        "title": "个人简历",
+        "body": "Experience",
+        "metadata": {"file_type": "pdf", "source": "candidate.pdf"},
+    }
+
+    assert recommend_processing_profile(cv_pdf) == ProcessingProfile.resume_semantic()
+    assert recommend_processing_profile(chinese_resume) == ProcessingProfile.resume_semantic()
+
+
+def test_generic_docx_recommendation_depends_on_document_length() -> None:
+    short_docx = {
+        "title": "Quarterly report",
+        "body": "Short ordinary document.",
+        "metadata": {"file_type": "docx", "source": "quarterly-report.docx"},
+    }
+    long_docx = {
+        "title": "Operations handbook",
+        "body": "procedure " * 2100,
+        "metadata": {"file_type": "docx", "source": "operations-handbook.docx"},
+    }
+
+    assert recommend_processing_profile(short_docx) == ProcessingProfile()
+    assert recommend_processing_profile(long_docx) == ProcessingProfile.parent_child()
