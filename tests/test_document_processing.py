@@ -71,6 +71,28 @@ class DocumentProcessingTests(unittest.TestCase):
 
         self.assertEqual(result, "Links: , ; and . Email dev@example.com remains.")
 
+    def test_clean_text_stops_urls_before_unicode_and_ascii_punctuation(self) -> None:
+        profile = PreprocessingProfile(remove_urls=True)
+        value = "查看 https://example.com/path，后续文字; read (https://example.org/docs), next."
+
+        result = clean_text(value, profile)
+
+        self.assertEqual(result, "查看 ，后续文字; read (), next.")
+
+    def test_clean_text_only_removes_bare_domains_with_complete_recognized_tlds(self) -> None:
+        profile = PreprocessingProfile(remove_urls=True)
+        value = (
+            "Keep example.computer, project.company, and www.internal; "
+            "remove example.com/path and www.example.org/docs."
+        )
+
+        result = clean_text(value, profile)
+
+        self.assertEqual(
+            result,
+            "Keep example.computer, project.company, and www.internal; remove and .",
+        )
+
     def test_clean_text_removes_emails_without_removing_urls(self) -> None:
         profile = PreprocessingProfile(remove_emails=True)
         value = "Contact dev.team+rag@example.co.uk; visit https://example.com/contact."
@@ -78,6 +100,20 @@ class DocumentProcessingTests(unittest.TestCase):
         result = clean_text(value, profile)
 
         self.assertEqual(result, "Contact ; visit https://example.com/contact.")
+
+    def test_clean_text_keeps_malformed_consecutive_dot_emails(self) -> None:
+        profile = PreprocessingProfile(remove_emails=True)
+        value = (
+            "Keep user..name@example.com and user@example..com; "
+            "remove valid.user+tag@example.co.uk."
+        )
+
+        result = clean_text(value, profile)
+
+        self.assertEqual(
+            result,
+            "Keep user..name@example.com and user@example..com; remove .",
+        )
 
     def test_clean_text_removes_urls_and_emails_across_lines(self) -> None:
         profile = PreprocessingProfile(remove_urls=True, remove_emails=True)
@@ -96,6 +132,20 @@ class DocumentProcessingTests(unittest.TestCase):
 
         self.assertEqual(result, value)
         self.assertEqual(profile.to_dict(), before)
+
+    def test_clean_text_normalizes_crlf_and_cr_line_breaks_when_enabled(self) -> None:
+        profile = PreprocessingProfile(normalize_whitespace=True)
+        crlf_value = " First  \r\n  \r\n\r\nSecond "
+        lf_value = " First  \n  \n\nSecond "
+
+        self.assertEqual(clean_text(crlf_value, profile), "First\n\nSecond")
+        self.assertEqual(clean_text(crlf_value, profile), clean_text(lf_value, profile))
+
+    def test_clean_text_preserves_newline_style_when_normalization_is_disabled(self) -> None:
+        profile = PreprocessingProfile(normalize_whitespace=False)
+        value = "First\r\n\rSecond"
+
+        self.assertEqual(clean_text(value, profile), value)
 
     def test_blank_document_body_behavior_remains_compatible(self) -> None:
         with self.assertRaisesRegex(ValueError, "document body cannot be empty"):

@@ -25,22 +25,34 @@ SCRIPT_PATTERN = re.compile(r"<script[\s\S]*?</script>", re.IGNORECASE)
 STYLE_PATTERN = re.compile(r"<style[\s\S]*?</style>", re.IGNORECASE)
 HTML_TAG_PATTERN = re.compile(r"<[^>]+>")
 HORIZONTAL_WHITESPACE_PATTERN = re.compile(r"[\t\f\v ]+")
+NON_LF_LINE_BREAK_PATTERN = re.compile(r"\r\n?")
 LINE_BREAK_PADDING_PATTERN = re.compile(r" *\n *")
 EXCESS_LINE_BREAKS_PATTERN = re.compile(r"\n{3,}")
 EMAIL_PATTERN = re.compile(
-    r"(?<![\w.+-])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}(?![\w.-])",
-    re.IGNORECASE,
+    r"""
+    (?<![\w.+-])
+    [A-Z0-9_%+-]+(?:\.[A-Z0-9_%+-]+)*
+    @
+    [A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?
+    (?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)*
+    \.[A-Z]{2,63}
+    (?![\w-]|\.[A-Z0-9])
+    """,
+    re.IGNORECASE | re.VERBOSE,
 )
 URL_PATTERN = re.compile(
     r"""
     (?<![@\w])
     (?:
-        (?:https?://|www\.)[^\s<>\"']+
+        https?://(?:localhost|[A-Z0-9](?:[A-Z0-9.-]*[A-Z0-9])?)(?::\d{1,5})?
         |
         (?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+
         (?:com|org|net|edu|gov|io|dev|app|ai|co|me|info|biz|au|cn|uk)
-        (?:/[^\s<>\"']*)?
     )
+    (?![A-Z0-9-])
+    (?:/[A-Z0-9._~%!$&'()*+,;=:@/-]*)?
+    (?:\?[A-Z0-9._~%!$&'()*+,;=:@/?-]*)?
+    (?:\#[A-Z0-9._~%!$&'()*+,;=:@/?-]*)?
     """,
     re.IGNORECASE | re.VERBOSE,
 )
@@ -112,6 +124,7 @@ def _sanitize_markup(value: str) -> str:
 
 
 def _normalize_whitespace(value: str) -> str:
+    value = NON_LF_LINE_BREAK_PATTERN.sub("\n", value)
     value = HORIZONTAL_WHITESPACE_PATTERN.sub(" ", value)
     value = LINE_BREAK_PADDING_PATTERN.sub("\n", value)
     value = EXCESS_LINE_BREAKS_PATTERN.sub("\n\n", value)
