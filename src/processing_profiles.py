@@ -63,8 +63,8 @@ class ProcessingProfile:
     max_tokens: int = 800
     overlap_tokens: int = 80
     parent_mode: str = "paragraph"
-    parent_max_tokens: int = 1200
-    child_max_tokens: int = 800
+    parent_max_tokens: int = 700
+    child_max_tokens: int = 180
     preprocessing: PreprocessingProfile = PreprocessingProfile()
     index_mode: str = "high_quality"
 

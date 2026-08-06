@@ -72,12 +72,32 @@ def test_parent_child_requires_one_canonical_child_budget() -> None:
         )
 
 
-def test_direct_parent_child_constructor_has_coherent_defaults() -> None:
-    profile = ProcessingProfile(chunk_mode="parent_child")
+def test_dataclass_defaults_preserve_general_profile_budgets() -> None:
+    profile = ProcessingProfile()
 
-    assert profile.max_tokens == profile.child_max_tokens == 800
-    assert profile.child_max_tokens < profile.parent_max_tokens
-    assert ProcessingProfile.from_dict(profile.to_dict()).digest() == profile.digest()
+    assert profile.max_tokens == 800
+    assert profile.parent_max_tokens == 700
+    assert profile.child_max_tokens == 180
+
+
+def test_direct_parent_child_constructor_rejects_incoherent_defaults() -> None:
+    with pytest.raises(ValueError, match="max_tokens"):
+        ProcessingProfile(chunk_mode="parent_child")
+
+
+def test_explicit_direct_parent_child_matches_canonical_factory() -> None:
+    profile = ProcessingProfile(
+        chunk_mode="parent_child",
+        max_tokens=180,
+        child_max_tokens=180,
+        parent_max_tokens=700,
+        overlap_tokens=20,
+    )
+    canonical = ProcessingProfile.parent_child()
+
+    assert profile == canonical
+    assert profile.digest() == canonical.digest()
+    assert ProcessingProfile.from_dict(profile.to_dict()) == profile
 
 
 def test_parent_child_overlap_is_limited_by_child_budget() -> None:
