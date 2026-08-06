@@ -49,14 +49,14 @@ URL_PATTERN = re.compile(
         (?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+
         (?:com|org|net|edu|gov|io|dev|app|ai|co|me|info|biz|au|cn|uk)
     )
-    (?![A-Z0-9-])
+    (?![\w-])
     (?:/[A-Z0-9._~%!$&'()*+,;=:@/-]*)?
     (?:\?[A-Z0-9._~%!$&'()*+,;=:@/?-]*)?
     (?:\#[A-Z0-9._~%!$&'()*+,;=:@/?-]*)?
     """,
     re.IGNORECASE | re.VERBOSE,
 )
-TRAILING_URL_PUNCTUATION = ".,;:!?)]}"
+TRAILING_URL_DELIMITERS = ".,;:!?)]}'\"\u2019\u201d"
 
 RESUME_SECTION_HEADINGS = {
     "个人简历": ("profile", "基本信息"),
@@ -133,7 +133,7 @@ def _normalize_whitespace(value: str) -> str:
 
 def _remove_url(match: re.Match[str]) -> str:
     matched = match.group(0)
-    trailing = matched[len(matched.rstrip(TRAILING_URL_PUNCTUATION)):]
+    trailing = matched[len(matched.rstrip(TRAILING_URL_DELIMITERS)):]
     return trailing
 
 

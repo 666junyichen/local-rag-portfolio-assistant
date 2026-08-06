@@ -79,6 +79,17 @@ class DocumentProcessingTests(unittest.TestCase):
 
         self.assertEqual(result, "查看 ，后续文字; read (), next.")
 
+    def test_clean_text_preserves_straight_and_curly_quotes_around_urls(self) -> None:
+        profile = PreprocessingProfile(remove_urls=True)
+        value = (
+            "See 'https://example.com/path' and \"https://example.org/docs\"; "
+            "also ‘https://example.net/a’ and “https://example.dev/b”."
+        )
+
+        result = clean_text(value, profile)
+
+        self.assertEqual(result, "See '' and \"\"; also ‘’ and “”.")
+
     def test_clean_text_only_removes_bare_domains_with_complete_recognized_tlds(self) -> None:
         profile = PreprocessingProfile(remove_urls=True)
         value = (
@@ -92,6 +103,12 @@ class DocumentProcessingTests(unittest.TestCase):
             result,
             "Keep example.computer, project.company, and www.internal; remove and .",
         )
+
+    def test_clean_text_keeps_bare_domains_with_underscore_continuations(self) -> None:
+        profile = PreprocessingProfile(remove_urls=True)
+        value = "Keep example.com_value and prefix_example.com unchanged."
+
+        self.assertEqual(clean_text(value, profile), value)
 
     def test_clean_text_removes_emails_without_removing_urls(self) -> None:
         profile = PreprocessingProfile(remove_emails=True)
