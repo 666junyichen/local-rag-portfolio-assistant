@@ -15,9 +15,36 @@ from xml.etree import ElementTree
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import numpy as np
 
+from src.processing_profiles import PreprocessingProfile
+
 
 SUPPORTED_EXTENSIONS = {".json", ".md", ".txt", ".csv", ".docx", ".pdf"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+
+SCRIPT_PATTERN = re.compile(r"<script[\s\S]*?</script>", re.IGNORECASE)
+STYLE_PATTERN = re.compile(r"<style[\s\S]*?</style>", re.IGNORECASE)
+HTML_TAG_PATTERN = re.compile(r"<[^>]+>")
+HORIZONTAL_WHITESPACE_PATTERN = re.compile(r"[\t\f\v ]+")
+LINE_BREAK_PADDING_PATTERN = re.compile(r" *\n *")
+EXCESS_LINE_BREAKS_PATTERN = re.compile(r"\n{3,}")
+EMAIL_PATTERN = re.compile(
+    r"(?<![\w.+-])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}(?![\w.-])",
+    re.IGNORECASE,
+)
+URL_PATTERN = re.compile(
+    r"""
+    (?<![@\w])
+    (?:
+        (?:https?://|www\.)[^\s<>\"']+
+        |
+        (?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+
+        (?:com|org|net|edu|gov|io|dev|app|ai|co|me|info|biz|au|cn|uk)
+        (?:/[^\s<>\"']*)?
+    )
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+TRAILING_URL_PUNCTUATION = ".,;:!?)]}"
 
 RESUME_SECTION_HEADINGS = {
     "个人简历": ("profile", "基本信息"),
@@ -77,15 +104,36 @@ def _measure(value: str, config: ChunkConfig) -> int:
     return count_tokens(value) if config.unit == "tokens" else len(value)
 
 
-def clean_text(value: str) -> str:
+def _sanitize_markup(value: str) -> str:
     value = html.unescape(value.replace("\x00", " "))
-    value = re.sub(r"<script[\s\S]*?</script>", " ", value, flags=re.IGNORECASE)
-    value = re.sub(r"<style[\s\S]*?</style>", " ", value, flags=re.IGNORECASE)
-    value = re.sub(r"<[^>]+>", " ", value)
-    value = re.sub(r"[\t\f\v ]+", " ", value)
-    value = re.sub(r" *\n *", "\n", value)
-    value = re.sub(r"\n{3,}", "\n\n", value)
+    value = SCRIPT_PATTERN.sub(" ", value)
+    value = STYLE_PATTERN.sub(" ", value)
+    return HTML_TAG_PATTERN.sub(" ", value)
+
+
+def _normalize_whitespace(value: str) -> str:
+    value = HORIZONTAL_WHITESPACE_PATTERN.sub(" ", value)
+    value = LINE_BREAK_PADDING_PATTERN.sub("\n", value)
+    value = EXCESS_LINE_BREAKS_PATTERN.sub("\n\n", value)
     return value.strip()
+
+
+def _remove_url(match: re.Match[str]) -> str:
+    matched = match.group(0)
+    trailing = matched[len(matched.rstrip(TRAILING_URL_PUNCTUATION)):]
+    return trailing
+
+
+def clean_text(value: str, profile: PreprocessingProfile | None = None) -> str:
+    profile = profile or PreprocessingProfile()
+    value = _sanitize_markup(value)
+    if profile.remove_emails:
+        value = EMAIL_PATTERN.sub("", value)
+    if profile.remove_urls:
+        value = URL_PATTERN.sub(_remove_url, value)
+    if profile.normalize_whitespace:
+        value = _normalize_whitespace(value)
+    return value
 
 
 def recommend_chunk_config(document: dict[str, Any]) -> ChunkConfig:

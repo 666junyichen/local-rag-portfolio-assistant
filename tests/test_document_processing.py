@@ -12,6 +12,7 @@ import numpy as np
 from src.document_processing import (
     ChunkConfig,
     chunk_metrics,
+    clean_text,
     count_tokens,
     detect_pii,
     normalize_document,
@@ -22,9 +23,84 @@ from src.document_processing import (
     replace_document_body,
     split_document,
 )
+from src.processing_profiles import PreprocessingProfile
 
 
 class DocumentProcessingTests(unittest.TestCase):
+    def test_clean_text_default_profile_matches_legacy_normalization(self) -> None:
+        value = "\x00 <p>Hello&nbsp;&nbsp; world</p>\t\n \n\nNext "
+
+        expected = "Hello\xa0\xa0 world\n\nNext"
+        self.assertEqual(clean_text(value), expected)
+        self.assertEqual(clean_text(value, PreprocessingProfile()), expected)
+
+    def test_clean_text_normalizes_horizontal_and_vertical_whitespace(self) -> None:
+        profile = PreprocessingProfile(normalize_whitespace=True)
+
+        result = clean_text(" First\t\tline  \n  \n\n\nSecond\f\v line ", profile)
+
+        self.assertEqual(result, "First line\n\nSecond line")
+
+    def test_clean_text_preserves_user_whitespace_when_normalization_is_disabled(self) -> None:
+        profile = PreprocessingProfile(normalize_whitespace=False)
+        value = "\tFirst  <b>line</b>  \n\n\nSecond\fline\v"
+
+        result = clean_text(value, profile)
+
+        self.assertEqual(result, "\tFirst   line   \n\n\nSecond\fline\v")
+
+    def test_clean_text_still_removes_unsafe_markup_without_whitespace_normalization(self) -> None:
+        profile = PreprocessingProfile(normalize_whitespace=False)
+        value = "A&amp;\x00<script>alert('x')</script>\n<style>.x { color: red; }</style><p>B</p>"
+
+        result = clean_text(value, profile)
+
+        self.assertEqual(result, "A&  \n  B ")
+        self.assertNotIn("\x00", result)
+        self.assertNotIn("alert", result)
+        self.assertNotIn("color", result)
+
+    def test_clean_text_removes_urls_without_removing_emails_or_surrounding_punctuation(self) -> None:
+        profile = PreprocessingProfile(remove_urls=True)
+        value = (
+            "Links: https://example.com/path?q=1, www.portfolio.dev/demo; "
+            "and docs.example.org. Email dev@example.com remains."
+        )
+
+        result = clean_text(value, profile)
+
+        self.assertEqual(result, "Links: , ; and . Email dev@example.com remains.")
+
+    def test_clean_text_removes_emails_without_removing_urls(self) -> None:
+        profile = PreprocessingProfile(remove_emails=True)
+        value = "Contact dev.team+rag@example.co.uk; visit https://example.com/contact."
+
+        result = clean_text(value, profile)
+
+        self.assertEqual(result, "Contact ; visit https://example.com/contact.")
+
+    def test_clean_text_removes_urls_and_emails_across_lines(self) -> None:
+        profile = PreprocessingProfile(remove_urls=True, remove_emails=True)
+        value = "Site: https://example.com\nEmail: me@example.com\nMirror: portfolio.dev/docs"
+
+        result = clean_text(value, profile)
+
+        self.assertEqual(result, "Site:\nEmail:\nMirror:")
+
+    def test_clean_text_removal_does_not_overreach_into_github_text_or_invalid_emails(self) -> None:
+        profile = PreprocessingProfile(remove_urls=True, remove_emails=True)
+        value = "GitHub projects use @mentions, team@localhost, and words@inside without domains."
+        before = profile.to_dict()
+
+        result = clean_text(value, profile)
+
+        self.assertEqual(result, value)
+        self.assertEqual(profile.to_dict(), before)
+
+    def test_blank_document_body_behavior_remains_compatible(self) -> None:
+        with self.assertRaisesRegex(ValueError, "document body cannot be empty"):
+            normalize_document({"title": "Blank", "body": "\x00<script>x</script>  \n\t"})
+
     def test_token_counter_handles_english_terms_and_chinese_characters(self) -> None:
         self.assertEqual(count_tokens("MongoDB Vector Search"), 3)
         self.assertEqual(count_tokens("中文检索"), 4)
