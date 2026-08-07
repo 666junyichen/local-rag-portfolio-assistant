@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -116,6 +117,7 @@ def _write_valid_repository(root: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         body = _current_state(state) if relative == "CURRENT_STATE.md" else f"# {path.stem}\n"
         path.write_text(body, encoding="utf-8")
+    _init_git_repository(root)
 
 
 def test_valid_project_memory_fixture_passes(tmp_path: Path) -> None:
@@ -637,13 +639,57 @@ def test_later_equivalent_ignore_rule_restores_private_protection(
     assert validate_repository(tmp_path) == []
 
 
-def _git_check_ignore(root: Path, path: Path) -> int:
+def test_wildcard_private_negation_makes_probe_trackable(tmp_path: Path) -> None:
+    _write_valid_repository(tmp_path)
+    (tmp_path / ".gitignore").write_text(
+        ".project-memory/private/\n!**/private/\n",
+        encoding="utf-8",
+    )
+    note = tmp_path / ".project-memory/private/note.md"
+
+    assert _git_check_ignore(tmp_path, note) == 1
+    assert any(
+        ".project-memory/private/ must be ignored" in error
+        for error in validate_repository(tmp_path)
+    )
+
+
+def test_later_ignore_rule_restores_protection_after_wildcard_negation(
+    tmp_path: Path,
+) -> None:
+    _write_valid_repository(tmp_path)
+    (tmp_path / ".gitignore").write_text(
+        ".project-memory/private/\n"
+        "!**/private/\n"
+        ".project-memory/private/\n",
+        encoding="utf-8",
+    )
+    note = tmp_path / ".project-memory/private/note.md"
+
+    assert _git_check_ignore(tmp_path, note) == 0
+    assert validate_repository(tmp_path) == []
+
+
+def test_git_check_ignore_failure_is_reported_explicitly(tmp_path: Path) -> None:
+    _write_valid_repository(tmp_path)
+    shutil.rmtree(tmp_path / ".git")
+
+    assert any(
+        "git check-ignore failed" in error and "not a git repository" in error.lower()
+        for error in validate_repository(tmp_path)
+    )
+
+
+def _init_git_repository(root: Path) -> None:
     subprocess.run(
         ["git", "-C", str(root), "init", "-q"],
         check=True,
         capture_output=True,
         text=True,
     )
+
+
+def _git_check_ignore(root: Path, path: Path) -> int:
     completed = subprocess.run(
         [
             "git",

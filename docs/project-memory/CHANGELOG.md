@@ -2,6 +2,7 @@
 
 ## 2026-08-08
 
+- Replaced private-ignore text matching with an effective Git probe, including wildcard-negation, restored-precedence, and command-failure coverage.
 - Normalized equivalent private-directory ignore and negation forms with ordered precedence.
 - Added typed passed/failed evidence outcomes and passed-evidence approval gates.
 - Enforced the exact ordered blocker list under the intended current-state section.

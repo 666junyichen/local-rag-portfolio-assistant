@@ -14,7 +14,7 @@ Run its focused tests:
 .\.venv\Scripts\python.exe -m pytest tests\test_project_memory.py -q
 ```
 
-The tests cover valid temporary repositories, missing required files and keys, structured metadata, typed passed/failed evidence, passed-evidence approval gates, exact blocker bullets, exact task-ID sets, duplicate task rows, task-table scoping, exact integer IDs, approval drift, broken repository-relative links, Windows and POSIX user paths, sensitive patterns, and private ignore failures. Private-ignore tests use Git itself to prove equivalent negations make a note trackable and that a later ignore restores protection. Failed evidence remains valid history for unreviewed tasks, while HTTP/HTTPS URL segments, Task 0, and repository-relative paths have explicit acceptance coverage. The tests also validate the checked-in memory without changing it.
+The tests cover valid temporary Git repositories, missing required files and keys, structured metadata, typed passed/failed evidence, passed-evidence approval gates, exact blocker bullets, exact task-ID sets, duplicate task rows, task-table scoping, exact integer IDs, approval drift, broken repository-relative links, Windows and POSIX user paths, sensitive patterns, and private ignore failures. Private-ignore validation uses `git check-ignore --no-index` on `.project-memory/private/note.md`, so wildcard negations and later-rule precedence follow effective Git semantics. Tests cover trackable probes, restored protection, and explicit Git command failures. Failed evidence remains valid history for unreviewed tasks, while HTTP/HTTPS URL segments, Task 0, and repository-relative paths have explicit acceptance coverage. The tests also validate the checked-in memory without changing it.
 
 ## Phase Evidence
 

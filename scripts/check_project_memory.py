@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import unquote
@@ -427,21 +428,43 @@ def _validate_public_memory(root: Path, errors: list[str]) -> None:
 
 
 def _validate_private_ignore(root: Path, errors: list[str]) -> None:
-    path = root / ".gitignore"
-    if not path.is_file():
-        errors.append(".project-memory/private/ must be ignored")
+    probe = ".project-memory/private/note.md"
+    command = [
+        "git",
+        "-c",
+        f"safe.directory={root.resolve().as_posix()}",
+        "-C",
+        str(root),
+        "check-ignore",
+        "-v",
+        "--no-index",
+        probe,
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except OSError as exc:
+        errors.append(f"git check-ignore failed for {probe}: {exc}")
         return
-    ignored = False
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        rule = raw_line.strip()
-        if not rule or rule.startswith("#"):
-            continue
-        negated = rule.startswith("!")
-        normalized = rule.lstrip("!").lstrip("/").rstrip("/")
-        if normalized == ".project-memory/private":
-            ignored = not negated
-    if not ignored:
-        errors.append(".project-memory/private/ must be ignored")
+
+    if completed.returncode == 0:
+        return
+    if completed.returncode == 1:
+        errors.append(
+            f".project-memory/private/ must be ignored; {probe} is trackable"
+        )
+        return
+
+    detail = completed.stderr.strip() or completed.stdout.strip()
+    if not detail:
+        detail = f"exit code {completed.returncode}"
+    errors.append(f"git check-ignore failed for {probe}: {detail}")
 
 
 def _validate_readme_status_link(root: Path, errors: list[str]) -> None:
