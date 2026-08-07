@@ -19,6 +19,7 @@ REQUIRED_MARKDOWN = (
     "RUNBOOK.md",
     "DATA_PRIVACY.md",
     "CHANGELOG.md",
+    "PRIVATE_NOTE_TEMPLATE.md",
     "sessions/TEMPLATE.md",
     "sessions/2026-08-07-project-memory-bootstrap.md",
 )
@@ -34,6 +35,8 @@ def _state() -> dict[str, object]:
                 "id": 1,
                 "title": "Profiles",
                 "status": "completed",
+                "reviewed": True,
+                "final_quality_approved": True,
                 "test_evidence": [
                     {
                         "command": "python -m pytest tests/test_processing_profiles.py -q",
@@ -46,6 +49,8 @@ def _state() -> dict[str, object]:
                 "id": 2,
                 "title": "Cleaning",
                 "status": "in_progress",
+                "reviewed": False,
+                "final_quality_approved": False,
                 "test_evidence": [],
             },
         ],
@@ -60,7 +65,12 @@ def _current_state(state: dict[str, object]) -> str:
     tasks = state["tasks"]
     assert isinstance(tasks, list)
     rows = "\n".join(
-        f"| {task['id']} | {task['status']} | {task['title']} |" for task in tasks
+        "| "
+        f"{task['id']} | {task['status']} | "
+        f"{str(task['reviewed']).lower()} | "
+        f"{str(task['final_quality_approved']).lower()} | "
+        f"{task['title']} |"
+        for task in tasks
     )
     blockers = "\n".join(f"- {item}" for item in state["known_blockers"])
     return f"""# Current State
@@ -70,8 +80,8 @@ def _current_state(state: dict[str, object]) -> str:
 - Last verified: `{state['last_verified']}`
 - Next action: {state['next_action']}
 
-| Task | Status | Summary |
-|---|---|---|
+| Task | Status | Reviewed | Final quality approved | Summary |
+|---|---|---|---|---|
 {rows}
 
 ## Known Blockers
@@ -120,6 +130,10 @@ def test_checked_in_project_memory_passes_validation() -> None:
     [
         (lambda root: (root / "docs/project-memory/RUNBOOK.md").unlink(), "missing required file"),
         (
+            lambda root: (root / "docs/project-memory/PRIVATE_NOTE_TEMPLATE.md").unlink(),
+            "missing required file: docs/project-memory/PRIVATE_NOTE_TEMPLATE.md",
+        ),
+        (
             lambda root: _mutate_state(root, lambda state: state.pop("next_action")),
             "missing required key: next_action",
         ),
@@ -140,6 +154,30 @@ def test_checked_in_project_memory_passes_validation() -> None:
                 root, lambda state: state["tasks"][0].update(test_evidence=[])
             ),
             "completed task 1 has no test evidence",
+        ),
+        (
+            lambda root: _mutate_state(
+                root, lambda state: state["tasks"][0].pop("reviewed")
+            ),
+            "task 1 missing required field: reviewed",
+        ),
+        (
+            lambda root: _mutate_state(
+                root, lambda state: state["tasks"][0].update(reviewed="yes")
+            ),
+            "task 1 reviewed must be a boolean",
+        ),
+        (
+            lambda root: _mutate_state(
+                root, lambda state: state["tasks"][0].pop("final_quality_approved")
+            ),
+            "task 1 missing required field: final_quality_approved",
+        ),
+        (
+            lambda root: _mutate_state(
+                root, lambda state: state["tasks"][0].update(final_quality_approved=1)
+            ),
+            "task 1 final_quality_approved must be a boolean",
         ),
     ],
 )
@@ -166,6 +204,27 @@ def test_current_state_must_match_machine_state(tmp_path: Path) -> None:
     current.write_text(current.read_text(encoding="utf-8").replace("Phase A", "Phase B"), encoding="utf-8")
 
     assert any("CURRENT_STATE.md does not match active_phase" in error for error in validate_repository(tmp_path))
+
+
+@pytest.mark.parametrize(
+    ("current_row", "expected"),
+    [
+        ("| 1 | completed | false | true | Profiles |", "task 1 reviewed"),
+        ("| 1 | completed | true | false | Profiles |", "task 1 final_quality_approved"),
+    ],
+)
+def test_current_state_detects_task_approval_drift(
+    tmp_path: Path, current_row: str, expected: str
+) -> None:
+    _write_valid_repository(tmp_path)
+    current = tmp_path / "docs/project-memory/CURRENT_STATE.md"
+    text = current.read_text(encoding="utf-8")
+    current.write_text(
+        text.replace("| 1 | completed | true | true | Profiles |", current_row),
+        encoding="utf-8",
+    )
+
+    assert any(expected in error for error in validate_repository(tmp_path))
 
 
 @pytest.mark.parametrize(

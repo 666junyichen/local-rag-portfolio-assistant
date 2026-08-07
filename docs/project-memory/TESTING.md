@@ -14,7 +14,7 @@ Run its focused tests:
 .\.venv\Scripts\python.exe -m pytest tests\test_project_memory.py -q
 ```
 
-The tests cover valid temporary repositories, missing required files and keys, invalid status/date/evidence, broken repository-relative links, state drift, sensitive patterns, and a missing private ignore rule. They also validate the checked-in memory without changing it.
+The tests cover valid temporary repositories, missing required files and keys, invalid status/date/evidence, required boolean review fields, approval drift, broken repository-relative links, sensitive patterns, and private ignore failures. They also validate the checked-in memory without changing it.
 
 ## Phase Evidence
 

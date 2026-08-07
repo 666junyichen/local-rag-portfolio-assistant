@@ -19,6 +19,16 @@
           "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
           "result": "164 passed, 3 subtests passed",
           "verified_at": "2026-08-07"
+        },
+        {
+          "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_project_memory.py -q",
+          "result": "23 passed after project-memory contract review fixes",
+          "verified_at": "2026-08-07"
+        },
+        {
+          "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
+          "result": "171 passed, 3 subtests passed after project-memory contract review fixes",
+          "verified_at": "2026-08-07"
         }
       ]
     },
@@ -108,5 +118,5 @@
     "CRLF migration behavior"
   ],
   "next_action": "Fix Task 2 blockers, obtain final-quality approval, then implement Task 3 parent-child chunking.",
-  "updated_at": "2026-08-07T23:35:41+10:00"
+  "updated_at": "2026-08-07T23:49:06+10:00"
 }

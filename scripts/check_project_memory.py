@@ -22,6 +22,7 @@ REQUIRED_FILES = (
     MEMORY_ROOT / "RUNBOOK.md",
     MEMORY_ROOT / "DATA_PRIVACY.md",
     MEMORY_ROOT / "CHANGELOG.md",
+    MEMORY_ROOT / "PRIVATE_NOTE_TEMPLATE.md",
     MEMORY_ROOT / "state.json",
     MEMORY_ROOT / "sessions/TEMPLATE.md",
     MEMORY_ROOT / "sessions/2026-08-07-project-memory-bootstrap.md",
@@ -145,6 +146,11 @@ def _validate_tasks(value: object, errors: list[str]) -> None:
             errors.append(f"invalid task status for task {task_id}: {status!r}")
         if not isinstance(task.get("title"), str) or not task["title"].strip():
             errors.append(f"task {task_id} title must be a non-empty string")
+        for field in ("reviewed", "final_quality_approved"):
+            if field not in task:
+                errors.append(f"task {task_id} missing required field: {field}")
+            elif not isinstance(task[field], bool):
+                errors.append(f"task {task_id} {field} must be a boolean")
         evidence = task.get("test_evidence")
         if not isinstance(evidence, list):
             errors.append(f"task {task_id} test_evidence must be a list")
@@ -195,14 +201,40 @@ def _validate_current_state(
             errors.append(f"CURRENT_STATE.md does not match {key}")
     tasks = state.get("tasks")
     if isinstance(tasks, list):
+        current_rows = _current_task_rows(text)
         for task in tasks:
-            if isinstance(task, dict) and f"| {task.get('id')} | {task.get('status')} |" not in text:
-                errors.append(f"CURRENT_STATE.md does not match task {task.get('id')} status")
+            if not isinstance(task, dict):
+                continue
+            task_id = task.get("id")
+            row = current_rows.get(task_id)
+            if row is None or row[0] != task.get("status"):
+                errors.append(f"CURRENT_STATE.md does not match task {task_id} status")
+                continue
+            for index, field in ((1, "reviewed"), (2, "final_quality_approved")):
+                value = task.get(field)
+                if isinstance(value, bool) and row[index] != str(value).lower():
+                    errors.append(f"CURRENT_STATE.md does not match task {task_id} {field}")
     blockers = state.get("known_blockers")
     if isinstance(blockers, list):
         for blocker in blockers:
             if isinstance(blocker, str) and blocker not in text:
                 errors.append(f"CURRENT_STATE.md is missing blocker: {blocker}")
+
+
+def _current_task_rows(text: str) -> dict[object, tuple[str, str, str]]:
+    rows: dict[object, tuple[str, str, str]] = {}
+    for line in text.splitlines():
+        if not line.startswith("|"):
+            continue
+        columns = [column.strip() for column in line.split("|")[1:-1]]
+        if len(columns) < 5:
+            continue
+        try:
+            task_id = int(columns[0])
+        except ValueError:
+            continue
+        rows[task_id] = (columns[1], columns[2], columns[3])
+    return rows
 
 
 def _validate_public_memory(root: Path, errors: list[str]) -> None:

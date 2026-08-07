@@ -2,6 +2,9 @@
 
 ## 2026-08-07
 
+- Required and type-checked task review and final-quality approval fields.
+- Added approval-field drift detection between structured and human-readable state.
+- Made the tracked private-note template a required project-memory file.
 - Added the mandatory repository start/end protocol.
 - Added structured state and the human-readable Phase A status mirror.
 - Recorded Task 1 as completed/reviewed, Task 2 as in progress, and Tasks 3-8 as pending.
