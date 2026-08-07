@@ -19,3 +19,7 @@ Tracked memory may describe private-data boundaries but must not contain private
 ## 2026-08-07: Passing Tests Do Not Imply Phase Approval
 
 Record Task 2's `148 passed` checkpoint while keeping the task in progress. Completion requires the named quality blockers to be fixed and reviewed.
+
+## 2026-08-08: Verification Is Risk-Based And Time-Boxed
+
+Use focused tests during implementation and one full-suite run at a stable task or merge milestone. Combine review findings into one fix pass, limit ordinary review to 15 minutes, and defer non-critical hardening ideas to `KNOWN_ISSUES.md`. This prevents documentation and isolated regex changes from repeatedly loading the entire application test surface.

@@ -1,224 +1,128 @@
 {
-  "schema_version": 1,
-  "active_branch": "feat/knowledge-studio-phase-a",
-  "active_phase": "Phase A",
-  "tasks": [
-    {
-      "id": 0,
-      "title": "Persistent project-memory system",
-      "status": "completed",
-      "reviewed": true,
-      "final_quality_approved": true,
-      "test_evidence": [
-        {
-          "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_project_memory.py -q",
-          "result": "16 passed",
-          "outcome": "passed",
-          "verified_at": "2026-08-07"
-        },
-        {
-          "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
-          "result": "164 passed, 3 subtests passed",
-          "outcome": "passed",
-          "verified_at": "2026-08-07"
-        },
-        {
-          "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_project_memory.py -q",
-          "result": "23 passed after project-memory contract review fixes",
-          "outcome": "passed",
-          "verified_at": "2026-08-07"
-        },
-        {
-          "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
-          "result": "171 passed, 3 subtests passed after project-memory contract review fixes",
-          "outcome": "passed",
-          "verified_at": "2026-08-07"
-        },
-        {
-          "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_project_memory.py -q",
-          "result": "31 passed after enforceability review fixes",
-          "outcome": "passed",
-          "verified_at": "2026-08-08"
-        },
-        {
-          "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
-          "result": "179 passed, 3 subtests passed after enforceability review fixes",
-          "outcome": "passed",
-          "verified_at": "2026-08-08"
-        },
-        {
-          "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_project_memory.py -q",
-          "result": "34 passed after code-quality review fixes",
-          "outcome": "passed",
-          "verified_at": "2026-08-08"
-        },
-        {
-          "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
-          "result": "182 passed, 3 subtests passed after code-quality review fixes",
-          "outcome": "passed",
-          "verified_at": "2026-08-08"
-        },
-        {
-          "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_project_memory.py -q",
-          "result": "43 passed after final code-quality review fixes",
-          "outcome": "passed",
-          "verified_at": "2026-08-08"
-        },
-        {
-          "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
-          "result": "191 passed, 3 subtests passed after final code-quality review fixes",
-          "outcome": "passed",
-          "verified_at": "2026-08-08"
-        },
-        {
-          "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_project_memory.py -q",
-          "result": "56 passed after medium-findings review fixes",
-          "outcome": "passed",
-          "verified_at": "2026-08-08"
-        },
-        {
-          "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
-          "result": "204 passed, 3 subtests passed after medium-findings review fixes",
-          "outcome": "passed",
-          "verified_at": "2026-08-08"
-        },
-        {
-          "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_project_memory.py -q",
-          "result": "67 passed after evidence and blocker contract fixes",
-          "outcome": "passed",
-          "verified_at": "2026-08-08"
-        },
-        {
-          "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
-          "result": "215 passed, 3 subtests passed after evidence and blocker contract fixes",
-          "outcome": "passed",
-          "verified_at": "2026-08-08"
-        },
-        {
-          "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_project_memory.py -q",
-          "result": "71 passed after private-ignore equivalence fix",
-          "outcome": "passed",
-          "verified_at": "2026-08-08"
-        },
-        {
-          "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
-          "result": "219 passed, 3 subtests passed after private-ignore equivalence fix",
-          "outcome": "passed",
-          "verified_at": "2026-08-08"
-        },
-        {
-          "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_project_memory.py -q",
-          "result": "74 passed after effective Git ignore validation fix",
-          "outcome": "passed",
-          "verified_at": "2026-08-08"
-        },
-        {
-          "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
-          "result": "222 passed, 3 subtests passed after effective Git ignore validation fix",
-          "outcome": "passed",
-          "verified_at": "2026-08-08"
-        },
-        {
-          "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_project_memory.py -q",
-          "result": "77 passed after private directory and tracked ignore-source validation fix",
-          "outcome": "passed",
-          "verified_at": "2026-08-08"
-        },
-        {
-          "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
-          "result": "225 passed, 3 subtests passed after private directory and tracked ignore-source validation fix",
-          "outcome": "passed",
-          "verified_at": "2026-08-08"
-        }
-      ]
-    },
-    {
-      "id": 1,
-      "title": "Versioned processing profiles",
-      "status": "completed",
-      "reviewed": true,
-      "final_quality_approved": true,
-      "test_evidence": [
-        {
-          "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_processing_profiles.py -q",
-          "result": "56 passed",
-          "outcome": "passed",
-          "verified_at": "2026-08-07"
-        }
-      ]
-    },
-    {
-      "id": 2,
-      "title": "Configurable cleaning and structural units",
-      "status": "in_progress",
-      "reviewed": false,
-      "final_quality_approved": false,
-      "test_evidence": [
-        {
-          "command": "python -m pytest -q",
-          "result": "148 passed at the latest Task 2 checkpoint; Phase A incomplete",
-          "outcome": "passed",
-          "verified_at": "2026-08-07"
-        }
-      ]
-    },
-    {
-      "id": 3,
-      "title": "Canonical general, resume, and parent-child chunking",
-      "status": "pending",
-      "reviewed": false,
-      "final_quality_approved": false,
-      "test_evidence": []
-    },
-    {
-      "id": 4,
-      "title": "SQLite profile migration and persistence",
-      "status": "pending",
-      "reviewed": false,
-      "final_quality_approved": false,
-      "test_evidence": []
-    },
-    {
-      "id": 5,
-      "title": "Hierarchy-aware ingestion and retrieval",
-      "status": "pending",
-      "reviewed": false,
-      "final_quality_approved": false,
-      "test_evidence": []
-    },
-    {
-      "id": 6,
-      "title": "Dify-style Knowledge Studio controls",
-      "status": "pending",
-      "reviewed": false,
-      "final_quality_approved": false,
-      "test_evidence": []
-    },
-    {
-      "id": 7,
-      "title": "Retrieval Lab consistency and diagnostics",
-      "status": "pending",
-      "reviewed": false,
-      "final_quality_approved": false,
-      "test_evidence": []
-    },
-    {
-      "id": 8,
-      "title": "Migration, integration, and documentation",
-      "status": "pending",
-      "reviewed": false,
-      "final_quality_approved": false,
-      "test_evidence": []
-    }
-  ],
-  "last_verified": "2026-08-08",
-  "known_blockers": [
-    "CJK-adjacent URLs",
-    "IPv6 and new-TLD URLs",
-    "Unicode-adjacent emails",
-    "Apostrophe emails",
-    "CRLF migration behavior"
-  ],
-  "next_action": "Fix Task 2 blockers, obtain final-quality approval, then implement Task 3 parent-child chunking.",
-  "updated_at": "2026-08-08T02:38:04+10:00"
+    "schema_version":  1,
+    "active_branch":  "feat/knowledge-studio-phase-a",
+    "active_phase":  "Phase A",
+    "tasks":  [
+                  {
+                      "id":  0,
+                      "title":  "Persistent project-memory system",
+                      "status":  "completed",
+                      "reviewed":  true,
+                      "final_quality_approved":  true,
+                      "test_evidence":  [
+                                            {
+                                                "command":  ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_project_memory.py -q",
+                                                "result":  "77 passed after final project-memory privacy validation fixes",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-08"
+                                            },
+                                            {
+                                                "command":  ".\\.venv\\Scripts\\python.exe -m pytest -q",
+                                                "result":  "225 passed, 3 subtests passed at the Task 0 milestone",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-08"
+                                            }
+                                        ]
+                  },
+                  {
+                      "id":  1,
+                      "title":  "Versioned processing profiles",
+                      "status":  "completed",
+                      "reviewed":  true,
+                      "final_quality_approved":  true,
+                      "test_evidence":  [
+                                            {
+                                                "command":  ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_processing_profiles.py -q",
+                                                "result":  "56 passed",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-07"
+                                            }
+                                        ]
+                  },
+                  {
+                      "id":  2,
+                      "title":  "Configurable cleaning and structural units",
+                      "status":  "in_progress",
+                      "reviewed":  false,
+                      "final_quality_approved":  false,
+                      "test_evidence":  [
+                                            {
+                                                "command":  "python -m pytest -q",
+                                                "result":  "148 passed at the latest Task 2 checkpoint; Phase A incomplete",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-07"
+                                            }
+                                        ]
+                  },
+                  {
+                      "id":  3,
+                      "title":  "Canonical general, resume, and parent-child chunking",
+                      "status":  "pending",
+                      "reviewed":  false,
+                      "final_quality_approved":  false,
+                      "test_evidence":  [
+
+                                        ]
+                  },
+                  {
+                      "id":  4,
+                      "title":  "SQLite profile migration and persistence",
+                      "status":  "pending",
+                      "reviewed":  false,
+                      "final_quality_approved":  false,
+                      "test_evidence":  [
+
+                                        ]
+                  },
+                  {
+                      "id":  5,
+                      "title":  "Hierarchy-aware ingestion and retrieval",
+                      "status":  "pending",
+                      "reviewed":  false,
+                      "final_quality_approved":  false,
+                      "test_evidence":  [
+
+                                        ]
+                  },
+                  {
+                      "id":  6,
+                      "title":  "Dify-style Knowledge Studio controls",
+                      "status":  "pending",
+                      "reviewed":  false,
+                      "final_quality_approved":  false,
+                      "test_evidence":  [
+
+                                        ]
+                  },
+                  {
+                      "id":  7,
+                      "title":  "Retrieval Lab consistency and diagnostics",
+                      "status":  "pending",
+                      "reviewed":  false,
+                      "final_quality_approved":  false,
+                      "test_evidence":  [
+
+                                        ]
+                  },
+                  {
+                      "id":  8,
+                      "title":  "Migration, integration, and documentation",
+                      "status":  "pending",
+                      "reviewed":  false,
+                      "final_quality_approved":  false,
+                      "test_evidence":  [
+
+                                        ]
+                  }
+              ],
+    "last_verified":  "2026-08-08",
+    "known_blockers":  [
+                           "CJK-adjacent URLs",
+                           "IPv6 and new-TLD URLs",
+                           "Unicode-adjacent emails",
+                           "Apostrophe emails",
+                           "CRLF migration behavior"
+                       ],
+    "next_action":  "Fix Task 2 blockers, obtain final-quality approval, then implement Task 3 parent-child chunking.",
+    "updated_at":  "2026-08-08T02:50:07+10:00"
 }

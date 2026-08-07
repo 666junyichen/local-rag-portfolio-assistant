@@ -16,12 +16,22 @@ Before changing files, you MUST:
 
 Before handing off or committing completed work, you MUST:
 
-1. Run focused tests for the changed behavior and the full test suite when feasible.
+1. Run focused tests for the changed behavior. Run the full test suite once, only after the task is stable or at a merge/handoff milestone.
 2. Update `state.json`, `CURRENT_STATE.md`, relevant issue/decision/testing documents, `CHANGELOG.md`, and a dated session note.
 3. Record exact commands and results. Never describe a partial test checkpoint as phase completion.
 4. Run `python scripts/check_project_memory.py` after the updates.
 5. Review staged content for credentials, private document bodies, phone numbers, email addresses, and machine-specific absolute paths.
 6. Keep private working notes only under `.project-memory/private/`, which must remain ignored.
+
+## Time And Cost Budget
+
+- During red-green-refactor loops, run only the directly affected test module or test case. Do not run the full suite after each small fix.
+- Documentation-only changes run the project-memory validator and focused documentation tests. They do not trigger model, database, browser, or full application tests.
+- Use one implementation pass, one combined spec/quality review, and at most one consolidated fix-and-recheck cycle per task. Additional non-critical edge cases go to `KNOWN_ISSUES.md` for a later hardening task.
+- Stop a review after 15 minutes and report the current result. Continue only when a high-severity privacy, data-loss, security, or core-functional defect remains.
+- Reuse the same reviewer for rechecks when possible. Do not create a fresh reviewer for every small patch.
+- Record only the latest focused result and latest milestone result in `state.json`. Detailed intermediate history belongs in the dated session note.
+- Before running any expensive command, state why it is needed and whether a cheaper focused check can answer the same question.
 
 ## Scope And Safety
 

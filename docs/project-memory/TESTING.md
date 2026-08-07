@@ -1,5 +1,15 @@
 # Testing
 
+## Verification Levels
+
+Use the smallest level that can detect the current change:
+
+1. **Edit loop:** run one affected test case or module.
+2. **Task checkpoint:** run all tests for the changed subsystem plus the project-memory validator.
+3. **Milestone:** run the full Python suite once after the task is stable, and run TypeScript/build/browser checks only when those surfaces changed.
+
+Do not repeat the milestone suite after every review comment. A review fix first receives focused regression coverage; related fixes are batched before the single milestone rerun. Reviews are time-boxed to 15 minutes and one consolidated recheck unless a high-severity issue remains.
+
 ## Memory Validation
 
 Run the validator directly:
@@ -22,10 +32,12 @@ The tests cover valid temporary Git repositories, missing required files and key
 - Task 2 latest recorded checkpoint: the full suite passed 148 tests on 2026-08-07; Phase A remained incomplete because quality blockers were still open.
 - Task 0 focused evidence is recorded in `state.json` and the bootstrap session note.
 
-Run the full Python suite before handoff:
+Run the full Python suite once before a feature-task handoff or merge milestone:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
 Test evidence must include non-empty command/result strings, an `outcome` of `passed` or `failed`, and an ISO verification date. Reviewed or final-quality-approved tasks require at least one fully valid passed entry; failed-only evidence cannot support approval.
+
+Keep only the latest focused result and latest milestone result in `state.json`. Put intermediate red/green iterations in the dated session note so the machine-readable state stays concise.
