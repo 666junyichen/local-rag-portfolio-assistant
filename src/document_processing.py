@@ -30,26 +30,30 @@ LINE_BREAK_PADDING_PATTERN = re.compile(r" *\n *")
 EXCESS_LINE_BREAKS_PATTERN = re.compile(r"\n{3,}")
 EMAIL_PATTERN = re.compile(
     r"""
-    (?<![\w.+-])
-    [A-Z0-9_%+-]+(?:\.[A-Z0-9_%+-]+)*
+    (?<![A-Z0-9_.+\-'])
+    [A-Z0-9_%+\-']+(?:\.[A-Z0-9_%+\-']+)*
     @
     [A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?
     (?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)*
     \.[A-Z]{2,63}
-    (?![\w-]|\.[A-Z0-9])
+    (?![A-Z0-9_-]|\.[A-Z0-9])
     """,
     re.IGNORECASE | re.VERBOSE,
 )
 URL_PATTERN = re.compile(
     r"""
-    (?<![@\w])
+    (?<![@A-Z0-9_])
     (?:
-        https?://(?:localhost|[A-Z0-9](?:[A-Z0-9.-]*[A-Z0-9])?)(?::\d{1,5})?
+        https?://(?:localhost|\[[0-9A-F:.]+\]|[A-Z0-9](?:[A-Z0-9.-]*[A-Z0-9])?)(?::\d{1,5})?
         |
         (?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+
-        (?:com|org|net|edu|gov|io|dev|app|ai|co|me|info|biz|au|cn|uk)
+        (?:
+            com|org|net|edu|gov|io|dev|app|ai|co|me|info|biz|au|cn|uk
+            |technology|tech|cloud|online|site|store|xyz|digital
+            |solutions|agency|studio|design|work|jobs|space
+        )
     )
-    (?![\w-])
+    (?![A-Z0-9_-])
     (?:/[A-Z0-9._~%!$&'()*+,;=:@/-]*)?
     (?:\?[A-Z0-9._~%!$&'()*+,;=:@/?-]*)?
     (?:\#[A-Z0-9._~%!$&'()*+,;=:@/?-]*)?

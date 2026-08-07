@@ -79,6 +79,25 @@ class DocumentProcessingTests(unittest.TestCase):
 
         self.assertEqual(result, "查看 ，后续文字; read (), next.")
 
+    def test_clean_text_removes_url_adjacent_to_cjk_text(self) -> None:
+        profile = PreprocessingProfile(remove_urls=True)
+        value = "\u67e5\u770bhttps://example.com/path\uff0c\u7ee7\u7eed\u9605\u8bfb"
+
+        result = clean_text(value, profile)
+
+        self.assertEqual(result, "\u67e5\u770b\uff0c\u7ee7\u7eed\u9605\u8bfb")
+
+    def test_clean_text_removes_ipv6_and_new_tld_urls(self) -> None:
+        profile = PreprocessingProfile(remove_urls=True)
+        value = (
+            "IPv6 https://[2001:db8::1]:8080/docs; "
+            "portfolio.technology/projects."
+        )
+
+        result = clean_text(value, profile)
+
+        self.assertEqual(result, "IPv6 ; .")
+
     def test_clean_text_preserves_straight_and_curly_quotes_around_urls(self) -> None:
         profile = PreprocessingProfile(remove_urls=True)
         value = (
@@ -117,6 +136,22 @@ class DocumentProcessingTests(unittest.TestCase):
         result = clean_text(value, profile)
 
         self.assertEqual(result, "Contact ; visit https://example.com/contact.")
+
+    def test_clean_text_removes_email_adjacent_to_unicode_text(self) -> None:
+        profile = PreprocessingProfile(remove_emails=True)
+        value = "\u8054\u7cfb\u5f20test@example.com\uff0c\u7ee7\u7eed"
+
+        result = clean_text(value, profile)
+
+        self.assertEqual(result, "\u8054\u7cfb\u5f20\uff0c\u7ee7\u7eed")
+
+    def test_clean_text_removes_valid_apostrophe_email(self) -> None:
+        profile = PreprocessingProfile(remove_emails=True)
+        value = "Contact o'connor@example.com for details."
+
+        result = clean_text(value, profile)
+
+        self.assertEqual(result, "Contact for details.")
 
     def test_clean_text_keeps_malformed_consecutive_dot_emails(self) -> None:
         profile = PreprocessingProfile(remove_emails=True)

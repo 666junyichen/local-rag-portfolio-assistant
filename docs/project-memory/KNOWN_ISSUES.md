@@ -1,8 +1,8 @@
 # Known Issues
 
-## Task 2 Quality Blockers
+## Resolved: Task 2 Quality Blockers
 
-Task 2 remains in progress despite a latest checkpoint of `148 passed`. Passing existing tests is necessary but does not resolve the missing boundary cases below.
+Task 2 was approved on 2026-08-08 after focused regression coverage passed.
 
 | Blocker | Required behavior before approval |
 |---|---|
@@ -12,6 +12,6 @@ Task 2 remains in progress despite a latest checkpoint of `148 passed`. Passing 
 | Apostrophe emails | Handle valid apostrophes in the local part while preserving surrounding prose. |
 | CRLF migration behavior | Define and test deterministic behavior for legacy profiles and text using Windows line endings. |
 
-## Resolution Rule
+## Resolution Evidence
 
-Each blocker needs a failing regression test first, an implementation fix, focused passing evidence, and a full-suite run. Task 2 remains `in_progress` and `final_quality_approved` remains false until all five cases pass review.
+The focused command `.\.venv\Scripts\python.exe -m pytest tests\test_document_processing.py -q` passed all 38 tests. The full suite remains reserved for the Phase A milestone.

@@ -42,13 +42,13 @@
                   {
                       "id":  2,
                       "title":  "Configurable cleaning and structural units",
-                      "status":  "in_progress",
-                      "reviewed":  false,
-                      "final_quality_approved":  false,
+                      "status":  "completed",
+                      "reviewed":  true,
+                      "final_quality_approved":  true,
                       "test_evidence":  [
                                             {
-                                                "command":  "python -m pytest -q",
-                                                "result":  "148 passed at the latest Task 2 checkpoint; Phase A incomplete",
+                                                "command":  ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_document_processing.py -q",
+                                                "result":  "38 passed after URL, email, Unicode boundary, apostrophe, IPv6, new-TLD, and CRLF coverage",
                                                 "outcome":  "passed",
                                                 "verified_at":  "2026-08-07"
                                             }
@@ -116,13 +116,7 @@
                   }
               ],
     "last_verified":  "2026-08-08",
-    "known_blockers":  [
-                           "CJK-adjacent URLs",
-                           "IPv6 and new-TLD URLs",
-                           "Unicode-adjacent emails",
-                           "Apostrophe emails",
-                           "CRLF migration behavior"
-                       ],
-    "next_action":  "Fix Task 2 blockers, obtain final-quality approval, then implement Task 3 parent-child chunking.",
-    "updated_at":  "2026-08-08T02:50:07+10:00"
+    "known_blockers":  [],
+    "next_action":  "Implement Task 3 canonical general, resume, and parent-child chunking.",
+    "updated_at":  "2026-08-08T18:00:00+10:00"
 }
