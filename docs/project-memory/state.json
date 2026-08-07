@@ -117,6 +117,18 @@
           "result": "222 passed, 3 subtests passed after effective Git ignore validation fix",
           "outcome": "passed",
           "verified_at": "2026-08-08"
+        },
+        {
+          "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_project_memory.py -q",
+          "result": "77 passed after private directory and tracked ignore-source validation fix",
+          "outcome": "passed",
+          "verified_at": "2026-08-08"
+        },
+        {
+          "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
+          "result": "225 passed, 3 subtests passed after private directory and tracked ignore-source validation fix",
+          "outcome": "passed",
+          "verified_at": "2026-08-08"
         }
       ]
     },
@@ -208,5 +220,5 @@
     "CRLF migration behavior"
   ],
   "next_action": "Fix Task 2 blockers, obtain final-quality approval, then implement Task 3 parent-child chunking.",
-  "updated_at": "2026-08-08T02:09:40+10:00"
+  "updated_at": "2026-08-08T02:38:04+10:00"
 }

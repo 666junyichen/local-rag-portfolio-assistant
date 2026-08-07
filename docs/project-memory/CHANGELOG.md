@@ -2,6 +2,7 @@
 
 ## 2026-08-08
 
+- Required both the private directory and child probe to be ignored by the repository `.gitignore`, excluding file-only and local Git exclude rules.
 - Replaced private-ignore text matching with an effective Git probe, including wildcard-negation, restored-precedence, and command-failure coverage.
 - Normalized equivalent private-directory ignore and negation forms with ordered precedence.
 - Added typed passed/failed evidence outcomes and passed-evidence approval gates.

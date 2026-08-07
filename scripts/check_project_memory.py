@@ -428,7 +428,10 @@ def _validate_public_memory(root: Path, errors: list[str]) -> None:
 
 
 def _validate_private_ignore(root: Path, errors: list[str]) -> None:
-    probe = ".project-memory/private/note.md"
+    probes = (
+        ".project-memory/private/",
+        ".project-memory/private/note.md",
+    )
     command = [
         "git",
         "-c",
@@ -437,12 +440,73 @@ def _validate_private_ignore(root: Path, errors: list[str]) -> None:
         str(root),
         "check-ignore",
         "-v",
+        "-z",
         "--no-index",
-        probe,
+        "--stdin",
     ]
     try:
         completed = subprocess.run(
             command,
+            check=False,
+            capture_output=True,
+            input="\0".join(probes) + "\0",
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except OSError as exc:
+        errors.append(f"git check-ignore failed for private probes: {exc}")
+        return
+
+    if completed.returncode not in (0, 1):
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        if not detail:
+            detail = f"exit code {completed.returncode}"
+        errors.append(f"git check-ignore failed for private probes: {detail}")
+        return
+
+    fields = completed.stdout.split("\0")
+    if fields and fields[-1] == "":
+        fields.pop()
+    if len(fields) % 4:
+        errors.append("git check-ignore returned malformed verbose output")
+        return
+
+    sources_by_probe = {
+        fields[index + 3]: fields[index]
+        for index in range(0, len(fields), 4)
+    }
+    valid_sources = True
+    for probe in probes:
+        source = sources_by_probe.get(probe)
+        if source is None:
+            valid_sources = False
+            errors.append(
+                f".project-memory/private/ must be ignored; {probe} is trackable"
+            )
+        elif source != ".gitignore":
+            valid_sources = False
+            errors.append(
+                ".project-memory/private/ must be ignored by repository .gitignore; "
+                f"effective source for {probe}: {source}"
+            )
+
+    if not valid_sources:
+        return
+
+    try:
+        tracked = subprocess.run(
+            [
+                "git",
+                "-c",
+                f"safe.directory={root.resolve().as_posix()}",
+                "-C",
+                str(root),
+                "ls-files",
+                "--error-unmatch",
+                "--",
+                ".gitignore",
+            ],
             check=False,
             capture_output=True,
             text=True,
@@ -450,21 +514,15 @@ def _validate_private_ignore(root: Path, errors: list[str]) -> None:
             errors="replace",
         )
     except OSError as exc:
-        errors.append(f"git check-ignore failed for {probe}: {exc}")
+        errors.append(f"git ls-files failed for .gitignore: {exc}")
         return
-
-    if completed.returncode == 0:
-        return
-    if completed.returncode == 1:
-        errors.append(
-            f".project-memory/private/ must be ignored; {probe} is trackable"
-        )
-        return
-
-    detail = completed.stderr.strip() or completed.stdout.strip()
-    if not detail:
-        detail = f"exit code {completed.returncode}"
-    errors.append(f"git check-ignore failed for {probe}: {detail}")
+    if tracked.returncode == 1:
+        errors.append("repository .gitignore must be tracked")
+    elif tracked.returncode != 0:
+        detail = tracked.stderr.strip() or tracked.stdout.strip()
+        if not detail:
+            detail = f"exit code {tracked.returncode}"
+        errors.append(f"git ls-files failed for .gitignore: {detail}")
 
 
 def _validate_readme_status_link(root: Path, errors: list[str]) -> None:

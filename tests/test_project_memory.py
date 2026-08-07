@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import stat
 import subprocess
 from pathlib import Path
 
@@ -118,6 +120,7 @@ def _write_valid_repository(root: Path) -> None:
         body = _current_state(state) if relative == "CURRENT_STATE.md" else f"# {path.stem}\n"
         path.write_text(body, encoding="utf-8")
     _init_git_repository(root)
+    _track_gitignore(root)
 
 
 def test_valid_project_memory_fixture_passes(tmp_path: Path) -> None:
@@ -584,6 +587,58 @@ def test_private_memory_directory_must_be_ignored(tmp_path: Path) -> None:
     assert any(".project-memory/private/ must be ignored" in error for error in validate_repository(tmp_path))
 
 
+def test_ignoring_only_private_note_does_not_protect_private_directory(
+    tmp_path: Path,
+) -> None:
+    _write_valid_repository(tmp_path)
+    (tmp_path / ".gitignore").write_text(
+        ".project-memory/private/note.md\n",
+        encoding="utf-8",
+    )
+    note = tmp_path / ".project-memory/private/note.md"
+
+    assert _git_check_ignore(tmp_path, note) == 0
+    assert any(
+        ".project-memory/private/ must be ignored" in error
+        for error in validate_repository(tmp_path)
+    )
+
+
+def test_info_exclude_cannot_supply_private_directory_protection(
+    tmp_path: Path,
+) -> None:
+    _write_valid_repository(tmp_path)
+    (tmp_path / ".gitignore").write_text(".project-memory/cache/\n", encoding="utf-8")
+    (tmp_path / ".git/info/exclude").write_text(
+        ".project-memory/private/\n",
+        encoding="utf-8",
+    )
+
+    errors = validate_repository(tmp_path)
+
+    assert any(
+        "repository .gitignore" in error and ".git/info/exclude" in error
+        for error in errors
+    )
+
+
+def test_untracked_gitignore_cannot_supply_private_directory_protection(
+    tmp_path: Path,
+) -> None:
+    _write_valid_repository(tmp_path)
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "rm", "--cached", "-q", ".gitignore"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert any(
+        "repository .gitignore must be tracked" in error
+        for error in validate_repository(tmp_path)
+    )
+
+
 def test_private_memory_ignore_rule_cannot_be_negated_later(tmp_path: Path) -> None:
     _write_valid_repository(tmp_path)
     (tmp_path / ".gitignore").write_text(
@@ -672,7 +727,7 @@ def test_later_ignore_rule_restores_protection_after_wildcard_negation(
 
 def test_git_check_ignore_failure_is_reported_explicitly(tmp_path: Path) -> None:
     _write_valid_repository(tmp_path)
-    shutil.rmtree(tmp_path / ".git")
+    shutil.rmtree(tmp_path / ".git", onerror=_remove_readonly)
 
     assert any(
         "git check-ignore failed" in error and "not a git repository" in error.lower()
@@ -687,6 +742,20 @@ def _init_git_repository(root: Path) -> None:
         capture_output=True,
         text=True,
     )
+
+
+def _track_gitignore(root: Path) -> None:
+    subprocess.run(
+        ["git", "-C", str(root), "add", ".gitignore"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _remove_readonly(function, path: str, _error) -> None:
+    os.chmod(path, stat.S_IWRITE)
+    function(path)
 
 
 def _git_check_ignore(root: Path, path: Path) -> int:
