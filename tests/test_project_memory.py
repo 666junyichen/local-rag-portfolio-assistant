@@ -78,6 +78,7 @@ def _current_state(state: dict[str, object]) -> str:
 - Active branch: `{state['active_branch']}`
 - Active phase: `{state['active_phase']}`
 - Last verified: `{state['last_verified']}`
+- Updated: `{state['updated_at']}`
 - Next action: {state['next_action']}
 
 ## Status
@@ -206,6 +207,58 @@ def test_current_state_must_match_machine_state(tmp_path: Path) -> None:
     current.write_text(current.read_text(encoding="utf-8").replace("Phase A", "Phase B"), encoding="utf-8")
 
     assert any("CURRENT_STATE.md does not match active_phase" in error for error in validate_repository(tmp_path))
+
+
+@pytest.mark.parametrize(
+    ("label", "state_key", "wrong_value"),
+    [
+        ("Active branch", "active_branch", "wrong-branch"),
+        ("Active phase", "active_phase", "Phase B"),
+        ("Updated", "updated_at", "2026-08-08T01:00:00+10:00"),
+        ("Next action", "next_action", "Do something else."),
+    ],
+)
+def test_current_state_metadata_uses_exact_labeled_values(
+    tmp_path: Path, label: str, state_key: str, wrong_value: str
+) -> None:
+    _write_valid_repository(tmp_path)
+    state = _state()
+    current = tmp_path / "docs/project-memory/CURRENT_STATE.md"
+    text = current.read_text(encoding="utf-8")
+    original = state[state_key]
+    assert isinstance(original, str)
+    text = text.replace(f"- {label}: `{original}`", f"- {label}: `{wrong_value}`")
+    if label == "Next action":
+        text = text.replace(
+            f"- {label}: `{wrong_value}`",
+            f"- {label}: {wrong_value}",
+        ).replace(f"- {label}: {original}", f"- {label}: {wrong_value}")
+    current.write_text(
+        f"{text}\nCorrect value mentioned elsewhere: {original}\n",
+        encoding="utf-8",
+    )
+
+    assert any(
+        f"CURRENT_STATE.md does not match {state_key}" in error
+        for error in validate_repository(tmp_path)
+    )
+
+
+def test_current_state_requires_updated_metadata_label(tmp_path: Path) -> None:
+    _write_valid_repository(tmp_path)
+    state = _state()
+    current = tmp_path / "docs/project-memory/CURRENT_STATE.md"
+    current.write_text(
+        current.read_text(encoding="utf-8").replace(
+            f"- Updated: `{state['updated_at']}`\n", ""
+        ),
+        encoding="utf-8",
+    )
+
+    assert any(
+        "CURRENT_STATE.md missing metadata field: updated_at" in error
+        for error in validate_repository(tmp_path)
+    )
 
 
 @pytest.mark.parametrize(
@@ -345,6 +398,55 @@ def test_evidence_command_and_result_must_be_non_empty_strings(
 
 
 @pytest.mark.parametrize(
+    ("task_update", "evidence", "expected"),
+    [
+        (
+            {"final_quality_approved": True, "reviewed": False},
+            None,
+            "final_quality_approved requires reviewed=true",
+        ),
+        (
+            {"final_quality_approved": True, "status": "in_progress"},
+            None,
+            "final_quality_approved requires status=completed",
+        ),
+        (
+            {"final_quality_approved": True},
+            [],
+            "final_quality_approved requires non-empty valid test evidence",
+        ),
+        (
+            {"final_quality_approved": True},
+            [{"command": "pytest", "result": [], "verified_at": "2026-08-08"}],
+            "final_quality_approved requires non-empty valid test evidence",
+        ),
+        (
+            {"reviewed": True, "final_quality_approved": False},
+            [],
+            "reviewed=true requires non-empty valid test evidence",
+        ),
+    ],
+)
+def test_task_approval_invariants(
+    tmp_path: Path,
+    task_update: dict[str, object],
+    evidence: list[object] | None,
+    expected: str,
+) -> None:
+    _write_valid_repository(tmp_path)
+
+    def mutate(state: dict[str, object]) -> None:
+        task = state["tasks"][0]
+        task.update(task_update)
+        if evidence is not None:
+            task["test_evidence"] = evidence
+
+    _mutate_state(tmp_path, mutate)
+
+    assert any(f"task 1 {expected}" in error for error in validate_repository(tmp_path))
+
+
+@pytest.mark.parametrize(
     "unsafe_text",
     [
         "SERVICE_" + "TOKEN=not-a-placeholder",
@@ -359,6 +461,9 @@ def test_evidence_command_and_result_must_be_non_empty_strings(
         "file:" + "///C:/private/notes.txt",
         "/" + "C:/private/notes.txt",
         "ftp:" + "//example.com/archive/C:/guide",
+        "/Users/" + "someone/private/notes.txt",
+        "/home/" + "someone/private/notes.txt",
+        "file:" + "///home/someone/private/notes.txt",
     ],
 )
 def test_public_memory_docs_reject_sensitive_patterns(tmp_path: Path, unsafe_text: str) -> None:
@@ -375,7 +480,9 @@ def test_public_memory_allows_urls_and_repository_relative_paths(tmp_path: Path)
     privacy.write_text(
         "# Privacy\n\n"
         "See https://example.com/privacy, https://example.com/archive/C:/guide, "
-        "and http://localhost:8505/archive/D:/guide.\n"
+        "http://localhost:8505/archive/D:/guide, "
+        "https://example.com/Users/demo/guide, and "
+        "https://example.com/home/demo/guide.\n"
         "Read docs/project-memory/RUNBOOK.md and scripts/check_project_memory.py.\n",
         encoding="utf-8",
     )

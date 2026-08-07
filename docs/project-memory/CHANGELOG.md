@@ -2,6 +2,9 @@
 
 ## 2026-08-08
 
+- Parsed labeled current-state metadata and enforced exact field equality.
+- Rejected local POSIX user-home paths while preserving HTTP/HTTPS URL paths.
+- Enforced reviewed and final-quality approval evidence/status invariants.
 - Limited drive-like path exceptions to actual HTTP and HTTPS URLs.
 - Enforced exact task-ID set equality between structured and human-readable state.
 - Rejected boolean task IDs through exact integer type validation.

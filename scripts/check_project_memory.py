@@ -54,6 +54,14 @@ WINDOWS_DRIVE_PATH_PATTERN = re.compile(r"(?i)[A-Z]:[\\/]")
 WINDOWS_UNC_PATH_PATTERN = re.compile(
     r"(?<![\\/])[\\/]{2}[^\\/\s]+[\\/][^\\/\s]+"
 )
+POSIX_USER_PATH_PATTERN = re.compile(r"(?i)/(?:Users|home)/[^/\s]+/")
+CURRENT_METADATA_FIELDS = {
+    "Active branch": "active_branch",
+    "Active phase": "active_phase",
+    "Last verified": "last_verified",
+    "Updated": "updated_at",
+    "Next action": "next_action",
+}
 
 
 def validate_repository(root: Path) -> list[str]:
@@ -106,17 +114,19 @@ def _load_and_validate_state(root: Path, errors: list[str]) -> dict[str, object]
     return state
 
 
-def _validate_iso_date(value: object, field: str, errors: list[str]) -> None:
+def _validate_iso_date(value: object, field: str, errors: list[str]) -> bool:
     if not isinstance(value, str):
         errors.append(f"{field} must be an ISO date")
-        return
+        return False
     try:
         parsed = date.fromisoformat(value)
     except ValueError:
         errors.append(f"{field} must be an ISO date")
-        return
+        return False
     if parsed.isoformat() != value:
         errors.append(f"{field} must be an ISO date")
+        return False
+    return True
 
 
 def _validate_iso_datetime(value: object, errors: list[str]) -> None:
@@ -162,21 +172,46 @@ def _validate_tasks(value: object, errors: list[str]) -> None:
         if not isinstance(evidence, list):
             errors.append(f"task {task_id} test_evidence must be a list")
             continue
+        evidence_valid = bool(evidence)
         if status == "completed" and not evidence:
             errors.append(f"completed task {task_id} has no test evidence")
         for item in evidence:
             if not isinstance(item, dict):
                 errors.append(f"task {task_id} has invalid test evidence")
+                evidence_valid = False
                 continue
+            item_valid = True
             for field in ("command", "result"):
                 value = item.get(field)
                 if not isinstance(value, str) or not value.strip():
                     errors.append(
                         f"task {task_id} evidence {field} must be a non-empty string"
                     )
-            _validate_iso_date(
+                    item_valid = False
+            if not _validate_iso_date(
                 item.get("verified_at"), f"task {task_id} evidence verified_at", errors
+            ):
+                item_valid = False
+            evidence_valid = evidence_valid and item_valid
+        reviewed = task.get("reviewed")
+        approved = task.get("final_quality_approved")
+        if reviewed is True and not evidence_valid:
+            errors.append(
+                f"task {task_id} reviewed=true requires non-empty valid test evidence"
             )
+        if approved is True:
+            if reviewed is not True:
+                errors.append(
+                    f"task {task_id} final_quality_approved requires reviewed=true"
+                )
+            if status != "completed":
+                errors.append(
+                    f"task {task_id} final_quality_approved requires status=completed"
+                )
+            if not evidence_valid:
+                errors.append(
+                    f"task {task_id} final_quality_approved requires non-empty valid test evidence"
+                )
 
 
 def _validate_markdown_links(root: Path, errors: list[str]) -> None:
@@ -210,9 +245,10 @@ def _validate_current_state(
     if state is None or not path.is_file():
         return
     text = path.read_text(encoding="utf-8")
-    for key in ("active_branch", "active_phase", "last_verified", "next_action"):
+    metadata = _current_metadata(text, errors)
+    for key in CURRENT_METADATA_FIELDS.values():
         value = state.get(key)
-        if isinstance(value, str) and value not in text:
+        if isinstance(value, str) and metadata.get(key) != value:
             errors.append(f"CURRENT_STATE.md does not match {key}")
     tasks = state.get("tasks")
     if isinstance(tasks, list):
@@ -251,6 +287,30 @@ def _validate_current_state(
         for blocker in blockers:
             if isinstance(blocker, str) and blocker not in text:
                 errors.append(f"CURRENT_STATE.md is missing blocker: {blocker}")
+
+
+def _current_metadata(text: str, errors: list[str]) -> dict[str, str]:
+    metadata: dict[str, str] = {}
+    for line in text.splitlines():
+        if line.startswith("## "):
+            break
+        if not line.startswith("- ") or ":" not in line:
+            continue
+        label, raw_value = line[2:].split(":", 1)
+        key = CURRENT_METADATA_FIELDS.get(label.strip())
+        if key is None:
+            continue
+        if key in metadata:
+            errors.append(f"CURRENT_STATE.md duplicate metadata field: {key}")
+            continue
+        value = raw_value.strip()
+        if len(value) >= 2 and value.startswith("`") and value.endswith("`"):
+            value = value[1:-1]
+        metadata[key] = value
+    for key in CURRENT_METADATA_FIELDS.values():
+        if key not in metadata:
+            errors.append(f"CURRENT_STATE.md missing metadata field: {key}")
+    return metadata
 
 
 def _current_task_rows(
@@ -317,6 +377,7 @@ def _validate_public_memory(root: Path, errors: list[str]) -> None:
             any(pattern.search(text) for pattern in SENSITIVE_PATTERNS)
             or WINDOWS_DRIVE_PATH_PATTERN.search(non_http_text)
             or WINDOWS_UNC_PATH_PATTERN.search(non_http_text)
+            or POSIX_USER_PATH_PATTERN.search(non_http_text)
         ):
             errors.append(f"potential sensitive value in {_relative(path, root)}")
 
