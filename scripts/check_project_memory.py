@@ -54,7 +54,9 @@ WINDOWS_DRIVE_PATH_PATTERN = re.compile(r"(?i)[A-Z]:[\\/]")
 WINDOWS_UNC_PATH_PATTERN = re.compile(
     r"(?<![\\/])[\\/]{2}[^\\/\s]+[\\/][^\\/\s]+"
 )
-POSIX_USER_PATH_PATTERN = re.compile(r"(?i)/(?:Users|home)/[^/\s]+/")
+POSIX_USER_PATH_PATTERN = re.compile(
+    r"(?i)/(?:Users|home)/[^/\s]+(?=/|\s|$)"
+)
 CURRENT_METADATA_FIELDS = {
     "Active branch": "active_branch",
     "Active phase": "active_phase",
@@ -173,6 +175,7 @@ def _validate_tasks(value: object, errors: list[str]) -> None:
             errors.append(f"task {task_id} test_evidence must be a list")
             continue
         evidence_valid = bool(evidence)
+        has_valid_passed_evidence = False
         if status == "completed" and not evidence:
             errors.append(f"completed task {task_id} has no test evidence")
         for item in evidence:
@@ -188,16 +191,28 @@ def _validate_tasks(value: object, errors: list[str]) -> None:
                         f"task {task_id} evidence {field} must be a non-empty string"
                     )
                     item_valid = False
+            outcome = item.get("outcome")
+            if type(outcome) is not str or outcome not in {"passed", "failed"}:
+                errors.append(
+                    f"task {task_id} evidence outcome must be 'passed' or 'failed'"
+                )
+                item_valid = False
             if not _validate_iso_date(
                 item.get("verified_at"), f"task {task_id} evidence verified_at", errors
             ):
                 item_valid = False
             evidence_valid = evidence_valid and item_valid
+            if item_valid and outcome == "passed":
+                has_valid_passed_evidence = True
         reviewed = task.get("reviewed")
         approved = task.get("final_quality_approved")
         if reviewed is True and not evidence_valid:
             errors.append(
                 f"task {task_id} reviewed=true requires non-empty valid test evidence"
+            )
+        if reviewed is True and not has_valid_passed_evidence:
+            errors.append(
+                f"task {task_id} reviewed=true requires passed test evidence"
             )
         if approved is True:
             if reviewed is not True:
@@ -211,6 +226,10 @@ def _validate_tasks(value: object, errors: list[str]) -> None:
             if not evidence_valid:
                 errors.append(
                     f"task {task_id} final_quality_approved requires non-empty valid test evidence"
+                )
+            if not has_valid_passed_evidence:
+                errors.append(
+                    f"task {task_id} final_quality_approved requires passed test evidence"
                 )
 
 
@@ -284,9 +303,9 @@ def _validate_current_state(
                     errors.append(f"CURRENT_STATE.md does not match task {task_id} {field}")
     blockers = state.get("known_blockers")
     if isinstance(blockers, list):
-        for blocker in blockers:
-            if isinstance(blocker, str) and blocker not in text:
-                errors.append(f"CURRENT_STATE.md is missing blocker: {blocker}")
+        current_blockers = _current_section_bullets(text, "## Known Blockers", errors)
+        if current_blockers != blockers:
+            errors.append("CURRENT_STATE.md known blockers do not match state.json")
 
 
 def _current_metadata(text: str, errors: list[str]) -> dict[str, str]:
@@ -311,6 +330,31 @@ def _current_metadata(text: str, errors: list[str]) -> dict[str, str]:
         if key not in metadata:
             errors.append(f"CURRENT_STATE.md missing metadata field: {key}")
     return metadata
+
+
+def _current_section_bullets(
+    text: str, heading: str, errors: list[str]
+) -> list[str]:
+    bullets: list[str] = []
+    in_section = False
+    found = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("## "):
+            if stripped == heading:
+                if found:
+                    errors.append(f"CURRENT_STATE.md duplicate section: {heading}")
+                    continue
+                found = True
+                in_section = True
+                continue
+            if in_section:
+                break
+        if in_section and stripped.startswith("- "):
+            bullets.append(stripped[2:].strip())
+    if not found:
+        errors.append(f"CURRENT_STATE.md missing section: {heading}")
+    return bullets
 
 
 def _current_task_rows(

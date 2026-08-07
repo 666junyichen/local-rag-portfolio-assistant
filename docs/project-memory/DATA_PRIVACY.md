@@ -6,6 +6,7 @@
 - Private document bodies or excerpts.
 - Phone numbers, personal email addresses, or other direct contact details.
 - Absolute paths containing a local user profile.
+- Bare or descendant POSIX user-home paths under `/Users` or `/home`.
 - Generated local catalogs, uploads, or private evaluation material.
 
 ## Safe To Track

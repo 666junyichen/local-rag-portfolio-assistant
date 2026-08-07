@@ -14,7 +14,7 @@ Run its focused tests:
 .\.venv\Scripts\python.exe -m pytest tests\test_project_memory.py -q
 ```
 
-The tests cover valid temporary repositories, missing required files and keys, structured metadata, typed evidence, approval invariants, exact task-ID sets, duplicate task rows, task-table scoping, exact integer IDs, approval drift, broken repository-relative links, Windows and POSIX user paths, sensitive patterns, and private ignore failures. HTTP/HTTPS URL segments, Task 0, and repository-relative paths have explicit acceptance coverage. The tests also validate the checked-in memory without changing it.
+The tests cover valid temporary repositories, missing required files and keys, structured metadata, typed passed/failed evidence, passed-evidence approval gates, exact blocker bullets, exact task-ID sets, duplicate task rows, task-table scoping, exact integer IDs, approval drift, broken repository-relative links, Windows and POSIX user paths, sensitive patterns, and private ignore failures. Failed evidence remains valid history for unreviewed tasks, while HTTP/HTTPS URL segments, Task 0, and repository-relative paths have explicit acceptance coverage. The tests also validate the checked-in memory without changing it.
 
 ## Phase Evidence
 
@@ -28,4 +28,4 @@ Run the full Python suite before handoff:
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Test evidence must include the command, result, and verification date. Completed tasks without evidence fail memory validation.
+Test evidence must include non-empty command/result strings, an `outcome` of `passed` or `failed`, and an ISO verification date. Reviewed or final-quality-approved tasks require at least one fully valid passed entry; failed-only evidence cannot support approval.

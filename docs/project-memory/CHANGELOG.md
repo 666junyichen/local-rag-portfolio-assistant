@@ -2,6 +2,9 @@
 
 ## 2026-08-08
 
+- Added typed passed/failed evidence outcomes and passed-evidence approval gates.
+- Enforced the exact ordered blocker list under the intended current-state section.
+- Rejected bare and descendant POSIX user-home paths.
 - Parsed labeled current-state metadata and enforced exact field equality.
 - Rejected local POSIX user-home paths while preserving HTTP/HTTPS URL paths.
 - Enforced reviewed and final-quality approval evidence/status invariants.

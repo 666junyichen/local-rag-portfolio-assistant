@@ -19,9 +19,11 @@
 ## Update State Safely
 
 - Use only `pending`, `in_progress`, `blocked`, or `completed`.
-- Give every completed task at least one test-evidence object.
+- Give every completed task at least one test-evidence object with a typed `passed` or `failed` outcome.
+- Require at least one valid passed entry before setting reviewed or final-quality approval to true.
 - Use ISO dates and a timezone-qualified ISO datetime.
 - Keep blockers and next action concrete.
+- Keep `CURRENT_STATE.md` blocker bullets in the same order as `state.json` with no missing or extra entries.
 - Do not mark a phase complete from a passing count alone.
 
 ## Recover From Validation Failure

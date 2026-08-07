@@ -41,6 +41,7 @@ def _state() -> dict[str, object]:
                     {
                         "command": "python -m pytest tests/test_processing_profiles.py -q",
                         "result": "passed",
+                        "outcome": "passed",
                         "verified_at": "2026-08-07",
                     }
                 ],
@@ -55,7 +56,7 @@ def _state() -> dict[str, object]:
             },
         ],
         "last_verified": "2026-08-07",
-        "known_blockers": ["CJK-adjacent URLs"],
+        "known_blockers": ["CJK-adjacent URLs", "IPv6 and new-TLD URLs"],
         "next_action": "Fix Task 2, then implement parent-child chunking.",
         "updated_at": "2026-08-07T12:00:00+10:00",
     }
@@ -397,6 +398,60 @@ def test_evidence_command_and_result_must_be_non_empty_strings(
     )
 
 
+@pytest.mark.parametrize("invalid_outcome", [None, True, "skipped"])
+def test_evidence_outcome_must_be_passed_or_failed(
+    tmp_path: Path, invalid_outcome: object
+) -> None:
+    _write_valid_repository(tmp_path)
+
+    def mutate(state: dict[str, object]) -> None:
+        evidence = state["tasks"][0]["test_evidence"][0]
+        if invalid_outcome is None:
+            evidence.pop("outcome")
+        else:
+            evidence["outcome"] = invalid_outcome
+
+    _mutate_state(tmp_path, mutate)
+
+    assert any(
+        "task 1 evidence outcome must be 'passed' or 'failed'" in error
+        for error in validate_repository(tmp_path)
+    )
+
+
+def test_failed_only_evidence_cannot_support_review_or_approval(tmp_path: Path) -> None:
+    _write_valid_repository(tmp_path)
+    _mutate_state(
+        tmp_path,
+        lambda state: state["tasks"][0]["test_evidence"][0].update(outcome="failed"),
+    )
+
+    errors = validate_repository(tmp_path)
+    assert any("task 1 reviewed=true requires passed test evidence" in error for error in errors)
+    assert any(
+        "task 1 final_quality_approved requires passed test evidence" in error
+        for error in errors
+    )
+
+
+def test_unreviewed_task_may_record_valid_failed_evidence(tmp_path: Path) -> None:
+    _write_valid_repository(tmp_path)
+
+    def mutate(state: dict[str, object]) -> None:
+        state["tasks"][1]["test_evidence"] = [
+            {
+                "command": "python -m pytest -q",
+                "result": "1 failed",
+                "outcome": "failed",
+                "verified_at": "2026-08-08",
+            }
+        ]
+
+    _mutate_state(tmp_path, mutate)
+
+    assert validate_repository(tmp_path) == []
+
+
 @pytest.mark.parametrize(
     ("task_update", "evidence", "expected"),
     [
@@ -446,6 +501,32 @@ def test_task_approval_invariants(
     assert any(f"task 1 {expected}" in error for error in validate_repository(tmp_path))
 
 
+@pytest.mark.parametrize("change", ["missing", "extra", "reordered", "misplaced"])
+def test_current_state_known_blockers_must_match_exact_section_bullets(
+    tmp_path: Path, change: str
+) -> None:
+    _write_valid_repository(tmp_path)
+    current = tmp_path / "docs/project-memory/CURRENT_STATE.md"
+    text = current.read_text(encoding="utf-8")
+    first = "- CJK-adjacent URLs"
+    second = "- IPv6 and new-TLD URLs"
+    if change == "missing":
+        text = text.replace(f"{first}\n", "") + "\nMentioned elsewhere: CJK-adjacent URLs\n"
+    elif change == "extra":
+        text = text.replace(second, f"{second}\n- Stale blocker")
+    elif change == "reordered":
+        text = text.replace(f"{first}\n{second}", f"{second}\n{first}")
+    else:
+        text = text.replace(f"{first}\n", "")
+        text += f"\n## Misplaced\n\n{first}\n"
+    current.write_text(text, encoding="utf-8")
+
+    assert any(
+        "CURRENT_STATE.md known blockers do not match state.json" in error
+        for error in validate_repository(tmp_path)
+    )
+
+
 @pytest.mark.parametrize(
     "unsafe_text",
     [
@@ -463,6 +544,8 @@ def test_task_approval_invariants(
         "ftp:" + "//example.com/archive/C:/guide",
         "/Users/" + "someone/private/notes.txt",
         "/home/" + "someone/private/notes.txt",
+        "/Users/" + "someone",
+        "/home/" + "someone",
         "file:" + "///home/someone/private/notes.txt",
     ],
 )
@@ -482,7 +565,8 @@ def test_public_memory_allows_urls_and_repository_relative_paths(tmp_path: Path)
         "See https://example.com/privacy, https://example.com/archive/C:/guide, "
         "http://localhost:8505/archive/D:/guide, "
         "https://example.com/Users/demo/guide, and "
-        "https://example.com/home/demo/guide.\n"
+        "https://example.com/home/demo/guide, "
+        "https://example.com/Users/demo, and https://example.com/home/demo.\n"
         "Read docs/project-memory/RUNBOOK.md and scripts/check_project_memory.py.\n",
         encoding="utf-8",
     )
