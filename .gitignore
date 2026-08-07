@@ -22,6 +22,7 @@ data/local_catalog.json
 data/local_catalog.sqlite3*
 data/archive/
 data/local_uploads/
+data/uploads/
 data/local_eval_questions.json
 evals/latest-report*.json
 
