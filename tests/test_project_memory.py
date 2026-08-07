@@ -80,6 +80,8 @@ def _current_state(state: dict[str, object]) -> str:
 - Last verified: `{state['last_verified']}`
 - Next action: {state['next_action']}
 
+## Status
+
 | Task | Status | Reviewed | Final quality approved | Summary |
 |---|---|---|---|---|
 {rows}
@@ -243,6 +245,27 @@ def test_current_state_rejects_duplicate_task_rows_even_when_last_row_matches(
     assert any("duplicate task row in CURRENT_STATE.md: 1" in error for error in validate_repository(tmp_path))
 
 
+@pytest.mark.parametrize("location", ["outside_status", "inside_status"])
+def test_current_state_ignores_unrelated_numeric_five_column_tables(
+    tmp_path: Path, location: str
+) -> None:
+    _write_valid_repository(tmp_path)
+    current = tmp_path / "docs/project-memory/CURRENT_STATE.md"
+    text = current.read_text(encoding="utf-8")
+    unrelated = """| Rank | Label | Enabled | Approved | Notes |
+|---|---|---|---|---|
+| 1 | sample | true | true | Not a task row |
+"""
+    if location == "outside_status":
+        text = f"{text}\n## Metrics\n\n{unrelated}"
+    else:
+        marker = "## Status\n\n"
+        text = text.replace(marker, f"{marker}{unrelated}\n")
+    current.write_text(text, encoding="utf-8")
+
+    assert validate_repository(tmp_path) == []
+
+
 @pytest.mark.parametrize(
     ("field", "invalid_value"),
     [
@@ -279,6 +302,7 @@ def test_evidence_command_and_result_must_be_non_empty_strings(
         "C:" + "/Users/someone/private/notes.txt",
         "D:" + "\\private\\notes.txt",
         "Z:" + "/private/notes.txt",
+        "\\\\" + "server\\private\\notes.txt",
     ],
 )
 def test_public_memory_docs_reject_sensitive_patterns(tmp_path: Path, unsafe_text: str) -> None:
@@ -294,7 +318,8 @@ def test_public_memory_allows_urls_and_repository_relative_paths(tmp_path: Path)
     privacy = tmp_path / "docs/project-memory/DATA_PRIVACY.md"
     privacy.write_text(
         "# Privacy\n\n"
-        "See https://example.com/privacy and http://localhost:8505/status.\n"
+        "See https://example.com/privacy, https://example.com/archive/C:/guide, "
+        "and http://localhost:8505/status.\n"
         "Read docs/project-memory/RUNBOOK.md and scripts/check_project_memory.py.\n",
         encoding="utf-8",
     )

@@ -2,6 +2,8 @@
 
 ## 2026-08-08
 
+- Scoped task-row parsing to the intended status table while preserving duplicate detection.
+- Added UNC-path rejection without treating drive-like URL path segments as local paths.
 - Rejected duplicate task rows in the human-readable state table.
 - Expanded machine-specific path detection to every Windows drive and both separator styles.
 - Required evidence command and result values to be non-empty strings.

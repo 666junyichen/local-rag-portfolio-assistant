@@ -48,7 +48,8 @@ SENSITIVE_PATTERNS = (
         r"(?i)\b(?:api[_ -]?key|token|secret)\s*[:=]\s*"
         r"(?!<|\.\.\.|example|placeholder|redacted)\S+"
     ),
-    re.compile(r"(?i)(?<![A-Z0-9_])[A-Z]:[\\/]"),
+    re.compile(r"(?i)(?<![A-Z0-9_/\\])[A-Z]:[\\/]"),
+    re.compile(r"(?<!\\)\\\\[^\\/\s]+\\[^\\\s]+"),
 )
 
 
@@ -233,16 +234,44 @@ def _current_task_rows(
     text: str, errors: list[str]
 ) -> dict[object, tuple[str, str, str]]:
     rows: dict[object, tuple[str, str, str]] = {}
+    expected_header = (
+        "task",
+        "status",
+        "reviewed",
+        "final quality approved",
+        "summary",
+    )
+    in_status = False
+    in_task_table = False
+    rows_started = False
     for line in text.splitlines():
-        if not line.startswith("|"):
+        stripped = line.strip()
+        if stripped.startswith("## "):
+            if stripped == "## Status":
+                in_status = True
+                continue
+            if in_status:
+                break
+        if not in_status:
             continue
-        columns = [column.strip() for column in line.split("|")[1:-1]]
+        if not stripped.startswith("|"):
+            if in_task_table and rows_started:
+                break
+            continue
+        columns = [column.strip() for column in stripped.split("|")[1:-1]]
         if len(columns) < 5:
+            continue
+        if not in_task_table:
+            if tuple(column.casefold() for column in columns[:5]) == expected_header:
+                in_task_table = True
+            continue
+        if all(re.fullmatch(r":?-+:?", column) for column in columns[:5]):
             continue
         try:
             task_id = int(columns[0])
         except ValueError:
             continue
+        rows_started = True
         if task_id in rows:
             errors.append(f"duplicate task row in CURRENT_STATE.md: {task_id}")
             continue
