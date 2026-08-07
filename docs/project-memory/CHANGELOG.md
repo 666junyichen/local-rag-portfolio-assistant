@@ -2,6 +2,10 @@
 
 ## 2026-08-08
 
+- Added parent-child and resume-semantic chunk hierarchies with child retrieval and parent evidence expansion.
+- Added persisted processing profiles for cleaning, delimiters, parent/child limits, and preprocessing rules.
+- Added standalone BM25 full-text retrieval plus Vector, Hybrid RRF, and Hybrid + Rerank diagnostics.
+- Unified Knowledge Studio preview, library inspection, saved configuration, and ingestion boundaries.
 - Added a risk-based, 15-minute verification and review budget to prevent repeated full-suite runs for small changes.
 - Required both the private directory and child probe to be ignored by the repository `.gitignore`, excluding file-only and local Git exclude rules.
 - Replaced private-ignore text matching with an effective Git probe, including wildcard-negation, restored-precedence, and command-failure coverage.

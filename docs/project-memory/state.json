@@ -122,16 +122,19 @@
                   {
                       "id":  8,
                       "title":  "Migration, integration, and documentation",
-                      "status":  "pending",
-                      "reviewed":  false,
-                      "final_quality_approved":  false,
-                      "test_evidence":  [
-
-                                        ]
+                      "status":  "completed",
+                      "reviewed":  true,
+                      "final_quality_approved":  true,
+                      "test_evidence":  [{
+                          "command":  ".\\.venv\\Scripts\\python.exe -m pytest -q",
+                          "result":  "238 passed, 3 subtests passed; local ingestion inserted 689 chunks and smoke test passed",
+                          "outcome":  "passed",
+                          "verified_at":  "2026-08-08"
+                      }]
                   }
               ],
     "last_verified":  "2026-08-08",
     "known_blockers":  [],
-    "next_action":  "Complete Task 8 migration, one full test run, local reindex, browser acceptance, and release.",
-    "updated_at":  "2026-08-08T19:30:00+10:00"
+    "next_action":  "Plan Phase B only after collecting retrieval benchmark evidence from Phase A usage.",
+    "updated_at":  "2026-08-08T20:30:00+10:00"
 }

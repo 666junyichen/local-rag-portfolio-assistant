@@ -93,7 +93,7 @@ Open Docker Desktop and wait until it shows **Engine running**, then run:
 powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
 ```
 
-The script creates persistent MongoDB Atlas Local and Ollama containers, downloads the configured model when needed, builds the vector index on first use, runs the smoke test, and starts Streamlit. Open [http://localhost:8505](http://localhost:8505). Keep the terminal open while using Streamlit.
+The script creates persistent MongoDB Atlas Local and Ollama containers, downloads the configured model when needed, migrates saved processing profiles, builds the Vector and BM25 indexes when needed, runs the smoke test, and starts Streamlit. Open [http://localhost:8505](http://localhost:8505). Keep the terminal open while using Streamlit.
 
 Before starting services, the script prints the current Git branch/commit, rejects a stale process already using port `8505`, and runs a real Streamlit import/render preflight for all three pages. Run that preflight by itself with:
 
@@ -150,18 +150,20 @@ Knowledge Studio keeps the complete private document catalog in the Git-ignored 
 
 The four tabs support:
 
-- **Upload & Chunk:** automatic per-file recommendations, manual overrides, PII warnings, character/token metrics, semantic-section previews, and an in-memory Vector + BM25 + RRF Top-5 test that does not write to MongoDB.
+- **Upload & Chunk:** automatic per-file recommendations, editable parsed/clean text, configurable whitespace/URL/email preprocessing, General/Parent-child/Resume semantic modes, delimiters, parent/child token limits, PII warnings, hierarchy previews, and an in-memory Top-5 test that does not write to MongoDB.
 - **Library:** search, filters, pagination, full-text and chunk inspection, RAG summary overrides, public JSON editing, and private document activation/exclusion. Exclusion never deletes the original file.
 - **Versions & Duplicates:** exact duplicate groups and human-confirmed resume/upload version recommendations.
 - **Index Maintenance:** active document counts, stale-index detection, visible ingestion progress, and the separate Atlas cloud-sync reminder.
 
-DOCX resumes now default to deterministic `resume_semantic / 320 tokens / overlap 0`. Education, internship, project, award, and skill entities are isolated; an oversized entity is split only inside itself and repeats its title. Repeated summaries and skill variants remain available as secondary evidence but share a semantic group so they cannot fill Top-K. Other defaults are `800/80` for Markdown, `700/70` for TXT, `800/100` for text PDFs, `800/0` for short JSON/CSV, and `900/80` for code. Each document persists its own strategy, chunk size, and overlap, so preview and ingestion use the same boundaries. Images and scanned PDFs are marked `needs_ocr`; OCR is intentionally not enabled in this version.
+DOCX resumes now default to deterministic semantic parents with child retrieval blocks. Education, internship, project, award, and skill entities are isolated; an oversized entity is split only inside itself and repeats its title. General parent-child mode defaults to roughly 700-token answer parents and 180-token retrieval children. MongoDB Vector Search and BM25 index the children, while answers and source panels expand each match to its parent evidence. Repeated summaries and skill variants share semantic groups so they cannot fill Top-K. Each document persists its complete processing profile, so preview, temporary retrieval, saved configuration, and ingestion use the same boundaries. Images and scanned PDFs are marked `needs_ocr`; OCR is intentionally not enabled in this version.
 
-The local Master resume currently produces 28 semantic chunks with zero cross-section warnings. Its separate 10-question resume benchmark scores `Hit@5 = 1.000` and `MRR = 0.850`:
+The local Master resume verification produces 28 semantic parents and 40 retrieval children instead of seven mixed chunks. Its separate 10-question resume benchmark can be run with:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\evaluate_resume_chunks.py
 ```
+
+Retrieval Lab exposes four comparable modes: Vector, BM25 full-text, Hybrid RRF, and Hybrid + local Cross-Encoder rerank. Result cards show retrieval channels, Vector/BM25 ranks, RRF score, reranker score, and request latency. If the optional reranker cannot load, the page reports the fallback reason and continues with Hybrid retrieval.
 
 ### Local troubleshooting
 

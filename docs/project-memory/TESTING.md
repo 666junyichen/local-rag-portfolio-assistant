@@ -32,6 +32,10 @@ The tests cover valid temporary Git repositories, missing required files and key
 - Task 2 focused approval: `tests/test_document_processing.py` passed 38 tests on 2026-08-08, including the recorded URL, email, Unicode-boundary, apostrophe, IPv6/new-TLD, and CRLF cases.
 - Tasks 3-7 subsystem checkpoint: 82 tests and 3 Streamlit subtests passed on 2026-08-08.
 - Real resume structure check: the Master DOCX produced 28 semantic parent blocks and 40 retrieval children instead of seven mixed chunks.
+- Phase A milestone: `238 passed, 3 subtests passed` in 50.39 seconds.
+- Cloud regression: 10 Vitest tests passed and the Next.js production build completed.
+- Local integration: 7,048 catalog rows migrated; 111 active sources produced 689 indexed children; Vector index reached READY; smoke test and a Chinese local answer passed.
+- Public integration: `/api/health` reported Atlas, Gemini, and Vector Index ready; a Chinese SSE chat returned sources and a Chinese answer. The cloud text index remains intentionally disabled on the current Atlas tier.
 - Task 0 focused evidence is recorded in `state.json` and the bootstrap session note.
 
 Run the full Python suite once before a feature-task handoff or merge milestone:
