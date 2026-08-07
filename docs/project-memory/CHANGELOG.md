@@ -2,6 +2,7 @@
 
 ## 2026-08-08
 
+- Normalized equivalent private-directory ignore and negation forms with ordered precedence.
 - Added typed passed/failed evidence outcomes and passed-evidence approval gates.
 - Enforced the exact ordered blocker list under the intended current-state section.
 - Rejected bare and descendant POSIX user-home paths.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -589,6 +590,74 @@ def test_private_memory_ignore_rule_cannot_be_negated_later(tmp_path: Path) -> N
     )
 
     assert any(".project-memory/private/ must be ignored" in error for error in validate_repository(tmp_path))
+
+
+@pytest.mark.parametrize(
+    "negation",
+    ["!.project-memory/private", "!/.project-memory/private"],
+)
+def test_equivalent_private_directory_negations_make_note_trackable(
+    tmp_path: Path, negation: str
+) -> None:
+    _write_valid_repository(tmp_path)
+    (tmp_path / ".gitignore").write_text(
+        f".project-memory/private/\n{negation}\n",
+        encoding="utf-8",
+    )
+    note = tmp_path / ".project-memory/private/note.md"
+    note.parent.mkdir(parents=True)
+    note.write_text("private", encoding="utf-8")
+
+    assert _git_check_ignore(tmp_path, note) == 1
+    assert any(
+        ".project-memory/private/ must be ignored" in error
+        for error in validate_repository(tmp_path)
+    )
+
+
+@pytest.mark.parametrize(
+    "final_rule",
+    [".project-memory/private", "/.project-memory/private/"],
+)
+def test_later_equivalent_ignore_rule_restores_private_protection(
+    tmp_path: Path, final_rule: str
+) -> None:
+    _write_valid_repository(tmp_path)
+    (tmp_path / ".gitignore").write_text(
+        ".project-memory/private/\n"
+        "!.project-memory/private\n"
+        f"{final_rule}\n",
+        encoding="utf-8",
+    )
+    note = tmp_path / ".project-memory/private/note.md"
+    note.parent.mkdir(parents=True)
+    note.write_text("private", encoding="utf-8")
+
+    assert _git_check_ignore(tmp_path, note) == 0
+    assert validate_repository(tmp_path) == []
+
+
+def _git_check_ignore(root: Path, path: Path) -> int:
+    subprocess.run(
+        ["git", "-C", str(root), "init", "-q"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    completed = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "check-ignore",
+            "--no-index",
+            path.relative_to(root).as_posix(),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return completed.returncode
 
 
 def _mutate_state(root: Path, mutation) -> None:

@@ -437,8 +437,8 @@ def _validate_private_ignore(root: Path, errors: list[str]) -> None:
         if not rule or rule.startswith("#"):
             continue
         negated = rule.startswith("!")
-        normalized = rule.lstrip("!").lstrip("/")
-        if normalized == ".project-memory/private/":
+        normalized = rule.lstrip("!").lstrip("/").rstrip("/")
+        if normalized == ".project-memory/private":
             ignored = not negated
     if not ignored:
         errors.append(".project-memory/private/ must be ignored")
