@@ -48,8 +48,11 @@ SENSITIVE_PATTERNS = (
         r"(?i)\b(?:api[_ -]?key|token|secret)\s*[:=]\s*"
         r"(?!<|\.\.\.|example|placeholder|redacted)\S+"
     ),
-    re.compile(r"(?i)(?<![A-Z0-9_/\\])[A-Z]:[\\/]"),
-    re.compile(r"(?<!\\)\\\\[^\\/\s]+\\[^\\\s]+"),
+)
+HTTP_URL_PATTERN = re.compile(r"(?i)\bhttps?://[^\s<>()]+")
+WINDOWS_DRIVE_PATH_PATTERN = re.compile(r"(?i)[A-Z]:[\\/]")
+WINDOWS_UNC_PATH_PATTERN = re.compile(
+    r"(?<![\\/])[\\/]{2}[^\\/\s]+[\\/][^\\/\s]+"
 )
 
 
@@ -139,9 +142,12 @@ def _validate_tasks(value: object, errors: list[str]) -> None:
             errors.append("each task must be an object")
             continue
         task_id = task.get("id")
-        if not isinstance(task_id, int) or task_id < 0 or task_id in seen_ids:
+        if type(task_id) is not int or task_id < 0:
             errors.append(f"invalid or duplicate task id: {task_id!r}")
-        seen_ids.add(task_id)
+        elif task_id in seen_ids:
+            errors.append(f"invalid or duplicate task id: {task_id!r}")
+        else:
+            seen_ids.add(task_id)
         status = task.get("status")
         if status not in VALID_STATUSES:
             errors.append(f"invalid task status for task {task_id}: {status!r}")
@@ -211,10 +217,27 @@ def _validate_current_state(
     tasks = state.get("tasks")
     if isinstance(tasks, list):
         current_rows = _current_task_rows(text, errors)
+        state_task_ids = {
+            task["id"]
+            for task in tasks
+            if isinstance(task, dict)
+            and type(task.get("id")) is int
+            and task["id"] >= 0
+        }
+        current_task_ids = set(current_rows)
+        if current_task_ids != state_task_ids:
+            missing = sorted(state_task_ids - current_task_ids)
+            extra = sorted(current_task_ids - state_task_ids)
+            errors.append(
+                "CURRENT_STATE.md task IDs do not match state.json "
+                f"(missing: {missing}; extra: {extra})"
+            )
         for task in tasks:
             if not isinstance(task, dict):
                 continue
             task_id = task.get("id")
+            if type(task_id) is not int or task_id < 0:
+                continue
             row = current_rows.get(task_id)
             if row is None or row[0] != task.get("status"):
                 errors.append(f"CURRENT_STATE.md does not match task {task_id} status")
@@ -289,7 +312,12 @@ def _validate_public_memory(root: Path, errors: list[str]) -> None:
         if not path.is_file():
             continue
         text = path.read_text(encoding="utf-8")
-        if any(pattern.search(text) for pattern in SENSITIVE_PATTERNS):
+        non_http_text = HTTP_URL_PATTERN.sub("", text)
+        if (
+            any(pattern.search(text) for pattern in SENSITIVE_PATTERNS)
+            or WINDOWS_DRIVE_PATH_PATTERN.search(non_http_text)
+            or WINDOWS_UNC_PATH_PATTERN.search(non_http_text)
+        ):
             errors.append(f"potential sensitive value in {_relative(path, root)}")
 
 

@@ -2,6 +2,9 @@
 
 ## 2026-08-08
 
+- Limited drive-like path exceptions to actual HTTP and HTTPS URLs.
+- Enforced exact task-ID set equality between structured and human-readable state.
+- Rejected boolean task IDs through exact integer type validation.
 - Scoped task-row parsing to the intended status table while preserving duplicate detection.
 - Added UNC-path rejection without treating drive-like URL path segments as local paths.
 - Rejected duplicate task rows in the human-readable state table.

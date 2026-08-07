@@ -245,6 +245,58 @@ def test_current_state_rejects_duplicate_task_rows_even_when_last_row_matches(
     assert any("duplicate task row in CURRENT_STATE.md: 1" in error for error in validate_repository(tmp_path))
 
 
+@pytest.mark.parametrize("change", ["extra", "missing"])
+def test_current_state_task_ids_must_exactly_match_state(
+    tmp_path: Path, change: str
+) -> None:
+    _write_valid_repository(tmp_path)
+    current = tmp_path / "docs/project-memory/CURRENT_STATE.md"
+    text = current.read_text(encoding="utf-8")
+    row = "| 2 | in_progress | false | false | Cleaning |"
+    if change == "extra":
+        text = text.replace(row, f"{row}\n| 99 | pending | false | false | Stale |")
+    else:
+        text = text.replace(f"{row}\n", "")
+    current.write_text(text, encoding="utf-8")
+
+    assert any(
+        "CURRENT_STATE.md task IDs do not match state.json" in error
+        for error in validate_repository(tmp_path)
+    )
+
+
+@pytest.mark.parametrize("boolean_id", [True, False])
+def test_boolean_task_ids_are_rejected(tmp_path: Path, boolean_id: bool) -> None:
+    _write_valid_repository(tmp_path)
+    _mutate_state(
+        tmp_path,
+        lambda state: state["tasks"][0].update(id=boolean_id),
+    )
+
+    assert any(
+        f"invalid or duplicate task id: {boolean_id!r}" in error
+        for error in validate_repository(tmp_path)
+    )
+
+
+def test_zero_task_id_remains_valid_for_task_zero(tmp_path: Path) -> None:
+    _write_valid_repository(tmp_path)
+    state_path = tmp_path / "docs/project-memory/state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["tasks"][0]["id"] = 0
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    current = tmp_path / "docs/project-memory/CURRENT_STATE.md"
+    current.write_text(
+        current.read_text(encoding="utf-8").replace(
+            "| 1 | completed | true | true | Profiles |",
+            "| 0 | completed | true | true | Profiles |",
+        ),
+        encoding="utf-8",
+    )
+
+    assert validate_repository(tmp_path) == []
+
+
 @pytest.mark.parametrize("location", ["outside_status", "inside_status"])
 def test_current_state_ignores_unrelated_numeric_five_column_tables(
     tmp_path: Path, location: str
@@ -303,6 +355,10 @@ def test_evidence_command_and_result_must_be_non_empty_strings(
         "D:" + "\\private\\notes.txt",
         "Z:" + "/private/notes.txt",
         "\\\\" + "server\\private\\notes.txt",
+        "//" + "server/share/notes.txt",
+        "file:" + "///C:/private/notes.txt",
+        "/" + "C:/private/notes.txt",
+        "ftp:" + "//example.com/archive/C:/guide",
     ],
 )
 def test_public_memory_docs_reject_sensitive_patterns(tmp_path: Path, unsafe_text: str) -> None:
@@ -319,7 +375,7 @@ def test_public_memory_allows_urls_and_repository_relative_paths(tmp_path: Path)
     privacy.write_text(
         "# Privacy\n\n"
         "See https://example.com/privacy, https://example.com/archive/C:/guide, "
-        "and http://localhost:8505/status.\n"
+        "and http://localhost:8505/archive/D:/guide.\n"
         "Read docs/project-memory/RUNBOOK.md and scripts/check_project_memory.py.\n",
         encoding="utf-8",
     )

@@ -14,7 +14,7 @@ Run its focused tests:
 .\.venv\Scripts\python.exe -m pytest tests\test_project_memory.py -q
 ```
 
-The tests cover valid temporary repositories, missing required files and keys, typed evidence, duplicate task rows, task-table scoping, required boolean review fields, approval drift, broken repository-relative links, drive and UNC paths, sensitive patterns, and private ignore failures. Safe URLs, drive-like URL segments, and repository-relative paths have explicit acceptance coverage. The tests also validate the checked-in memory without changing it.
+The tests cover valid temporary repositories, missing required files and keys, typed evidence, exact task-ID sets, duplicate task rows, task-table scoping, exact integer IDs, required boolean review fields, approval drift, broken repository-relative links, drive and UNC paths, sensitive patterns, and private ignore failures. HTTP/HTTPS URL segments, Task 0, and repository-relative paths have explicit acceptance coverage. The tests also validate the checked-in memory without changing it.
 
 ## Phase Evidence
 
