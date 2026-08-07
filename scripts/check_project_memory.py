@@ -48,7 +48,7 @@ SENSITIVE_PATTERNS = (
         r"(?i)\b(?:api[_ -]?key|token|secret)\s*[:=]\s*"
         r"(?!<|\.\.\.|example|placeholder|redacted)\S+"
     ),
-    re.compile(r"(?i)\b[A-Z]:[\\/]Users[\\/][^\\/\s]+[\\/]"),
+    re.compile(r"(?i)(?<![A-Z0-9_])[A-Z]:[\\/]"),
 )
 
 
@@ -158,10 +158,18 @@ def _validate_tasks(value: object, errors: list[str]) -> None:
         if status == "completed" and not evidence:
             errors.append(f"completed task {task_id} has no test evidence")
         for item in evidence:
-            if not isinstance(item, dict) or not all(item.get(key) for key in ("command", "result", "verified_at")):
+            if not isinstance(item, dict):
                 errors.append(f"task {task_id} has invalid test evidence")
                 continue
-            _validate_iso_date(item["verified_at"], f"task {task_id} evidence verified_at", errors)
+            for field in ("command", "result"):
+                value = item.get(field)
+                if not isinstance(value, str) or not value.strip():
+                    errors.append(
+                        f"task {task_id} evidence {field} must be a non-empty string"
+                    )
+            _validate_iso_date(
+                item.get("verified_at"), f"task {task_id} evidence verified_at", errors
+            )
 
 
 def _validate_markdown_links(root: Path, errors: list[str]) -> None:
@@ -201,7 +209,7 @@ def _validate_current_state(
             errors.append(f"CURRENT_STATE.md does not match {key}")
     tasks = state.get("tasks")
     if isinstance(tasks, list):
-        current_rows = _current_task_rows(text)
+        current_rows = _current_task_rows(text, errors)
         for task in tasks:
             if not isinstance(task, dict):
                 continue
@@ -221,7 +229,9 @@ def _validate_current_state(
                 errors.append(f"CURRENT_STATE.md is missing blocker: {blocker}")
 
 
-def _current_task_rows(text: str) -> dict[object, tuple[str, str, str]]:
+def _current_task_rows(
+    text: str, errors: list[str]
+) -> dict[object, tuple[str, str, str]]:
     rows: dict[object, tuple[str, str, str]] = {}
     for line in text.splitlines():
         if not line.startswith("|"):
@@ -232,6 +242,9 @@ def _current_task_rows(text: str) -> dict[object, tuple[str, str, str]]:
         try:
             task_id = int(columns[0])
         except ValueError:
+            continue
+        if task_id in rows:
+            errors.append(f"duplicate task row in CURRENT_STATE.md: {task_id}")
             continue
         rows[task_id] = (columns[1], columns[2], columns[3])
     return rows

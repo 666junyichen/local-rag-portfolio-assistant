@@ -1,5 +1,11 @@
 # Project Memory Changelog
 
+## 2026-08-08
+
+- Rejected duplicate task rows in the human-readable state table.
+- Expanded machine-specific path detection to every Windows drive and both separator styles.
+- Required evidence command and result values to be non-empty strings.
+
 ## 2026-08-07
 
 - Required and type-checked task review and final-quality approval fields.
