@@ -35,6 +35,10 @@ def render_source(source: dict[str, Any]) -> None:
     fusion = source.get("fusion_score") or source.get("fusionScore")
     reranker = source.get("reranker_score")
     diagnostics = [f"score `{score:.3f}`", f"channel `{channel_label}`"]
+    if source.get("vector_rank") is not None:
+        diagnostics.append(f"vector rank `{int(source['vector_rank'])}`")
+    if source.get("bm25_rank") is not None:
+        diagnostics.append(f"BM25 rank `{int(source['bm25_rank'])}`")
     if fusion is not None:
         diagnostics.append(f"RRF `{float(fusion):.4f}`")
     if reranker is not None:

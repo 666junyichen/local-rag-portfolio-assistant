@@ -48,7 +48,12 @@ class StreamlitContractTests(unittest.TestCase):
         mode_select = next(item for item in app.selectbox if item.label == "Retrieval mode")
         self.assertEqual(
             list(mode_select.options),
-            ["baseline", "hybrid", "hybrid-rerank"],
+            [
+                "Vector / 向量检索",
+                "BM25 / 全文检索",
+                "Hybrid / RRF 融合",
+                "Hybrid + Cross-Encoder Rerank",
+            ],
         )
 
     def test_knowledge_studio_uses_an_editable_clean_body_as_chunk_source(self) -> None:
@@ -78,12 +83,28 @@ class StreamlitContractTests(unittest.TestCase):
         clean_editor.set_value("Manually redacted evidence.").run()
         self.assertTrue(
             any(
-                "Chunk 1" in item.label and "tokens" in item.label and "27 chars" in item.label
+                "Child 1" in item.label and "tokens" in item.label and "27 chars" in item.label
                 for item in app.expander
             )
         )
         self.assertTrue(any(item.value == "Manually redacted evidence." for item in app.markdown))
         self.assertEqual(list(app.exception), [])
+
+    def test_knowledge_studio_exposes_phase_a_processing_controls(self) -> None:
+        source = (ROOT / "pages" / "1_Knowledge_Studio.py").read_text(encoding="utf-8")
+
+        for label in (
+            "General",
+            "Parent-child",
+            "Resume semantic",
+            "规范化空白",
+            "删除 URL",
+            "删除邮箱地址",
+            "分段标识符",
+            "匹配子块",
+            "返回父块",
+        ):
+            self.assertIn(label, source)
 
 
 if __name__ == "__main__":

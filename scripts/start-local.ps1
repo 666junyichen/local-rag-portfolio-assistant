@@ -126,6 +126,8 @@ if (-not ($InstalledModels | Select-String -SimpleMatch $Model -Quiet)) {
 }
 
 Write-Step "Checking the local vector and text indexes"
+& $Python scripts\migrate_processing_profiles.py
+if ($LASTEXITCODE -ne 0) { throw "Could not migrate local processing profiles." }
 $IndexState = & $Python scripts\local_status.py
 if ($LASTEXITCODE -ne 0) { throw "Could not inspect the local MongoDB collection." }
 $VectorReady = $IndexState | Select-String -Pattern "^vector=[1-9][0-9]*\|READY$" -Quiet

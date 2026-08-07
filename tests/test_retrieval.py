@@ -74,6 +74,35 @@ class RetrievalTests(unittest.TestCase):
         selected = select_results(rows, RetrievalSettings(top_k=3))
 
         self.assertEqual([item["chunk_id"] for item in selected], ["project-rag", "project-qa", "summary-secondary"])
+    def test_select_results_expands_child_match_to_parent_evidence(self) -> None:
+        rows = [
+            {
+                "chunk_id": "child-1",
+                "parent_chunk_id": "parent-1",
+                "raw_body": "Focused MongoDB vector child.",
+                "parent_body": "Complete Local RAG project evidence and outcomes.",
+                "semantic_group_id": "rag-project",
+                "score": 0.91,
+                "visibility": "private",
+            },
+            {
+                "chunk_id": "child-2",
+                "parent_chunk_id": "parent-1",
+                "raw_body": "Focused Ollama child.",
+                "parent_body": "Complete Local RAG project evidence and outcomes.",
+                "semantic_group_id": "rag-project",
+                "score": 0.84,
+                "visibility": "private",
+            },
+        ]
+
+        selected = select_results(rows, RetrievalSettings(top_k=5, scope="all"))
+
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0]["body"], rows[0]["parent_body"])
+        self.assertEqual(selected[0]["matched_child_body"], rows[0]["raw_body"])
+        self.assertTrue(selected[0]["parent_expanded"])
+
     def test_bm25_can_recall_an_exact_term_missing_from_semantic_candidates(self) -> None:
         rows = [
             {"chunk_id": "generic", "body": "General machine learning project"},

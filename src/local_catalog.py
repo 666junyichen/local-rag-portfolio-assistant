@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from src.document_processing import normalize_document, recommend_chunk_config
+from src.processing_profiles import ProcessingProfile, profile_from_legacy
 
 
 CATALOG_STATUSES = {"discovered", "active", "excluded", "parse_error", "needs_ocr"}
@@ -82,6 +83,9 @@ class LocalCatalog:
                     chunk_size INTEGER NOT NULL DEFAULT 800,
                     chunk_overlap INTEGER NOT NULL DEFAULT 80,
                     chunk_unit TEXT NOT NULL DEFAULT 'characters',
+                    profile_version INTEGER,
+                    processing_profile_json TEXT,
+                    processing_profile_hash TEXT,
                     metadata_json TEXT NOT NULL DEFAULT '{}',
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
@@ -98,6 +102,12 @@ class LocalCatalog:
                 connection.execute(
                     "ALTER TABLE documents ADD COLUMN chunk_unit TEXT NOT NULL DEFAULT 'characters'"
                 )
+            if "profile_version" not in columns:
+                connection.execute("ALTER TABLE documents ADD COLUMN profile_version INTEGER")
+            if "processing_profile_json" not in columns:
+                connection.execute("ALTER TABLE documents ADD COLUMN processing_profile_json TEXT")
+            if "processing_profile_hash" not in columns:
+                connection.execute("ALTER TABLE documents ADD COLUMN processing_profile_hash TEXT")
 
     def _record(self, raw: dict[str, Any], status: str) -> dict[str, Any]:
         normalized = normalize_document(raw, default_visibility="private")
@@ -185,6 +195,8 @@ class LocalCatalog:
             return None
         item = dict(row)
         item["metadata"] = json.loads(item.pop("metadata_json") or "{}")
+        profile_json = item.pop("processing_profile_json", None)
+        item["processing_profile"] = json.loads(profile_json) if profile_json else None
         item["is_latest"] = bool(item["is_latest"])
         return item
 
@@ -277,6 +289,59 @@ class LocalCatalog:
                 (strategy, chunk_size, overlap, unit, _utc_now(), doc_id),
             )
         return cursor.rowcount > 0
+
+    def update_processing_profile(
+        self, doc_id: str, profile: ProcessingProfile
+    ) -> bool:
+        strategy = (
+            "resume_semantic" if profile.chunk_mode == "resume_semantic" else "recursive"
+        )
+        payload = json.dumps(profile.to_dict(), ensure_ascii=False, sort_keys=True)
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE documents
+                SET profile_version = ?, processing_profile_json = ?,
+                    processing_profile_hash = ?, chunk_strategy = ?, chunk_size = ?,
+                    chunk_overlap = ?, chunk_unit = 'tokens', updated_at = ?
+                WHERE doc_id = ?
+                """,
+                (
+                    profile.profile_version,
+                    payload,
+                    profile.digest(),
+                    strategy,
+                    profile.max_tokens,
+                    profile.overlap_tokens,
+                    _utc_now(),
+                    doc_id,
+                ),
+            )
+        return cursor.rowcount > 0
+
+    def migrate_processing_profiles(self) -> int:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT doc_id, title, file_type, source_path, relative_path,
+                       chunk_strategy, chunk_size, chunk_overlap, chunk_unit
+                FROM documents
+                WHERE processing_profile_json IS NULL OR processing_profile_json = ''
+                """
+            ).fetchall()
+        migrated = 0
+        for row in rows:
+            file_identity = row["file_type"] or row["source_path"] or row["relative_path"]
+            profile = profile_from_legacy(
+                title=row["title"],
+                file_type=file_identity,
+                strategy=row["chunk_strategy"],
+                chunk_size=row["chunk_size"],
+                overlap=row["chunk_overlap"],
+                unit=row["chunk_unit"],
+            )
+            migrated += int(self.update_processing_profile(row["doc_id"], profile))
+        return migrated
 
     @staticmethod
     def _version_title(title: str) -> str:
@@ -384,6 +449,8 @@ class LocalCatalog:
                         "chunk_overlap": item["chunk_overlap"],
                         "unit": item["chunk_unit"],
                     },
+                    "processing_profile": item["processing_profile"],
+                    "processing_profile_hash": item["processing_profile_hash"],
                 }
             )
             documents.append(

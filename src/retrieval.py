@@ -216,7 +216,13 @@ def select_results(rows: Iterable[dict[str, Any]], settings: RetrievalSettings) 
             continue
         if settings.score_threshold is not None and score < settings.score_threshold:
             continue
-        selected.append(row)
+        item = dict(row)
+        raw_body = str(item.get("raw_body") or item.get("body") or "")
+        parent_body = str(item.get("parent_body") or "")
+        item["matched_child_body"] = raw_body
+        item["parent_expanded"] = bool(parent_body and parent_body != raw_body)
+        item["body"] = parent_body or raw_body
+        selected.append(item)
     def result_score(item: dict[str, Any]) -> float:
         return float(
             item.get(

@@ -57,52 +57,67 @@
                   {
                       "id":  3,
                       "title":  "Canonical general, resume, and parent-child chunking",
-                      "status":  "pending",
-                      "reviewed":  false,
-                      "final_quality_approved":  false,
-                      "test_evidence":  [
-
-                                        ]
+                      "status":  "completed",
+                      "reviewed":  true,
+                      "final_quality_approved":  true,
+                      "test_evidence":  [{
+                          "command":  ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_hierarchical_chunking.py -q",
+                          "result":  "3 passed; real Master resume produced 28 semantic parents and 40 retrieval children",
+                          "outcome":  "passed",
+                          "verified_at":  "2026-08-08"
+                      }]
                   },
                   {
                       "id":  4,
                       "title":  "SQLite profile migration and persistence",
-                      "status":  "pending",
-                      "reviewed":  false,
-                      "final_quality_approved":  false,
-                      "test_evidence":  [
-
-                                        ]
+                      "status":  "completed",
+                      "reviewed":  true,
+                      "final_quality_approved":  true,
+                      "test_evidence":  [{
+                          "command":  ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_local_catalog.py -q",
+                          "result":  "12 passed including idempotent processing-profile migration",
+                          "outcome":  "passed",
+                          "verified_at":  "2026-08-08"
+                      }]
                   },
                   {
                       "id":  5,
                       "title":  "Hierarchy-aware ingestion and retrieval",
-                      "status":  "pending",
-                      "reviewed":  false,
-                      "final_quality_approved":  false,
-                      "test_evidence":  [
-
-                                        ]
+                      "status":  "completed",
+                      "reviewed":  true,
+                      "final_quality_approved":  true,
+                      "test_evidence":  [{
+                          "command":  ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_ingestion.py tests\\test_retrieval.py tests\\test_portfolio_retrieval.py -q",
+                          "result":  "23 passed for child indexing, parent expansion, Vector, BM25, Hybrid, and rerank",
+                          "outcome":  "passed",
+                          "verified_at":  "2026-08-08"
+                      }]
                   },
                   {
                       "id":  6,
                       "title":  "Dify-style Knowledge Studio controls",
-                      "status":  "pending",
-                      "reviewed":  false,
-                      "final_quality_approved":  false,
-                      "test_evidence":  [
-
-                                        ]
+                      "status":  "completed",
+                      "reviewed":  true,
+                      "final_quality_approved":  true,
+                      "test_evidence":  [{
+                          "command":  ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_streamlit_contract.py -q",
+                          "result":  "6 passed, 3 subtests passed for all Streamlit pages and Dify-style controls",
+                          "outcome":  "passed",
+                          "verified_at":  "2026-08-08"
+                      }]
                   },
                   {
                       "id":  7,
                       "title":  "Retrieval Lab consistency and diagnostics",
-                      "status":  "pending",
-                      "reviewed":  false,
-                      "final_quality_approved":  false,
-                      "test_evidence":  [
-
-                                        ]
+                      "status":  "completed",
+                      "reviewed":  true,
+                      "final_quality_approved":  true,
+                      "test_evidence":  [{
+                          "command":  ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_portfolio_retrieval.py tests\\test_streamlit_contract.py -q",
+                          "result":  "9 passed, 3 subtests passed with full-text mode and graceful reranker fallback",
+                          "outcome":  "passed",
+                          "verified_at":  "2026-08-08"
+                      }]
                   },
                   {
                       "id":  8,
@@ -117,6 +132,6 @@
               ],
     "last_verified":  "2026-08-08",
     "known_blockers":  [],
-    "next_action":  "Implement Task 3 canonical general, resume, and parent-child chunking.",
-    "updated_at":  "2026-08-08T18:00:00+10:00"
+    "next_action":  "Complete Task 8 migration, one full test run, local reindex, browser acceptance, and release.",
+    "updated_at":  "2026-08-08T19:30:00+10:00"
 }

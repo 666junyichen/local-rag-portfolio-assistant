@@ -30,6 +30,8 @@ The tests cover valid temporary Git repositories, missing required files and key
 
 - Task 1 review checkpoint: `tests/test_processing_profiles.py` passed 56 tests on 2026-08-07.
 - Task 2 focused approval: `tests/test_document_processing.py` passed 38 tests on 2026-08-08, including the recorded URL, email, Unicode-boundary, apostrophe, IPv6/new-TLD, and CRLF cases.
+- Tasks 3-7 subsystem checkpoint: 82 tests and 3 Streamlit subtests passed on 2026-08-08.
+- Real resume structure check: the Master DOCX produced 28 semantic parent blocks and 40 retrieval children instead of seven mixed chunks.
 - Task 0 focused evidence is recorded in `state.json` and the bootstrap session note.
 
 Run the full Python suite once before a feature-task handoff or merge milestone:

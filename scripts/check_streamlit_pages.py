@@ -37,12 +37,17 @@ def main() -> int:
     mode_select = next(
         item for item in retrieval_lab.selectbox if item.label == "Retrieval mode"
     )
-    expected_modes = ["baseline", "hybrid", "hybrid-rerank"]
+    expected_modes = [
+        "Vector / 向量检索",
+        "BM25 / 全文检索",
+        "Hybrid / RRF 融合",
+        "Hybrid + Cross-Encoder Rerank",
+    ]
     if list(mode_select.options) != expected_modes:
         raise RuntimeError(
             f"Retrieval Lab modes are {list(mode_select.options)!r}, expected {expected_modes!r}"
         )
-    print("[OK] Retrieval Lab exposes baseline, hybrid, and hybrid-rerank")
+    print("[OK] Retrieval Lab exposes vector, full-text, hybrid, and hybrid-rerank")
     return 0
 
 

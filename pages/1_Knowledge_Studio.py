@@ -25,6 +25,10 @@ from src.document_processing import (  # noqa: E402
     split_document,
 )
 from src.ingestion import build_chunk_records, ensure_local_catalog  # noqa: E402
+from src.hierarchical_chunking import (  # noqa: E402
+    ChunkHierarchy,
+    build_chunk_hierarchy,
+)
 from src.knowledge_store import (  # noqa: E402
     archive_public_document,
     publish_document,
@@ -39,6 +43,11 @@ from src.portfolio_rag import (  # noqa: E402
     try_load_reranker,
 )
 from src.retrieval import rerank_with_cross_encoder  # noqa: E402
+from src.processing_profiles import (  # noqa: E402
+    PreprocessingProfile,
+    ProcessingProfile,
+    recommend_processing_profile,
+)
 from src.ui import apply_streamlit_theme  # noqa: E402
 
 
@@ -71,8 +80,10 @@ def catalog() -> LocalCatalog:
     return ensure_local_catalog(DATA_DIR)
 
 
-def chunk_document(document: dict[str, Any], config: ChunkConfig) -> list[dict[str, Any]]:
-    return split_document(document, config)
+def chunk_document(
+    document: dict[str, Any], profile: ProcessingProfile
+) -> ChunkHierarchy:
+    return build_chunk_hierarchy(document, profile)
 
 
 @st.cache_data(ttl=15, show_spinner=False)
@@ -132,26 +143,92 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
         st.session_state[clean_key] = clean_text(str(st.session_state[raw_key]))
         st.session_state[clean_source_key] = str(st.session_state[raw_key])
 
-    clean_body = clean_text(str(st.session_state[clean_key]))
-    if st.session_state[clean_key] != clean_body:
-        st.session_state[clean_key] = clean_body
-    edited_document = replace_document_body(document, clean_body) if clean_body else None
+    recommended_profile = recommend_processing_profile(document)
+    mode = st.segmented_control(
+        "处理配置", ["Auto recommended", "Manual"], default="Auto recommended"
+    )
+    preprocessing_columns = st.columns(3)
+    normalize_whitespace = preprocessing_columns[0].toggle("规范化空白", value=True)
+    remove_urls = preprocessing_columns[1].toggle("删除 URL", value=False)
+    remove_emails = preprocessing_columns[2].toggle("删除邮箱地址", value=False)
+    preprocessing = PreprocessingProfile(
+        normalize_whitespace=normalize_whitespace,
+        remove_urls=remove_urls,
+        remove_emails=remove_emails,
+    )
 
-    recommended = recommend_chunk_config(edited_document or document)
-    mode = st.segmented_control("切片配置", ["Auto recommended", "Manual"], default="Auto recommended")
     if mode == "Manual":
-        strategy = st.selectbox("切片策略", ["resume_semantic", "recursive", "markdown", "paragraph"])
-        chunk_size = st.slider("Chunk size", 200, 2000, recommended.chunk_size, 50)
-        overlap = st.slider("Overlap", 0, int(chunk_size * 0.25), min(recommended.chunk_overlap, int(chunk_size * 0.25)), 10)
-        config = ChunkConfig(strategy, chunk_size, overlap, unit=recommended.unit)
+        mode_labels = {
+            "General": "general",
+            "Parent-child": "parent_child",
+            "Resume semantic": "resume_semantic",
+        }
+        default_label = next(
+            label
+            for label, value in mode_labels.items()
+            if value == recommended_profile.chunk_mode
+        )
+        selected_label = st.selectbox(
+            "分段模式",
+            list(mode_labels),
+            index=list(mode_labels).index(default_label),
+        )
+        chunk_mode = mode_labels[selected_label]
+        delimiter = st.text_input("分段标识符", value=recommended_profile.delimiter)
+        if chunk_mode == "parent_child":
+            parent_max_tokens = st.slider("父块最大 tokens", 200, 2000, 700, 50)
+            child_max_tokens = st.slider("子块最大 tokens", 40, 500, 180, 10)
+            overlap_tokens = st.slider(
+                "子块重叠 tokens", 0, child_max_tokens // 4, 20, 5
+            )
+            profile = ProcessingProfile.parent_child(
+                delimiter=delimiter,
+                parent_max_tokens=parent_max_tokens,
+                child_max_tokens=child_max_tokens,
+                max_tokens=child_max_tokens,
+                overlap_tokens=overlap_tokens,
+                preprocessing=preprocessing,
+            )
+        elif chunk_mode == "resume_semantic":
+            max_tokens = st.slider("语义块最大 tokens", 200, 1000, 320, 20)
+            profile = ProcessingProfile.resume_semantic(
+                delimiter=delimiter,
+                max_tokens=max_tokens,
+                preprocessing=preprocessing,
+            )
+        else:
+            max_tokens = st.slider(
+                "分段最大 tokens", 200, 2000, recommended_profile.max_tokens, 50
+            )
+            overlap_tokens = st.slider(
+                "分段重叠 tokens",
+                0,
+                max_tokens // 4,
+                min(recommended_profile.overlap_tokens, max_tokens // 4),
+                10,
+            )
+            profile = ProcessingProfile(
+                delimiter=delimiter,
+                max_tokens=max_tokens,
+                overlap_tokens=overlap_tokens,
+                preprocessing=preprocessing,
+            )
     else:
-        config = recommended
-        strategy_label = "Resume semantic" if config.strategy == "resume_semantic" else config.strategy
+        profile = ProcessingProfile.from_dict(
+            {
+                **recommended_profile.to_dict(),
+                "preprocessing": preprocessing.to_dict(),
+            }
+        )
         st.success(
-            f"推荐配置：{strategy_label} / {config.chunk_size} {config.unit} / overlap {config.chunk_overlap}"
+            f"推荐配置：{profile.chunk_mode} / 子块 {profile.child_max_tokens} tokens / "
+            f"父块 {profile.parent_max_tokens} tokens / overlap {profile.overlap_tokens}"
         )
 
-    chunks = chunk_document(edited_document, config) if edited_document else []
+    clean_body = clean_text(str(st.session_state[clean_key]), preprocessing)
+    edited_document = replace_document_body(document, clean_body) if clean_body else None
+    hierarchy = chunk_document(edited_document, profile) if edited_document else None
+    chunks = [child.to_dict() for child in hierarchy.children] if hierarchy else []
     metrics = chunk_metrics(chunks)
     metric_columns = st.columns(6)
     metric_columns[0].metric("文档", len(parsed))
@@ -175,19 +252,32 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
     with clean_tab:
         st.caption("这是进入切片、召回和索引的最终正文，可以继续人工修改或脱敏。")
         st.text_area("清洗正文", height=360, label_visibility="collapsed", key=clean_key)
+        if st.button("应用修改并重新生成预览", use_container_width=True):
+            st.session_state[clean_key] = clean_text(
+                str(st.session_state[clean_key]), preprocessing
+            )
+            st.rerun()
     with chunks_tab:
-        for chunk in chunks:
+        parents = {
+            parent.chunk_id: parent for parent in (hierarchy.parents if hierarchy else ())
+        }
+        for chunk_index, chunk in enumerate(chunks):
             section_type = str(chunk.get("section_type") or "document")
             entity_title = str(chunk.get("entity_title") or chunk.get("title") or "Untitled")
             with st.expander(
-                f"Chunk {chunk['chunk_index'] + 1} · {section_type} · "
+                f"Child {chunk_index + 1} · {section_type} · "
                 f"{chunk.get('token_count', 0)} tokens / {len(chunk['body'])} chars · {entity_title}"
             ):
                 st.caption(
                     f"{chunk.get('section_path') or entity_title} · "
                     f"priority: {chunk.get('retrieval_priority') or 'primary'}"
                 )
+                st.markdown("**匹配子块**")
                 st.write(chunk["body"])
+                parent = parents.get(str(chunk.get("parent_chunk_id") or ""))
+                if parent and parent.raw_body != chunk["body"]:
+                    st.markdown("**返回父块**")
+                    st.write(parent.raw_body)
     with recall_tab:
         query = st.text_input("测试问题", placeholder="例如：Junyi 有哪些 MongoDB 项目经验？")
         use_preview_reranker = st.toggle(
@@ -237,10 +327,11 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
         disabled=edited_document is None,
     ):
         rows = []
+        profiles: dict[str, ProcessingProfile] = {}
         active_ids = set()
         for index, original_item in enumerate(parsed):
             item = edited_document if index == selected_index else original_item
-            item_config = config if index == selected_index else recommend_chunk_config(item)
+            item_profile = profile if index == selected_index else recommend_processing_profile(item)
             source_name = str((item.get("metadata") or {}).get("source") or item["title"])
             enriched = {
                 **item,
@@ -250,17 +341,16 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
                 "metadata": {
                     **(item.get("metadata") or {}),
                     "source_path": str(UPLOADS / source_name),
-                    "chunking": {
-                        "strategy": item_config.strategy,
-                        "chunk_size": item_config.chunk_size,
-                        "chunk_overlap": item_config.chunk_overlap,
-                        "unit": item_config.unit,
-                    },
+                    "processing_profile": item_profile.to_dict(),
                 },
             }
             rows.append(enriched)
-            active_ids.add(stable_document_id(enriched))
+            doc_id = stable_document_id(enriched)
+            active_ids.add(doc_id)
+            profiles[doc_id] = item_profile
         local_catalog.upsert_documents(rows, active_ids=active_ids)
+        for doc_id, item_profile in profiles.items():
+            local_catalog.update_processing_profile(doc_id, item_profile)
         st.success(f"已保存并启用 {len(rows)} 份私有资料。请在“索引维护”统一重建索引。")
 
     publish_confirm = st.checkbox("我已检查正文并完成脱敏，允许发布到公开知识库")
@@ -274,12 +364,7 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
             **edited_document,
             "metadata": {
                 **(edited_document.get("metadata") or {}),
-                "chunking": {
-                    "strategy": config.strategy,
-                    "chunk_size": config.chunk_size,
-                    "chunk_overlap": config.chunk_overlap,
-                    "unit": config.unit,
-                },
+                "processing_profile": profile.to_dict(),
             },
         }
         result = publish_document(PUBLIC_PATH, public_document)
@@ -368,47 +453,83 @@ def private_library(local_catalog: LocalCatalog, indexed: dict[str, set[str]]) -
             st.warning("OCR not enabled：图片或扫描版 PDF 暂不进入索引。")
         st.text_area("完整正文", item["body"], height=420, disabled=True, label_visibility="collapsed")
     with chunks_tab:
-        config = ChunkConfig(
-            item["chunk_strategy"],
-            item["chunk_size"],
-            item["chunk_overlap"],
-            unit=item.get("chunk_unit") or "characters",
+        stored_profile = item.get("processing_profile")
+        detail_profile = (
+            ProcessingProfile.from_dict(stored_profile)
+            if stored_profile
+            else recommend_processing_profile(item)
         )
-        preview_doc = {"doc_id": item["doc_id"], "title": item["title"], "body": item["summary"] or item["body"], "visibility": "private"}
-        for chunk in split_document(preview_doc, config):
-            section_type = chunk.get("section_type") or "document"
-            entity_title = chunk.get("entity_title") or item["title"]
+        preview_doc = {
+            "doc_id": item["doc_id"],
+            "title": item["title"],
+            "body": item["summary"] or item["body"],
+            "visibility": "private",
+            "metadata": item,
+        }
+        hierarchy = build_chunk_hierarchy(preview_doc, detail_profile)
+        parent_by_id = {parent.chunk_id: parent for parent in hierarchy.parents}
+        for index, child in enumerate(hierarchy.children, 1):
+            parent = parent_by_id[child.parent_chunk_id]
+            section_type = child.metadata.get("section_type") or "document"
+            entity_title = child.metadata.get("entity_title") or item["title"]
             with st.expander(
-                f"Chunk {chunk['chunk_index'] + 1} · {section_type} · "
-                f"{chunk['token_count']} tokens / {len(chunk['body'])} chars"
+                f"Child {index} · {section_type} · "
+                f"{child.token_count} tokens / {len(child.raw_body)} chars"
             ):
                 st.caption(
-                    f"{entity_title} · {chunk.get('section_path') or '-'} · "
-                    f"priority: {chunk.get('retrieval_priority') or 'primary'}"
+                    f"{entity_title} · {child.metadata.get('section_path') or '-'} · "
+                    f"priority: {child.metadata.get('retrieval_priority') or 'primary'}"
                 )
-                st.write(chunk["body"])
+                st.markdown("**匹配子块**")
+                st.write(child.raw_body)
+                if parent.raw_body != child.raw_body:
+                    st.markdown("**返回父块**")
+                    st.write(parent.raw_body)
     with override_tab:
         summary = st.text_area("专用于 RAG 的摘要（留空则使用完整正文）", item["summary"], height=180)
-        config_columns = st.columns(3)
-        strategy_options = ["resume_semantic", "recursive", "markdown", "paragraph"]
-        current_strategy = item["chunk_strategy"] if item["chunk_strategy"] in strategy_options else "recursive"
-        strategy = config_columns[0].selectbox(
-            "策略",
-            strategy_options,
-            index=strategy_options.index(current_strategy),
-            key=f"strategy-{detail_id}",
+        config_columns = st.columns(4)
+        mode_options = ["general", "parent_child", "resume_semantic"]
+        chunk_mode = config_columns[0].selectbox(
+            "分段模式", mode_options, index=mode_options.index(detail_profile.chunk_mode),
+            key=f"mode-{detail_id}",
         )
-        size = config_columns[1].number_input("Chunk size", 200, 2000, item["chunk_size"], 50, key=f"size-{detail_id}")
-        overlap = config_columns[2].number_input("Overlap", 0, int(size * 0.25), min(item["chunk_overlap"], int(size * 0.25)), 10, key=f"overlap-{detail_id}")
+        parent_size = config_columns[1].number_input(
+            "父块 tokens", 200, 2000, detail_profile.parent_max_tokens, 20,
+            key=f"parent-{detail_id}",
+        )
+        default_child = detail_profile.child_max_tokens if chunk_mode == "parent_child" else detail_profile.max_tokens
+        child_size = config_columns[2].number_input(
+            "子块 tokens", 1 if chunk_mode == "parent_child" else 200, 2000,
+            default_child, 20, key=f"child-{detail_id}",
+        )
+        overlap = config_columns[3].number_input(
+            "重叠 tokens", 0, max(0, int(child_size * 0.25)),
+            min(detail_profile.overlap_tokens, int(child_size * 0.25)), 5,
+            key=f"overlap-{detail_id}",
+        )
         if st.button("保存摘要与切片配置"):
             local_catalog.update_summary(detail_id, summary)
-            local_catalog.update_chunking(
-                detail_id,
-                strategy,
-                int(size),
-                int(overlap),
-                unit="tokens" if strategy == "resume_semantic" else (item.get("chunk_unit") or "characters"),
-            )
+            if chunk_mode == "parent_child":
+                saved_profile = ProcessingProfile.parent_child(
+                    parent_max_tokens=max(int(parent_size), int(child_size) + 1),
+                    child_max_tokens=int(child_size),
+                    max_tokens=int(child_size),
+                    overlap_tokens=int(overlap),
+                    preprocessing=detail_profile.preprocessing,
+                )
+            elif chunk_mode == "resume_semantic":
+                saved_profile = ProcessingProfile.resume_semantic(
+                    max_tokens=max(200, int(child_size)),
+                    overlap_tokens=int(overlap),
+                    preprocessing=detail_profile.preprocessing,
+                )
+            else:
+                saved_profile = ProcessingProfile(
+                    max_tokens=max(200, int(child_size)),
+                    overlap_tokens=int(overlap),
+                    preprocessing=detail_profile.preprocessing,
+                )
+            local_catalog.update_processing_profile(detail_id, saved_profile)
             st.success("已保存。索引状态将在重建前显示为 outdated。")
 
 

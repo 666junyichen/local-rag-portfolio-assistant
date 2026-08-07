@@ -50,8 +50,14 @@ with st.sidebar:
     scope = st.radio("资料范围", ["public", "all"], key="lab_scope", format_func=lambda value: "仅公开" if value == "public" else "公开 + 私有")
     mode = st.selectbox(
         "Retrieval mode",
-        ["baseline", "hybrid", "hybrid-rerank"],
-        help="Baseline 仅使用向量检索；hybrid 使用 BM25 + Vector + RRF；rerank 再加入本地 Cross-Encoder。",
+        ["baseline", "full-text", "hybrid", "hybrid-rerank"],
+        format_func=lambda value: {
+            "baseline": "Vector / 向量检索",
+            "full-text": "BM25 / 全文检索",
+            "hybrid": "Hybrid / RRF 融合",
+            "hybrid-rerank": "Hybrid + Cross-Encoder Rerank",
+        }[value],
+        help="Vector 使用语义向量；全文检索使用 BM25；Hybrid 使用 BM25 + Vector + RRF；Rerank 再加入本地 Cross-Encoder。",
     )
 
 saved_questions = json.loads(EVAL_PATH.read_text(encoding="utf-8")) if EVAL_PATH.exists() else []
@@ -80,8 +86,9 @@ if run or generate:
         if reranker_warning:
             st.warning(
                 "Cross-Encoder 暂时不可用，已自动回退到 hybrid 检索。"
-                f"\n\n详细信息：{reranker_warning}"
+                f"\n\n降级原因：{reranker_warning}"
             )
+        started = time.perf_counter()
         results = vector_search(
             collection,
             model,
@@ -90,9 +97,19 @@ if run or generate:
             top_k=top_k,
             score_threshold=threshold if use_threshold else None,
             scope=scope,
-            mode="baseline" if mode == "baseline" else "hybrid",
+            mode="hybrid" if mode == "hybrid-rerank" else mode,
             reranker=reranker,
         )
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        channel_counts: dict[str, int] = {}
+        for result in results:
+            for channel in result.get("retrieval_channels", []):
+                channel_counts[channel] = channel_counts.get(channel, 0) + 1
+        st.caption(
+            f"模式：{mode} · 召回渠道：{channel_counts or {'vector': len(results)}} · "
+            f"延迟：{elapsed_ms:.0f} ms"
+        )
+        st.caption("结果会展示 Vector/BM25 排名、RRF 融合分数和 rerank 前后变化。")
         st.subheader(f"候选与入选上下文 · {len(results)}")
         if not results:
             st.warning("当前参数下没有合格资料，系统不会调用 Ollama 猜测答案。")
@@ -110,6 +127,7 @@ if run or generate:
                 score_threshold=threshold if use_threshold else None,
                 scope=scope,
                 reranker=reranker,
+                retrieval_mode="hybrid" if mode == "hybrid-rerank" else mode,
             )
             st.write(answer)
     except Exception as error:
@@ -127,7 +145,7 @@ if st.button("运行当前模式评测", use_container_width=True):
         if reranker_warning:
             st.warning(
                 "Cross-Encoder 暂时不可用，本次评测已自动回退到 hybrid。"
-                f"\n\n详细信息：{reranker_warning}"
+                f"\n\n降级原因：{reranker_warning}"
             )
         cases = load_benchmark(BENCHMARK_PATH)
         rankings = {}
@@ -142,7 +160,7 @@ if st.button("运行当前模式评测", use_container_width=True):
                 case.question,
                 top_k=10,
                 scope=case.scope,
-                mode="baseline" if mode == "baseline" else "hybrid",
+                mode="hybrid" if mode == "hybrid-rerank" else mode,
                 reranker=reranker,
             )
             latencies[case.case_id] = (time.perf_counter() - started) * 1000

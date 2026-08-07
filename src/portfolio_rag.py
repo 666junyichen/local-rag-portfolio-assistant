@@ -70,7 +70,9 @@ def load_settings(env_path: str | Path = ".env") -> Settings:
             "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
         ),
         embedding_local_only=os.environ.get("EMBEDDING_LOCAL_ONLY", "false").lower() == "true",
-        retrieval_mode=os.environ.get("RETRIEVAL_MODE", "hybrid").lower(),
+        retrieval_mode=os.environ.get(
+            "RETRIEVAL_MODE", os.environ.get("DEFAULT_RETRIEVAL_MODE", "hybrid")
+        ).lower(),
         reranker_model_id=os.environ.get(
             "RERANKER_MODEL_ID",
             "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
@@ -275,6 +277,41 @@ def sparse_search(
         return bm25_rank(rows, query, top_k=top_k)
 
 
+def full_text_search(
+    collection: Collection,
+    settings: Settings,
+    query: str,
+    *,
+    top_k: int = 5,
+    score_threshold: float | None = None,
+    scope: str = "all",
+) -> list[dict[str, Any]]:
+    """Run BM25/full-text retrieval and return the same evidence shape as vector search."""
+    rows = sparse_search(
+        collection,
+        settings,
+        query,
+        top_k=min(max(top_k * 10, 30), 50),
+        scope=scope,
+    )
+    max_score = max((float(row.get("bm25_score", 0.0)) for row in rows), default=0.0)
+    candidates: list[dict[str, Any]] = []
+    for rank, row in enumerate(rows, 1):
+        item = dict(row)
+        item["bm25_rank"] = rank
+        item["retrieval_channels"] = ["bm25"]
+        item["score"] = float(item.get("bm25_score", 0.0)) / max_score if max_score else 0.0
+        candidates.append(item)
+    return select_results(
+        candidates,
+        RetrievalSettings(
+            top_k=min(max(top_k, 1), 10),
+            score_threshold=score_threshold,
+            scope=scope,
+        ),
+    )
+
+
 def hybrid_search(
     collection: Collection,
     model: SentenceTransformer,
@@ -344,6 +381,15 @@ def vector_search(
     reranker: Any | None = None,
 ) -> list[dict[str, Any]]:
     active_mode = (mode or settings.retrieval_mode).lower()
+    if active_mode in {"full-text", "full_text", "bm25"}:
+        return full_text_search(
+            collection,
+            settings,
+            query,
+            top_k=top_k,
+            score_threshold=score_threshold,
+            scope=scope,
+        )
     if active_mode == "hybrid":
         return hybrid_search(
             collection,
@@ -376,6 +422,7 @@ def retrieve_for_question(
     score_threshold: float | None = None,
     scope: str = "all",
     reranker: Any | None = None,
+    retrieval_mode: str | None = None,
 ) -> list[dict[str, Any]]:
     if should_refuse_without_retrieval(query):
         return []
@@ -383,7 +430,7 @@ def retrieve_for_question(
     if plan.mode == "simple":
         return vector_search(
             collection, model, settings, query, top_k, score_threshold, scope,
-            reranker=reranker,
+            mode=retrieval_mode, reranker=reranker,
         )
     merged: dict[str, dict[str, Any]] = {}
     for subquery in plan.subqueries:
@@ -395,6 +442,7 @@ def retrieve_for_question(
             top_k=min(max(top_k * 2, 5), 10),
             score_threshold=score_threshold,
             scope=scope,
+            mode=retrieval_mode,
             reranker=reranker,
         )
         for row in rows:
@@ -486,6 +534,7 @@ def generate_answer_with_sources(
     scope: str = "all",
     max_tokens: int = 128,
     reranker: Any | None = None,
+    retrieval_mode: str | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
     results = retrieve_for_question(
         collection,
@@ -496,6 +545,7 @@ def generate_answer_with_sources(
         score_threshold=score_threshold,
         scope=scope,
         reranker=reranker,
+        retrieval_mode=retrieval_mode,
     )
     if not results:
         message = (

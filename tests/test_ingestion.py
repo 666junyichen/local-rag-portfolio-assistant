@@ -13,6 +13,7 @@ from src.ingestion import (
     select_private_documents,
 )
 from src.local_catalog import stable_document_id
+from src.processing_profiles import ProcessingProfile
 
 
 class IngestionTests(unittest.TestCase):
@@ -105,6 +106,25 @@ class IngestionTests(unittest.TestCase):
 
         self.assertEqual(len(chunks), 1)
         self.assertIn("chunk_id", chunks[0])
+
+    def test_ingestion_indexes_children_and_preserves_parent_evidence(self) -> None:
+        document = {
+            "title": "Long RAG guide",
+            "body": "\n\n".join(
+                ["MongoDB vector evidence. " * 120, "Ollama answer evidence. " * 120]
+            ),
+            "visibility": "private",
+        }
+
+        chunks = build_chunk_records(
+            [document], profile=ProcessingProfile.parent_child()
+        )
+
+        self.assertGreater(len(chunks), 1)
+        self.assertTrue(all(chunk["parent_chunk_id"] for chunk in chunks))
+        self.assertTrue(all(chunk["parent_body"] for chunk in chunks))
+        self.assertTrue(all(chunk["processing_profile_hash"] for chunk in chunks))
+        self.assertTrue(all(count_tokens(chunk["body"]) <= 180 for chunk in chunks))
 
     def test_catalog_migration_preserves_all_rows_and_only_activates_curated_subset(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

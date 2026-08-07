@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from src.local_catalog import LocalCatalog, stable_document_id
+from src.processing_profiles import ProcessingProfile
 
 
 class LocalCatalogTests(unittest.TestCase):
@@ -139,6 +140,49 @@ class LocalCatalogTests(unittest.TestCase):
             saved = catalog.get(doc_id)
             self.assertEqual((saved["chunk_strategy"], saved["chunk_size"], saved["chunk_overlap"]), ("recursive", 600, 60))
             self.assertEqual(saved["chunk_unit"], "tokens")
+
+    def test_processing_profile_migration_is_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            catalog = self.make_catalog(Path(temp_dir))
+            row = {
+                "source": "resume_root",
+                "relative_path": "master/resume.docx",
+                "title": "Master Resume",
+                "body": "Education and project evidence.",
+            }
+            doc_id = stable_document_id(row)
+            catalog.upsert_documents([row], active_ids={doc_id})
+
+            first = catalog.migrate_processing_profiles()
+            second = catalog.migrate_processing_profiles()
+            saved = catalog.get(doc_id)
+
+            self.assertEqual(first, 1)
+            self.assertEqual(second, 0)
+            self.assertEqual(saved["processing_profile"]["chunk_mode"], "resume_semantic")
+            self.assertTrue(saved["processing_profile_hash"])
+
+    def test_parent_child_processing_profile_can_be_updated(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            catalog = self.make_catalog(Path(temp_dir))
+            row = {
+                "source": "project_activity_root",
+                "relative_path": "guide/readme.md",
+                "title": "Guide",
+                "body": "Long guide body.",
+            }
+            doc_id = stable_document_id(row)
+            catalog.upsert_documents([row])
+
+            updated = catalog.update_processing_profile(
+                doc_id, ProcessingProfile.parent_child()
+            )
+            saved = catalog.get(doc_id)
+
+            self.assertTrue(updated)
+            self.assertEqual(saved["processing_profile"]["chunk_mode"], "parent_child")
+            self.assertEqual(saved["chunk_size"], 180)
+            self.assertEqual(saved["chunk_overlap"], 20)
 
     def test_image_record_is_marked_needs_ocr_and_not_activated(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

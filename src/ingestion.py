@@ -11,6 +11,12 @@ from src.document_processing import (
     split_document,
 )
 from src.local_catalog import LocalCatalog, stable_document_id
+from src.hierarchical_chunking import build_chunk_hierarchy
+from src.processing_profiles import (
+    ProcessingProfile,
+    profile_from_legacy,
+    recommend_processing_profile,
+)
 
 
 def _load_json_list(path: Path) -> list[dict[str, Any]]:
@@ -128,8 +134,10 @@ def load_knowledge_documents(data_dir: Path, *, include_private: bool = True) ->
 def build_chunk_records(
     documents: Iterable[dict[str, Any]],
     config: ChunkConfig | None = None,
+    *,
+    profile: ProcessingProfile | None = None,
 ) -> list[dict[str, Any]]:
-    config = config or ChunkConfig()
+    legacy_default = config or ChunkConfig()
     seen_hashes: set[str] = set()
     chunks: list[dict[str, Any]] = []
     for raw in documents:
@@ -138,27 +146,40 @@ def build_chunk_records(
         if document["content_hash"] in seen_hashes:
             continue
         seen_hashes.add(document["content_hash"])
-        configured = (document.get("metadata") or {}).get("chunking") or {}
-        document_config = config
-        if configured:
-            document_config = ChunkConfig(
-                strategy=str(configured.get("strategy") or config.strategy),
-                chunk_size=int(configured.get("chunk_size") or config.chunk_size),
-                chunk_overlap=int(
+        metadata = document.get("metadata") or {}
+        configured_profile = metadata.get("processing_profile")
+        configured = metadata.get("chunking") or {}
+        if profile is not None:
+            document_profile = profile
+        elif configured_profile:
+            document_profile = ProcessingProfile.from_dict(configured_profile)
+        elif configured or config is not None:
+            document_profile = profile_from_legacy(
+                title=document["title"],
+                file_type=str(metadata.get("file_type") or metadata.get("source") or ""),
+                strategy=str(configured.get("strategy") or legacy_default.strategy),
+                chunk_size=int(configured.get("chunk_size") or legacy_default.chunk_size),
+                overlap=int(
                     configured.get("chunk_overlap")
                     if configured.get("chunk_overlap") is not None
-                    else config.chunk_overlap
+                    else legacy_default.chunk_overlap
                 ),
-                unit=str(configured.get("unit") or "characters"),
+                unit=str(configured.get("unit") or legacy_default.unit),
             )
-            recommended = recommend_chunk_config(document)
-            is_legacy_resume_default = (
-                recommended.strategy == "resume_semantic"
-                and document_config.strategy == "recursive"
-                and document_config.chunk_size == 600
-                and document_config.chunk_overlap == 60
+        else:
+            document_profile = recommend_processing_profile(document)
+        hierarchy = build_chunk_hierarchy(document, document_profile)
+        for child in hierarchy.children:
+            chunks.append(
+                {
+                    **child.to_dict(),
+                    "content_hash": document["content_hash"],
+                    "title": document["title"],
+                    "source": document.get("source"),
+                    "relative_path": document.get("relative_path"),
+                    "chunk_unit": "tokens",
+                    "processing_profile_hash": hierarchy.processing_profile_hash,
+                    "processing_profile": document_profile.to_dict(),
+                }
             )
-            if is_legacy_resume_default:
-                document_config = recommended
-        chunks.extend(split_document(document, document_config))
     return chunks

@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from src.portfolio_rag import Settings, hybrid_search
+from src.portfolio_rag import Settings, full_text_search, hybrid_search
 
 
 class PortfolioRetrievalTests(unittest.TestCase):
@@ -13,6 +13,20 @@ class PortfolioRetrievalTests(unittest.TestCase):
             ollama_base_url="http://localhost:11434",
             ollama_model="qwen2.5:3b",
         )
+
+    @patch("src.portfolio_rag.sparse_search")
+    def test_full_text_search_normalizes_bm25_scores_and_selects_top_k(self, sparse) -> None:
+        sparse.return_value = [
+            {"chunk_id": "a", "doc_id": "a", "visibility": "public", "bm25_score": 12.0},
+            {"chunk_id": "b", "doc_id": "b", "visibility": "public", "bm25_score": 6.0},
+        ]
+
+        results = full_text_search(object(), self.settings, "MongoDB", top_k=1, scope="public")
+
+        self.assertEqual([row["chunk_id"] for row in results], ["a"])
+        self.assertEqual(results[0]["retrieval_channels"], ["bm25"])
+        self.assertEqual(results[0]["bm25_rank"], 1)
+        self.assertEqual(results[0]["score"], 1.0)
 
     @patch("src.portfolio_rag.sparse_search")
     @patch("src.portfolio_rag.vector_candidates")
