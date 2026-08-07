@@ -5,6 +5,8 @@ A bilingual portfolio assistant with two deliberately separated privacy modes:
 - **Local private mode:** Streamlit, MongoDB Local Atlas, SentenceTransformers, and Ollama.
 - **Cloud public mode:** Next.js, Vercel Functions, MongoDB Atlas Vector Search, and Gemini.
 
+Development status and handoff context are maintained in [Project Status](docs/project-memory/CURRENT_STATE.md).
+
 The project began with the Google for Developers and MongoDB **Building with RAG using Gemma 4, Antigravity 2.0 & MongoDB Atlas** workshop repository, then evolved into an independent product with document processing, retrieval evaluation, source evidence, privacy controls, and a deployable cloud chat.
 
 ![Cloud and local RAG evidence](public/streamlit-answer.png)

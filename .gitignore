@@ -24,3 +24,6 @@ data/archive/
 data/local_uploads/
 data/local_eval_questions.json
 evals/latest-report*.json
+
+# Local-only project memory. Never commit private notes or document bodies.
+.project-memory/private/

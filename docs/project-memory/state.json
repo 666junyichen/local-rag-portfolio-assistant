@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "active_branch": "feat/knowledge-studio-phase-a",
+  "active_phase": "Phase A",
+  "tasks": [
+    {
+      "id": 0,
+      "title": "Persistent project-memory system",
+      "status": "completed",
+      "reviewed": true,
+      "final_quality_approved": true,
+      "test_evidence": [
+        {
+          "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_project_memory.py -q",
+          "result": "16 passed",
+          "verified_at": "2026-08-07"
+        },
+        {
+          "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
+          "result": "164 passed, 3 subtests passed",
+          "verified_at": "2026-08-07"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "title": "Versioned processing profiles",
+      "status": "completed",
+      "reviewed": true,
+      "final_quality_approved": true,
+      "test_evidence": [
+        {
+          "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_processing_profiles.py -q",
+          "result": "56 passed",
+          "verified_at": "2026-08-07"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Configurable cleaning and structural units",
+      "status": "in_progress",
+      "reviewed": false,
+      "final_quality_approved": false,
+      "test_evidence": [
+        {
+          "command": "python -m pytest -q",
+          "result": "148 passed at the latest Task 2 checkpoint; Phase A incomplete",
+          "verified_at": "2026-08-07"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Canonical general, resume, and parent-child chunking",
+      "status": "pending",
+      "reviewed": false,
+      "final_quality_approved": false,
+      "test_evidence": []
+    },
+    {
+      "id": 4,
+      "title": "SQLite profile migration and persistence",
+      "status": "pending",
+      "reviewed": false,
+      "final_quality_approved": false,
+      "test_evidence": []
+    },
+    {
+      "id": 5,
+      "title": "Hierarchy-aware ingestion and retrieval",
+      "status": "pending",
+      "reviewed": false,
+      "final_quality_approved": false,
+      "test_evidence": []
+    },
+    {
+      "id": 6,
+      "title": "Dify-style Knowledge Studio controls",
+      "status": "pending",
+      "reviewed": false,
+      "final_quality_approved": false,
+      "test_evidence": []
+    },
+    {
+      "id": 7,
+      "title": "Retrieval Lab consistency and diagnostics",
+      "status": "pending",
+      "reviewed": false,
+      "final_quality_approved": false,
+      "test_evidence": []
+    },
+    {
+      "id": 8,
+      "title": "Migration, integration, and documentation",
+      "status": "pending",
+      "reviewed": false,
+      "final_quality_approved": false,
+      "test_evidence": []
+    }
+  ],
+  "last_verified": "2026-08-07",
+  "known_blockers": [
+    "CJK-adjacent URLs",
+    "IPv6 and new-TLD URLs",
+    "Unicode-adjacent emails",
+    "Apostrophe emails",
+    "CRLF migration behavior"
+  ],
+  "next_action": "Fix Task 2 blockers, obtain final-quality approval, then implement Task 3 parent-child chunking.",
+  "updated_at": "2026-08-07T23:35:41+10:00"
+}
