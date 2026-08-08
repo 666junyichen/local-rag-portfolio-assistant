@@ -60,17 +60,14 @@ function Pull-DockerImage([string]$Image, [int]$Attempts = 3) {
 
 Set-Location $Root
 
-Write-Step "Checking local prerequisites"
-if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-    throw "Docker CLI was not found. Install and open Docker Desktop first."
+$StreamlitHealthy = $false
+try {
+    $HealthResponse = Invoke-WebRequest -Uri "http://localhost:8505/_stcore/health" -UseBasicParsing -TimeoutSec 3
+    $StreamlitHealthy = $HealthResponse.StatusCode -eq 200
+} catch {
+    $StreamlitHealthy = $false
 }
-docker info *> $null
-if ($LASTEXITCODE -ne 0) {
-    throw "Docker Desktop Engine is not running. Open Docker Desktop and wait for 'Engine running'."
-}
-if (-not (Test-Path $Python)) {
-    throw "Python environment is missing at .venv. Create it with 'uv sync' before starting the app."
-}
+if ($StreamlitHealthy) { Write-Host "Streamlit is already running and healthy at http://localhost:8505." -ForegroundColor Green; exit 0 }
 
 $Listener = Get-NetTCPConnection -LocalPort 8505 -State Listen -ErrorAction SilentlyContinue |
     Select-Object -First 1
@@ -83,6 +80,18 @@ if ($Listener) {
         "The script will not stop an unknown process automatically. Close it or configure another port."
     }
     throw "Port 8505 is already used by PID $($Listener.OwningProcess) ($ProcessName). $Hint"
+}
+
+Write-Step "Checking local prerequisites"
+if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+    throw "Docker CLI was not found. Install and open Docker Desktop first."
+}
+docker info *> $null
+if ($LASTEXITCODE -ne 0) {
+    throw "Docker Desktop Engine is not running. Open Docker Desktop and wait for 'Engine running'."
+}
+if (-not (Test-Path $Python)) {
+    throw "Python environment is missing at .venv. Create it with 'uv sync' before starting the app."
 }
 
 $Branch = git branch --show-current 2>$null

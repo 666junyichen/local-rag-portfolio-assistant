@@ -131,6 +131,15 @@ class LocalRuntimeTests(unittest.TestCase):
         self.assertIn("git rev-parse --short HEAD", script)
         self.assertIn("--server.fileWatcherType none", script)
 
+    def test_start_script_reuses_a_healthy_streamlit_server(self) -> None:
+        script = (
+            Path(__file__).resolve().parents[1] / "scripts" / "start-local.ps1"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("http://localhost:8505/_stcore/health", script)
+        self.assertIn("already running and healthy", script)
+        self.assertRegex(script, r"if \(\$StreamlitHealthy\).*?exit 0")
+
 
 if __name__ == "__main__":
     unittest.main()

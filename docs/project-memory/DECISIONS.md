@@ -23,3 +23,7 @@ Record Task 2's `148 passed` checkpoint while keeping the task in progress. Comp
 ## 2026-08-08: Verification Is Risk-Based And Time-Boxed
 
 Use focused tests during implementation and one full-suite run at a stable task or merge milestone. Combine review findings into one fix pass, limit ordinary review to 15 minutes, and defer non-critical hardening ideas to `KNOWN_ISSUES.md`. This prevents documentation and isolated regex changes from repeatedly loading the entire application test surface.
+
+## 2026-08-08: Phase B Is Retrieval Calibration, Not Feature Expansion
+
+The refreshed 50-question benchmark shows that Vector is the strongest fast default, plain Hybrid RRF lowers ranking quality, and Cross-Encoder reranking provides the best quality at higher latency. Phase B should therefore focus on freshness-aware ranking and routing the reranker only to questions that need higher precision. Agentic RAG, GraphRAG, OCR, and new paid services remain deferred until a measured failure requires them.

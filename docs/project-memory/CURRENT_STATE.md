@@ -1,14 +1,16 @@
 # Current State
 
-- Active branch: `feat/knowledge-studio-phase-a`
-- Active phase: `Phase A`
+- Active branch: `main`
+- Active phase: `Post-Phase A evaluation`
 - Last verified: `2026-08-08`
-- Updated: `2026-08-08T20:30:00+10:00`
-- Next action: Plan Phase B only after collecting retrieval benchmark evidence from Phase A usage.
+- Updated: `2026-08-08T13:57:00+10:00`
+- Next action: Plan a narrow Phase B for freshness-aware ranking and adaptive reranker routing; defer Agentic RAG and other broad features.
 
 ## Status
 
 Tasks 0-8 are completed and reviewed. Processing profiles now drive cleaning, parent-child/semantic chunking, SQLite persistence, child indexing, parent evidence expansion, Knowledge Studio, and all four Retrieval Lab modes. The real local catalog and retrieval indexes have been migrated and rebuilt.
+
+The refreshed 50-question benchmark on the 689-child index found that Vector remains the best fast default. Plain Hybrid RRF matched Vector Hit@5 but reduced MRR from 0.906 to 0.867. Hybrid + Cross-Encoder Rerank reached Hit@5 1.000, Recall@5 0.954, MRR 0.924, and nDCG@5 0.889 at 1.49 seconds average latency. The remaining baseline weakness is freshness ranking; this evidence narrows Phase B to freshness-aware ranking and selective reranker routing.
 
 | Task | Status | Reviewed | Final quality approved | Summary |
 |---|---|---|---|---|

@@ -53,12 +53,13 @@ Local mode keeps Vector Search and text-search indexes separate, fuses their ran
 
 ### Measured retrieval baseline
 
-The tracked 50-question bilingual benchmark separates answerable, exact-term, cross-document, freshness, no-answer, and privacy cases. Results measured locally on the current curated 111-document / 400-chunk index:
+The tracked 50-question bilingual benchmark separates answerable, exact-term, cross-document, freshness, no-answer, and privacy cases. Results measured locally on the current curated 111-document / 689-child index:
 
-| Mode | Hit@5 | Recall@5 | MRR | No-answer | Privacy violations | Avg retrieval latency |
+| Mode | Hit@5 | Recall@5 | MRR | nDCG@5 | No-answer | Privacy violations | Avg retrieval latency |
 |---|---:|---:|---:|---:|---:|---:|
-| Vector baseline | 0.925 | 0.838 | 0.906 | 1.000* | 0 | ~69 ms |
-| Hybrid + multilingual reranker | **0.975** | **0.946** | **0.923** | **1.000** | **0** | ~1.41 s |
+| Vector baseline | 0.925 | 0.838 | 0.906 | 0.830 | 1.000* | 0 | 182 ms |
+| Hybrid RRF | 0.925 | 0.838 | 0.867 | 0.813 | 1.000* | 0 | 93 ms |
+| Hybrid + multilingual reranker | **1.000** | **0.954** | **0.924** | **0.889** | **1.000** | **0** | 1.49 s |
 
 `*` No-answer and sensitive-private cases are rejected by a deterministic pre-retrieval safety gate. The fast hybrid mode remains the default UI path; the higher-latency reranker is an explicit local toggle and Retrieval Lab experiment.
 
@@ -95,7 +96,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
 
 The script creates persistent MongoDB Atlas Local and Ollama containers, downloads the configured model when needed, migrates saved processing profiles, builds the Vector and BM25 indexes when needed, runs the smoke test, and starts Streamlit. Open [http://localhost:8505](http://localhost:8505). Keep the terminal open while using Streamlit.
 
-Before starting services, the script prints the current Git branch/commit, rejects a stale process already using port `8505`, and runs a real Streamlit import/render preflight for all three pages. Run that preflight by itself with:
+Before starting services, the script reuses a healthy Streamlit server already listening on port `8505`, rejects an unhealthy or unknown listener, prints the current Git branch/commit, and runs a real Streamlit import/render preflight for all three pages. Run that preflight by itself with:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\check_streamlit_pages.py
@@ -174,7 +175,7 @@ Retrieval Lab exposes four comparable modes: Vector, BM25 full-text, Hybrid RRF,
 | `localhost:62262` refuses the connection | MongoDB Atlas Local is not running | Run the startup script and inspect `docker logs portfolio-rag-mongodb` |
 | The configured model is missing | Ollama is available but the `.env` model has not been downloaded | The startup script automatically runs `ollama pull` |
 | Streamlit loads but chat is disabled | One or more runtime checks failed | Read the MongoDB, Embedding, and Ollama diagnostics shown in the page |
-| Port `8505` is already in use | An older Streamlit or another process is still listening | Stop the old terminal with `Ctrl+C`; the startup script reports its PID and never kills unknown processes automatically |
+| Port `8505` is already in use | A healthy Streamlit app may already be open, or another process owns the port | The startup script now exits successfully when Streamlit health is OK; otherwise stop the reported process or its terminal before retrying |
 | Retrieval Lab reports a reranker warning | Cross-Encoder is unavailable or its first download failed | Retrieval automatically falls back to hybrid; restore network access and retry high-precision mode later |
 | Index rebuild spends many minutes generating embeddings | `voyageai/voyage-4-nano` is too heavy for the current CPU or the private scan contains too many low-value files | Use the multilingual MiniLM default; ingestion curates project README/docs and master resume evidence while preserving the full private source file locally |
 

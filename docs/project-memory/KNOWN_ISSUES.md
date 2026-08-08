@@ -23,3 +23,9 @@ The real local catalog was migrated, the Vector/BM25 indexes were rebuilt, the m
 ## Remaining Cloud Limitation
 
 The public Atlas deployment currently reports `textIndex=false`, so the public Demo remains on stable Vector Search. Local Retrieval Lab provides BM25, Hybrid RRF, and Hybrid + Rerank. Do not describe cloud BM25 as enabled until Atlas index capacity is available and the public collection is reseeded.
+
+## Retrieval Calibration Evidence
+
+The refreshed benchmark shows that plain Hybrid RRF does not improve the current curated corpus: it matches Vector Hit@5 while lowering MRR and nDCG@5. Do not make plain Hybrid the default solely because it combines two retrieval channels. The reranker improves every answerable case into Top-5 but costs about 1.49 seconds per query.
+
+Freshness is the remaining weak category for the fast Vector path. A future calibration task should test deterministic update-date features and selective reranker routing before adding multi-step Agentic RAG.

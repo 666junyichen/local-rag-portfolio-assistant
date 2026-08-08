@@ -2,6 +2,7 @@
 
 ## 2026-08-08
 
+- Made repeated local startup idempotent when a healthy Streamlit server already owns port 8505.
 - Added parent-child and resume-semantic chunk hierarchies with child retrieval and parent evidence expansion.
 - Added persisted processing profiles for cleaning, delimiters, parent/child limits, and preprocessing rules.
 - Added standalone BM25 full-text retrieval plus Vector, Hybrid RRF, and Hybrid + Rerank diagnostics.

@@ -1,7 +1,7 @@
 {
     "schema_version":  1,
-    "active_branch":  "feat/knowledge-studio-phase-a",
-    "active_phase":  "Phase A",
+    "active_branch":  "main",
+    "active_phase":  "Post-Phase A evaluation",
     "tasks":  [
                   {
                       "id":  0,
@@ -135,6 +135,6 @@
               ],
     "last_verified":  "2026-08-08",
     "known_blockers":  [],
-    "next_action":  "Plan Phase B only after collecting retrieval benchmark evidence from Phase A usage.",
-    "updated_at":  "2026-08-08T20:30:00+10:00"
+    "next_action":  "Plan a narrow Phase B for freshness-aware ranking and adaptive reranker routing; defer Agentic RAG and other broad features.",
+    "updated_at":  "2026-08-08T13:57:00+10:00"
 }
