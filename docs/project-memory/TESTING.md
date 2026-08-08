@@ -40,6 +40,7 @@ The tests cover valid temporary Git repositories, missing required files and key
 - Phase B adaptive benchmark on 2026-08-08: Hit@5 0.975, Recall@5 0.908, MRR 0.9167, nDCG@5 0.864, freshness Hit@5 1.000, no-answer accuracy 1.000, and zero privacy violations. The local reranker was triggered for 15 of 50 questions and average latency was 697 ms.
 - Phase B focused checkpoint: 46 tests and 3 Streamlit subtests passed for environment reload, runtime diagnostics, freshness ranking, adaptive routing, fallback behavior, and UI contracts.
 - Phase B milestone suite: `250 passed, 3 subtests passed` in 66.60 seconds on 2026-08-08.
+- Post-merge startup regression: the standalone page checker was updated for Adaptive mode; 7 Streamlit contract tests and 3 subtests passed, and all three pages passed the independent AppTest preflight.
 - Runtime regression: `tests/test_local_runtime.py` passed 10 tests; rerunning `start-local.ps1` against a healthy server returned success and reused `http://localhost:8505`.
 - Task 0 focused evidence is recorded in `state.json` and the bootstrap session note.
 

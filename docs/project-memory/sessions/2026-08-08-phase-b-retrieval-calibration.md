@@ -19,6 +19,7 @@ Calibrate local configuration reload, runtime diagnostics, freshness ranking, an
 | `.\.venv\Scripts\python.exe scripts\evaluate_retrieval.py --mode baseline` | Hit@5 0.925, MRR 0.90625, no-answer 1.000, privacy violations 0 |
 | `.\.venv\Scripts\python.exe scripts\evaluate_retrieval.py --mode adaptive` | Hit@5 0.975, MRR 0.9167, freshness Hit@5 1.000, no-answer 1.000, privacy violations 0 |
 | `.\.venv\Scripts\python.exe -m pytest -q` | 250 passed, 3 subtests passed |
+| `.\.venv\Scripts\python.exe -m pytest tests\test_streamlit_contract.py -q` | 7 passed, 3 subtests passed after the standalone checker accepted Adaptive mode |
 
 ## Decisions And Concerns
 

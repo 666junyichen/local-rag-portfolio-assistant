@@ -57,6 +57,12 @@ class StreamlitContractTests(unittest.TestCase):
             ],
         )
 
+    def test_standalone_page_checker_accepts_adaptive_mode(self) -> None:
+        source = (ROOT / "scripts" / "check_streamlit_pages.py").read_text(encoding="utf-8")
+
+        self.assertIn('"Adaptive / 智能路由"', source)
+        self.assertIn("adaptive, vector, full-text, hybrid, and hybrid-rerank", source)
+
     def test_knowledge_studio_uses_an_editable_clean_body_as_chunk_source(self) -> None:
         source = (ROOT / "pages" / "1_Knowledge_Studio.py").read_text(encoding="utf-8")
 
