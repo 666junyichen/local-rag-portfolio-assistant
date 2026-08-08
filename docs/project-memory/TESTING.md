@@ -37,6 +37,9 @@ The tests cover valid temporary Git repositories, missing required files and key
 - Local integration: 7,048 catalog rows migrated; 111 active sources produced 689 indexed children; Vector index reached READY; smoke test and a Chinese local answer passed.
 - Public integration: `/api/health` reported Atlas, Gemini, and Vector Index ready; a Chinese SSE chat returned sources and a Chinese answer. The cloud text index remains intentionally disabled on the current Atlas tier.
 - Post-Phase A benchmark refresh on 2026-08-08: Vector Hit@5 0.925, Recall@5 0.838, MRR 0.906, nDCG@5 0.830, 182 ms average latency; Hybrid RRF Hit@5 0.925, Recall@5 0.838, MRR 0.867, nDCG@5 0.813, 93 ms; Hybrid + Rerank Hit@5 1.000, Recall@5 0.954, MRR 0.924, nDCG@5 0.889, 1.49 s. All modes retained no-answer accuracy 1.000 and zero privacy violations.
+- Phase B adaptive benchmark on 2026-08-08: Hit@5 0.975, Recall@5 0.908, MRR 0.9167, nDCG@5 0.864, freshness Hit@5 1.000, no-answer accuracy 1.000, and zero privacy violations. The local reranker was triggered for 15 of 50 questions and average latency was 697 ms.
+- Phase B focused checkpoint: 46 tests and 3 Streamlit subtests passed for environment reload, runtime diagnostics, freshness ranking, adaptive routing, fallback behavior, and UI contracts.
+- Phase B milestone suite: `250 passed, 3 subtests passed` in 66.60 seconds on 2026-08-08.
 - Runtime regression: `tests/test_local_runtime.py` passed 10 tests; rerunning `start-local.ps1` against a healthy server returned success and reused `http://localhost:8505`.
 - Task 0 focused evidence is recorded in `state.json` and the bootstrap session note.
 

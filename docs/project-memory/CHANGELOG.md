@@ -2,6 +2,11 @@
 
 ## 2026-08-08
 
+- Added a local configuration reload action that clears Streamlit resource and reranker caches.
+- Split local runtime diagnostics into UI, configuration, MongoDB, Vector index, BM25 index, Embedding, and Ollama/model status.
+- Added adaptive retrieval with freshness-aware ranking and selective local Cross-Encoder reranking.
+- Added actual retrieval path, reranker decision, fallback reason, and latency diagnostics to Chat and Retrieval Lab.
+- Kept Vector Search as the fast default after benchmark evidence showed plain Hybrid RRF reduced ranking quality.
 - Made repeated local startup idempotent when a healthy Streamlit server already owns port 8505.
 - Added parent-child and resume-semantic chunk hierarchies with child retrieval and parent evidence expansion.
 - Added persisted processing profiles for cleaning, delimiters, parent/child limits, and preprocessing rules.

@@ -4,6 +4,7 @@ import os
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable
 
@@ -18,9 +19,14 @@ from sentence_transformers import SentenceTransformer
 from src.document_processing import ChunkConfig
 from src.ingestion import build_chunk_records
 from src.profile_cards import format_profile_context, load_profile_cards
-from src.query_planning import plan_query, should_refuse_without_retrieval
+from src.query_planning import (
+    plan_query,
+    should_refuse_without_retrieval,
+    should_use_precision_reranker,
+)
 from src.retrieval import (
     RetrievalSettings,
+    apply_freshness_rerank,
     apply_keyword_rerank,
     apply_section_intent_rerank,
     bm25_rank,
@@ -42,13 +48,15 @@ class Settings:
     text_index_name: str = "text_index"
     embedding_model_id: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     embedding_local_only: bool = False
-    retrieval_mode: str = "hybrid"
+    retrieval_mode: str = "baseline"
     reranker_model_id: str = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
     reranker_candidate_limit: int = 12
 
 
 def load_settings(env_path: str | Path = ".env") -> Settings:
-    load_dotenv(env_path)
+    # Local settings are file-authoritative so a long-lived Streamlit process
+    # cannot keep stale or empty values inherited from its parent shell.
+    load_dotenv(env_path, override=True)
     local_mongodb_uri = os.environ.get("LOCAL_MONGODB_URI")
     if not local_mongodb_uri:
         raise ValueError(
@@ -71,7 +79,7 @@ def load_settings(env_path: str | Path = ".env") -> Settings:
         ),
         embedding_local_only=os.environ.get("EMBEDDING_LOCAL_ONLY", "false").lower() == "true",
         retrieval_mode=os.environ.get(
-            "RETRIEVAL_MODE", os.environ.get("DEFAULT_RETRIEVAL_MODE", "hybrid")
+            "RETRIEVAL_MODE", os.environ.get("DEFAULT_RETRIEVAL_MODE", "baseline")
         ).lower(),
         reranker_model_id=os.environ.get(
             "RERANKER_MODEL_ID",
@@ -350,18 +358,34 @@ def hybrid_search(
     return selected
 
 
+@lru_cache(maxsize=4)
 def load_reranker(settings: Settings) -> Any:
     from sentence_transformers import CrossEncoder
 
-    return CrossEncoder(settings.reranker_model_id)
+    return CrossEncoder(settings.reranker_model_id, local_files_only=True)
+
+
+@lru_cache(maxsize=4)
+def _cached_reranker_result(settings: Settings) -> tuple[Any | None, str | None]:
+    try:
+        return load_reranker(settings), None
+    except Exception as error:
+        return None, str(error)
+
+
+def clear_reranker_cache() -> None:
+    load_reranker.cache_clear()
+    _cached_reranker_result.cache_clear()
 
 
 def try_load_reranker(
     settings: Settings,
     *,
-    loader: Callable[[Settings], Any] = load_reranker,
+    loader: Callable[[Settings], Any] | None = None,
 ) -> tuple[Any | None, str | None]:
     """Load the optional precision reranker without breaking retrieval."""
+    if loader is None:
+        return _cached_reranker_result(settings)
     try:
         return loader(settings), None
     except Exception as error:
@@ -406,10 +430,79 @@ def vector_search(
         query,
     )
     candidates = apply_section_intent_rerank(candidates, query)
+    candidates = apply_freshness_rerank(candidates, query)
     return select_results(
         candidates,
         RetrievalSettings(top_k=top_k, score_threshold=score_threshold, scope=scope),
     )
+
+
+def adaptive_search(
+    collection: Collection,
+    model: SentenceTransformer,
+    settings: Settings,
+    query: str,
+    top_k: int = 5,
+    score_threshold: float | None = None,
+    scope: str = "all",
+    *,
+    force_reranker: bool = False,
+    reranker: Any | None = None,
+    diagnostics: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Use fast Vector retrieval first and load precision ranking only when justified."""
+    started = time.perf_counter()
+    fast_results = vector_search(
+        collection,
+        model,
+        settings,
+        query,
+        top_k=min(max(top_k * 2, 5), 10),
+        score_threshold=score_threshold,
+        scope=scope,
+        mode="baseline",
+    )
+    decision = should_use_precision_reranker(
+        query,
+        fast_results,
+        force=force_reranker or reranker is not None,
+    )
+    path = "vector"
+    fallback_reason: str | None = None
+    results = fast_results[:top_k]
+    if decision.enabled:
+        active_reranker = reranker
+        if active_reranker is None:
+            active_reranker, fallback_reason = try_load_reranker(settings)
+        if active_reranker is not None:
+            results = hybrid_search(
+                collection,
+                model,
+                settings,
+                query,
+                top_k=top_k,
+                score_threshold=score_threshold,
+                scope=scope,
+                reranker=active_reranker,
+            )
+            path = "hybrid-rerank"
+    if diagnostics is not None:
+        diagnostics.update(
+            {
+                "retrieval_path": path,
+                "reranker_triggered": path == "hybrid-rerank",
+                "reranker_reasons": list(decision.reasons),
+                "fallback_reason": fallback_reason,
+                "latency_ms": (time.perf_counter() - started) * 1000,
+            }
+        )
+    for result in results:
+        result["retrieval_path"] = path
+        result["reranker_triggered"] = path == "hybrid-rerank"
+        result["reranker_reasons"] = list(decision.reasons)
+        if fallback_reason:
+            result["fallback_reason"] = fallback_reason
+    return results
 
 
 def retrieve_for_question(
@@ -423,9 +516,25 @@ def retrieve_for_question(
     scope: str = "all",
     reranker: Any | None = None,
     retrieval_mode: str | None = None,
+    force_reranker: bool = False,
+    diagnostics: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     if should_refuse_without_retrieval(query):
         return []
+    active_mode = (retrieval_mode or settings.retrieval_mode).lower()
+    if active_mode == "adaptive":
+        return adaptive_search(
+            collection,
+            model,
+            settings,
+            query,
+            top_k=top_k,
+            score_threshold=score_threshold,
+            scope=scope,
+            force_reranker=force_reranker,
+            reranker=reranker,
+            diagnostics=diagnostics,
+        )
     plan = plan_query(query)
     if plan.mode == "simple":
         return vector_search(
@@ -535,6 +644,8 @@ def generate_answer_with_sources(
     max_tokens: int = 128,
     reranker: Any | None = None,
     retrieval_mode: str | None = None,
+    force_reranker: bool = False,
+    diagnostics: dict[str, Any] | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
     results = retrieve_for_question(
         collection,
@@ -546,6 +657,8 @@ def generate_answer_with_sources(
         scope=scope,
         reranker=reranker,
         retrieval_mode=retrieval_mode,
+        force_reranker=force_reranker,
+        diagnostics=diagnostics,
     )
     if not results:
         message = (

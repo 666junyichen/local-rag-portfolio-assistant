@@ -63,3 +63,13 @@ def check_ollama(
     if required_model not in names:
         return ServiceStatus(False, f"Ollama is running, but {required_model} is not installed.")
     return ServiceStatus(True, f"Ollama is running with {required_model}.")
+
+
+def check_search_index(collection: Any, index_name: str, label: str) -> ServiceStatus:
+    """Report one MongoDB search index without hiding other runtime states."""
+    try:
+        indexes = list(collection.list_search_indexes(name=index_name))
+    except Exception as error:
+        return ServiceStatus(False, f"{label}: unavailable ({error})")
+    state = str(indexes[0].get("status", "UNKNOWN")) if indexes else "MISSING"
+    return ServiceStatus(state == "READY", f"{label}: {state}")

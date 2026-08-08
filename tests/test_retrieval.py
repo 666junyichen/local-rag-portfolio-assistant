@@ -5,6 +5,7 @@ import unittest
 from src.retrieval import (
     RetrievalSettings,
     apply_keyword_rerank,
+    apply_freshness_rerank,
     apply_section_intent_rerank,
     bm25_rank,
     reciprocal_rank_fusion,
@@ -14,6 +15,29 @@ from src.retrieval import (
 
 
 class RetrievalTests(unittest.TestCase):
+
+    def test_freshness_rerank_only_changes_order_for_freshness_questions(self) -> None:
+        rows = [
+            {"chunk_id": "older", "score": 0.62, "updated": "2025-01-01"},
+            {"chunk_id": "newer", "score": 0.60, "updated": "2026-07-01"},
+        ]
+
+        fresh = apply_freshness_rerank(rows, "What is the latest deployment?")
+        ordinary = apply_freshness_rerank(rows, "What was deployed?")
+
+        self.assertEqual(fresh[0]["chunk_id"], "newer")
+        self.assertTrue(fresh[0]["freshness_applied"])
+        self.assertEqual([row["chunk_id"] for row in ordinary], ["older", "newer"])
+
+    def test_freshness_rerank_reads_nested_source_dates(self) -> None:
+        rows = [
+            {"chunk_id": "old", "score": 0.50, "metadata": {"modified_at": "2024-02-01"}},
+            {"chunk_id": "new", "score": 0.49, "source_updated_at": "2026-06-01"},
+        ]
+
+        ranked = apply_freshness_rerank(rows, "当前最新版本是什么？")
+
+        self.assertEqual(ranked[0]["chunk_id"], "new")
 
     def test_section_intent_promotes_project_evidence_for_project_questions(self) -> None:
         rows = [

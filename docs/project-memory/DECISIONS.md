@@ -27,3 +27,11 @@ Use focused tests during implementation and one full-suite run at a stable task 
 ## 2026-08-08: Phase B Is Retrieval Calibration, Not Feature Expansion
 
 The refreshed 50-question benchmark shows that Vector is the strongest fast default, plain Hybrid RRF lowers ranking quality, and Cross-Encoder reranking provides the best quality at higher latency. Phase B should therefore focus on freshness-aware ranking and routing the reranker only to questions that need higher precision. Agentic RAG, GraphRAG, OCR, and new paid services remain deferred until a measured failure requires them.
+
+## 2026-08-08: Local Configuration Is File-Authoritative
+
+For local Streamlit execution, the repository `.env` overrides stale or empty values inherited from a long-lived shell. Local mode only consumes `LOCAL_MONGODB_URI` and Ollama settings; cloud Atlas and Gemini credentials remain outside the local private-data path.
+
+## 2026-08-08: Adaptive Retrieval Is The Interactive Default
+
+Keep Vector as the fast first pass. Apply deterministic recency features only when the query expresses freshness intent, and invoke the cached local Cross-Encoder only for complex, explicitly requested, or low-confidence queries. If the free local reranker is unavailable, report the fallback and continue with Vector instead of downloading during a request.

@@ -15,6 +15,7 @@ from src.portfolio_rag import (  # noqa: E402
     load_embedding_model,
     load_reranker,
     load_settings,
+    retrieve_for_question,
     vector_search,
 )
 from src.query_planning import should_refuse_without_retrieval  # noqa: E402
@@ -22,7 +23,11 @@ from src.query_planning import should_refuse_without_retrieval  # noqa: E402
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate a reproducible local retrieval configuration.")
-    parser.add_argument("--mode", choices=("baseline", "hybrid", "hybrid-rerank"), default="baseline")
+    parser.add_argument(
+        "--mode",
+        choices=("adaptive", "baseline", "hybrid", "hybrid-rerank"),
+        default="baseline",
+    )
     parser.add_argument("--limit", type=int, default=0, help="Optional smoke-test case limit.")
     args = parser.parse_args()
     benchmark_path = ROOT / "evals" / "rag_benchmark.json"
@@ -35,9 +40,25 @@ def main() -> None:
     reranker = load_reranker(settings) if args.mode == "hybrid-rerank" else None
     rankings = {}
     latencies = {}
+    diagnostics_by_case = {}
     for index, case in enumerate(cases, 1):
         started = time.perf_counter()
-        rankings[case.case_id] = [] if should_refuse_without_retrieval(case.question) else vector_search(
+        diagnostics: dict = {}
+        if should_refuse_without_retrieval(case.question):
+            rankings[case.case_id] = []
+        elif args.mode == "adaptive":
+            rankings[case.case_id] = retrieve_for_question(
+                collection,
+                model,
+                settings,
+                case.question,
+                top_k=10,
+                scope=case.scope,
+                retrieval_mode="adaptive",
+                diagnostics=diagnostics,
+            )
+        else:
+            rankings[case.case_id] = vector_search(
                 collection,
                 model,
                 settings,
@@ -47,6 +68,7 @@ def main() -> None:
                 mode="baseline" if args.mode == "baseline" else "hybrid",
                 reranker=reranker,
             )
+        diagnostics_by_case[case.case_id] = diagnostics
         latencies[case.case_id] = (time.perf_counter() - started) * 1000
         print(f"[{index:02d}/{len(cases)}] {case.case_id}")
     report = {
@@ -69,6 +91,7 @@ def main() -> None:
                     for row in rankings.get(case.case_id, [])[:10]
                 ],
                 "latency_ms": round(latencies[case.case_id], 2),
+                "diagnostics": diagnostics_by_case[case.case_id],
             }
             for case in cases
         ],

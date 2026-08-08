@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from src.portfolio_rag import Settings, full_text_search, hybrid_search
+from src.portfolio_rag import Settings, adaptive_search, full_text_search, hybrid_search
 
 
 class PortfolioRetrievalTests(unittest.TestCase):
@@ -13,6 +13,71 @@ class PortfolioRetrievalTests(unittest.TestCase):
             ollama_base_url="http://localhost:11434",
             ollama_model="qwen2.5:3b",
         )
+
+    @patch("src.portfolio_rag.hybrid_search")
+    @patch("src.portfolio_rag.vector_search")
+    def test_adaptive_search_keeps_clear_queries_on_fast_vector_path(self, vector, hybrid) -> None:
+        vector.return_value = [
+            {"chunk_id": "a", "score": 0.84},
+            {"chunk_id": "b", "score": 0.62},
+        ]
+        diagnostics = {}
+
+        results = adaptive_search(
+            object(), object(), self.settings, "What MongoDB experience does Junyi have?",
+            diagnostics=diagnostics,
+        )
+
+        self.assertEqual(results, vector.return_value)
+        hybrid.assert_not_called()
+        self.assertEqual(diagnostics["retrieval_path"], "vector")
+        self.assertFalse(diagnostics["reranker_triggered"])
+
+    @patch("src.portfolio_rag.try_load_reranker")
+    @patch("src.portfolio_rag.hybrid_search")
+    @patch("src.portfolio_rag.vector_search")
+    def test_adaptive_search_routes_low_confidence_to_hybrid_rerank(
+        self, vector, hybrid, load_reranker
+    ) -> None:
+        vector.return_value = [
+            {"chunk_id": "a", "score": 0.39},
+            {"chunk_id": "b", "score": 0.38},
+        ]
+        reranker = object()
+        load_reranker.return_value = (reranker, None)
+        hybrid.return_value = [{"chunk_id": "b", "reranker_score": 0.9}]
+        diagnostics = {}
+
+        results = adaptive_search(
+            object(), object(), self.settings, "What is the latest deployment?",
+            diagnostics=diagnostics,
+        )
+
+        self.assertEqual(results, hybrid.return_value)
+        self.assertEqual(hybrid.call_args.kwargs["reranker"], reranker)
+        self.assertEqual(diagnostics["retrieval_path"], "hybrid-rerank")
+        self.assertTrue(diagnostics["reranker_triggered"])
+        self.assertIn("low-confidence", diagnostics["reranker_reasons"])
+
+    @patch("src.portfolio_rag.try_load_reranker")
+    @patch("src.portfolio_rag.hybrid_search")
+    @patch("src.portfolio_rag.vector_search")
+    def test_adaptive_search_falls_back_to_vector_when_reranker_is_unavailable(
+        self, vector, hybrid, load_reranker
+    ) -> None:
+        vector.return_value = [{"chunk_id": "a", "score": 0.31}]
+        load_reranker.return_value = (None, "model unavailable")
+        diagnostics = {}
+
+        results = adaptive_search(
+            object(), object(), self.settings, "Summarize Junyi's AI projects",
+            diagnostics=diagnostics,
+        )
+
+        self.assertEqual(results, vector.return_value)
+        hybrid.assert_not_called()
+        self.assertEqual(diagnostics["retrieval_path"], "vector")
+        self.assertEqual(diagnostics["fallback_reason"], "model unavailable")
 
     @patch("src.portfolio_rag.sparse_search")
     def test_full_text_search_normalizes_bm25_scores_and_selects_top_k(self, sparse) -> None:

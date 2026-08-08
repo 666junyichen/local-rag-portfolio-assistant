@@ -49,6 +49,7 @@ class StreamlitContractTests(unittest.TestCase):
         self.assertEqual(
             list(mode_select.options),
             [
+                "Adaptive / 智能路由",
                 "Vector / 向量检索",
                 "BM25 / 全文检索",
                 "Hybrid / RRF 融合",

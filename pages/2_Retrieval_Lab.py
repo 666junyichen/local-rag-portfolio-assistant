@@ -15,6 +15,7 @@ from src.portfolio_rag import (  # noqa: E402
     get_collections,
     load_embedding_model,
     load_settings,
+    retrieve_for_question,
     try_load_reranker,
     vector_search,
 )
@@ -50,8 +51,9 @@ with st.sidebar:
     scope = st.radio("资料范围", ["public", "all"], key="lab_scope", format_func=lambda value: "仅公开" if value == "public" else "公开 + 私有")
     mode = st.selectbox(
         "Retrieval mode",
-        ["baseline", "full-text", "hybrid", "hybrid-rerank"],
+        ["adaptive", "baseline", "full-text", "hybrid", "hybrid-rerank"],
         format_func=lambda value: {
+            "adaptive": "Adaptive / 智能路由",
             "baseline": "Vector / 向量检索",
             "full-text": "BM25 / 全文检索",
             "hybrid": "Hybrid / RRF 融合",
@@ -89,17 +91,31 @@ if run or generate:
                 f"\n\n降级原因：{reranker_warning}"
             )
         started = time.perf_counter()
-        results = vector_search(
-            collection,
-            model,
-            settings,
-            query,
-            top_k=top_k,
-            score_threshold=threshold if use_threshold else None,
-            scope=scope,
-            mode="hybrid" if mode == "hybrid-rerank" else mode,
-            reranker=reranker,
-        )
+        diagnostics: dict = {}
+        if mode == "adaptive":
+            results = retrieve_for_question(
+                collection,
+                model,
+                settings,
+                query,
+                top_k=top_k,
+                score_threshold=threshold if use_threshold else None,
+                scope=scope,
+                retrieval_mode="adaptive",
+                diagnostics=diagnostics,
+            )
+        else:
+            results = vector_search(
+                collection,
+                model,
+                settings,
+                query,
+                top_k=top_k,
+                score_threshold=threshold if use_threshold else None,
+                scope=scope,
+                mode="hybrid" if mode == "hybrid-rerank" else mode,
+                reranker=reranker,
+            )
         elapsed_ms = (time.perf_counter() - started) * 1000
         channel_counts: dict[str, int] = {}
         for result in results:
@@ -109,6 +125,14 @@ if run or generate:
             f"模式：{mode} · 召回渠道：{channel_counts or {'vector': len(results)}} · "
             f"延迟：{elapsed_ms:.0f} ms"
         )
+        if mode == "adaptive":
+            st.caption(
+                f"Actual path: {diagnostics.get('retrieval_path', 'vector')} · "
+                f"Reranker: {'used' if diagnostics.get('reranker_triggered') else 'not used'} · "
+                f"Reason: {', '.join(diagnostics.get('reranker_reasons', [])) or 'fast-path'}"
+            )
+            if diagnostics.get("fallback_reason"):
+                st.warning(f"Adaptive fallback: {diagnostics['fallback_reason']}")
         st.caption("结果会展示 Vector/BM25 排名、RRF 融合分数和 rerank 前后变化。")
         st.subheader(f"候选与入选上下文 · {len(results)}")
         if not results:
@@ -128,6 +152,7 @@ if run or generate:
                 scope=scope,
                 reranker=reranker,
                 retrieval_mode="hybrid" if mode == "hybrid-rerank" else mode,
+                force_reranker=mode == "hybrid-rerank",
             )
             st.write(answer)
     except Exception as error:
@@ -153,16 +178,29 @@ if st.button("运行当前模式评测", use_container_width=True):
         progress = st.progress(0, text="Preparing benchmark...")
         for index, case in enumerate(cases, 1):
             started = time.perf_counter()
-            rankings[case.case_id] = [] if should_refuse_without_retrieval(case.question) else vector_search(
-                collection,
-                model,
-                settings,
-                case.question,
-                top_k=10,
-                scope=case.scope,
-                mode="hybrid" if mode == "hybrid-rerank" else mode,
-                reranker=reranker,
-            )
+            if should_refuse_without_retrieval(case.question):
+                rankings[case.case_id] = []
+            elif mode == "adaptive":
+                rankings[case.case_id] = retrieve_for_question(
+                    collection,
+                    model,
+                    settings,
+                    case.question,
+                    top_k=10,
+                    scope=case.scope,
+                    retrieval_mode="adaptive",
+                )
+            else:
+                rankings[case.case_id] = vector_search(
+                    collection,
+                    model,
+                    settings,
+                    case.question,
+                    top_k=10,
+                    scope=case.scope,
+                    mode="hybrid" if mode == "hybrid-rerank" else mode,
+                    reranker=reranker,
+                )
             latencies[case.case_id] = (time.perf_counter() - started) * 1000
             progress.progress(index / len(cases), text=f"{index}/{len(cases)} · {case.case_id}")
         report = {"mode": mode, **evaluate_rankings(cases, rankings, ks=(1, 3, 5, 10), latencies_ms=latencies)}

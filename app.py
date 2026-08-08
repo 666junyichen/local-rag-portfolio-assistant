@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
 from src.portfolio_rag import (  # noqa: E402
+    clear_reranker_cache,
     generate_answer_with_sources,
     get_collections,
     load_embedding_model,
@@ -17,7 +18,7 @@ from src.portfolio_rag import (  # noqa: E402
     store_message,
     try_load_reranker,
 )
-from src.local_runtime import check_ollama  # noqa: E402
+from src.local_runtime import ServiceStatus, check_ollama, check_search_index  # noqa: E402
 from src.ui import apply_streamlit_theme, render_source  # noqa: E402
 
 
@@ -98,6 +99,10 @@ text = COPY[language]
 
 with st.sidebar:
     st.markdown("### Local RAG")
+    if st.button("重新加载本地配置 / Reload local configuration", use_container_width=True):
+        st.cache_resource.clear()
+        clear_reranker_cache()
+        st.rerun()
     selected_language = st.segmented_control(
         "Language / 语言",
         ["zh", "en"],
@@ -131,25 +136,42 @@ question_cols = st.columns(2)
 settings = collection = history_collection = model = None
 runtime_errors: list[str] = []
 runtime_details: list[str] = []
+runtime_statuses: list[tuple[str, ServiceStatus]] = [
+    ("Phase A feature version", ServiceStatus(True, "complete")),
+    ("Streamlit UI", ServiceStatus(True, "running")),
+]
 
 try:
     settings = load_settings(ROOT / ".env")
+    runtime_statuses.append(("Local configuration", ServiceStatus(True, "loaded from project .env")))
 except Exception as error:
     runtime_errors.append(f"Configuration: {error}")
+    runtime_statuses.append(("Local configuration", ServiceStatus(False, str(error))))
 
 if settings:
     try:
         _, collection, history_collection = load_database(settings)
         runtime_details.append(f"MongoDB: connected to {settings.collection_name}")
+        runtime_statuses.append(("MongoDB", ServiceStatus(True, "connected")))
+        vector_status = check_search_index(collection, settings.vector_index_name, "Vector index")
+        text_status = check_search_index(collection, settings.text_index_name, "BM25 index")
+        runtime_statuses.extend(
+            [("Vector index", vector_status), ("BM25 index", text_status)]
+        )
+        if not vector_status.available:
+            runtime_errors.append(vector_status.detail)
     except Exception as error:
         runtime_errors.append(f"MongoDB: {error}")
+        runtime_statuses.append(("MongoDB", ServiceStatus(False, str(error))))
 
     if collection is not None:
         try:
             model = load_embeddings(settings)
             runtime_details.append(f"Embedding: {settings.embedding_model_id}")
+            runtime_statuses.append(("Embedding model", ServiceStatus(True, "loaded locally")))
         except Exception as error:
             runtime_errors.append(f"Embedding: {error}")
+            runtime_statuses.append(("Embedding model", ServiceStatus(False, str(error))))
     else:
         runtime_details.append("Embedding: waiting for MongoDB before loading")
 
@@ -158,6 +180,16 @@ if settings:
         runtime_details.append(ollama.detail)
     else:
         runtime_errors.append(ollama.detail)
+    runtime_statuses.append(("Ollama and model", ollama))
+
+with st.expander("Local runtime diagnostics", expanded=bool(runtime_errors)):
+    for label, status in runtime_statuses:
+        marker = "✅" if status.available else "❌"
+        st.write(f"{marker} **{label}**: {status.detail}")
+    st.caption(
+        "Local mode checks only LOCAL_MONGODB_URI, OLLAMA_BASE_URL, and OLLAMA_MODEL. "
+        "Cloud credentials are never displayed or used for private documents."
+    )
 
 runtime_ready = not runtime_errors and all(
     value is not None for value in (settings, collection, history_collection, model)
@@ -203,6 +235,7 @@ if query:
         st.write(query)
     with st.chat_message("assistant"):
         with st.spinner(text["thinking"]):
+            retrieval_diagnostics: dict = {}
             reranker, reranker_warning = (
                 load_precision_reranker(settings) if use_reranker else (None, None)
             )
@@ -220,6 +253,21 @@ if query:
                 score_threshold=threshold if use_threshold else None,
                 scope=scope,
                 reranker=reranker,
+                retrieval_mode="adaptive",
+                force_reranker=use_reranker,
+                diagnostics=retrieval_diagnostics,
+            )
+        path = retrieval_diagnostics.get("retrieval_path", "vector")
+        reasons = ", ".join(retrieval_diagnostics.get("reranker_reasons", [])) or "fast-path"
+        st.caption(
+            f"Retrieval path: {path} · Reranker: "
+            f"{'used' if retrieval_diagnostics.get('reranker_triggered') else 'not used'} · "
+            f"Reason: {reasons} · Latency: {retrieval_diagnostics.get('latency_ms', 0):.0f} ms"
+        )
+        if retrieval_diagnostics.get("fallback_reason"):
+            st.warning(
+                "Precision reranker was unavailable; Vector results were used. "
+                f"Reason: {retrieval_diagnostics['fallback_reason']}"
             )
         st.write(answer)
         if sources:

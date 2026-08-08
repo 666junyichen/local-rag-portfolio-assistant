@@ -6,6 +6,8 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Iterable, Sequence
 
+from src.query_planning import is_freshness_query
+
 
 @dataclass(frozen=True)
 class RetrievalSettings:
@@ -207,6 +209,49 @@ def apply_section_intent_rerank(rows: Iterable[dict[str, Any]], query: str) -> l
     return reranked
 
 
+def _updated_timestamp(row: dict[str, Any]) -> float | None:
+    metadata = row.get("metadata") or {}
+    for value in (
+        row.get("source_updated_at"),
+        row.get("updated"),
+        row.get("modified_at"),
+        metadata.get("source_updated_at"),
+        metadata.get("updated"),
+        metadata.get("modified_at"),
+    ):
+        if not value:
+            continue
+        match = re.search(r"(20\d{2})(?:[-/.](\d{1,2}))?(?:[-/.](\d{1,2}))?", str(value))
+        if match:
+            year, month, day = (int(part or default) for part, default in zip(match.groups(), ("0", "1", "1")))
+            return float(year * 10000 + month * 100 + day)
+    return None
+
+
+def apply_freshness_rerank(rows: Iterable[dict[str, Any]], query: str) -> list[dict[str, Any]]:
+    """Apply a bounded deterministic recency feature only for freshness intent."""
+    candidates = [dict(row) for row in rows]
+    if not is_freshness_query(query) or not candidates:
+        return candidates
+    timestamps = [_updated_timestamp(row) for row in candidates]
+    dated = [value for value in timestamps if value is not None]
+    oldest = min(dated) if dated else 0.0
+    newest = max(dated) if dated else 0.0
+    span = max(newest - oldest, 1.0)
+    for item, timestamp in zip(candidates, timestamps):
+        base = float(
+            item.get(
+                "intent_score",
+                item.get("reranker_score", item.get("fusion_score", item.get("rank_score", item.get("score", 0)))),
+            )
+        )
+        recency = ((timestamp - oldest) / span) if timestamp is not None and dated else 0.0
+        item["freshness_score"] = base + recency * 0.08
+        item["freshness_applied"] = timestamp is not None
+    candidates.sort(key=lambda item: float(item["freshness_score"]), reverse=True)
+    return candidates
+
+
 def select_results(rows: Iterable[dict[str, Any]], settings: RetrievalSettings) -> list[dict[str, Any]]:
     selected = []
     for row in rows:
@@ -226,10 +271,13 @@ def select_results(rows: Iterable[dict[str, Any]], settings: RetrievalSettings) 
     def result_score(item: dict[str, Any]) -> float:
         return float(
             item.get(
-                "intent_score",
+                "freshness_score",
                 item.get(
-                    "reranker_score",
-                    item.get("fusion_score", item.get("rank_score", item.get("score", 0))),
+                    "intent_score",
+                    item.get(
+                        "reranker_score",
+                        item.get("fusion_score", item.get("rank_score", item.get("score", 0))),
+                    ),
                 ),
             )
         )

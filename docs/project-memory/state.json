@@ -1,7 +1,7 @@
 {
     "schema_version":  1,
-    "active_branch":  "main",
-    "active_phase":  "Post-Phase A evaluation",
+    "active_branch":  "feat/phase-b-retrieval-calibration",
+    "active_phase":  "Phase B retrieval calibration",
     "tasks":  [
                   {
                       "id":  0,
@@ -131,10 +131,37 @@
                           "outcome":  "passed",
                           "verified_at":  "2026-08-08"
                       }]
+                  },
+                  {
+                      "id":  9,
+                      "title":  "Phase B local configuration and retrieval calibration",
+                      "status":  "completed",
+                      "reviewed":  true,
+                      "final_quality_approved":  true,
+                      "test_evidence":  [
+                                            {
+                                                "command":  ".\\.venv\\Scripts\\python.exe scripts\\evaluate_retrieval.py --mode baseline",
+                                                "result":  "50-case baseline: Hit@5 0.925, MRR 0.90625, no-answer accuracy 1.000, privacy violations 0",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-08"
+                                            },
+                                            {
+                                                "command":  ".\\.venv\\Scripts\\python.exe scripts\\evaluate_retrieval.py --mode adaptive",
+                                                "result":  "50-case adaptive: Hit@5 0.975, MRR 0.9167, freshness Hit@5 1.000, no-answer accuracy 1.000, privacy violations 0",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-08"
+                                            },
+                                            {
+                                                "command":  ".\\.venv\\Scripts\\python.exe -m pytest -q",
+                                                "result":  "250 passed, 3 subtests passed",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-08"
+                                            }
+                                        ]
                   }
               ],
     "last_verified":  "2026-08-08",
     "known_blockers":  [],
-    "next_action":  "Plan a narrow Phase B for freshness-aware ranking and adaptive reranker routing; defer Agentic RAG and other broad features.",
-    "updated_at":  "2026-08-08T13:57:00+10:00"
+    "next_action":  "Merge the verified Phase B branch to main, restart the local Streamlit process, and collect future Retrieval Lab evidence before expanding scope.",
+    "updated_at":  "2026-08-08T18:30:00+10:00"
 }

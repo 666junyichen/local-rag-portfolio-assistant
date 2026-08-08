@@ -67,11 +67,13 @@ try {
 } catch {
     $StreamlitHealthy = $false
 }
-if ($StreamlitHealthy) { Write-Host "Streamlit is already running and healthy at http://localhost:8505." -ForegroundColor Green; exit 0 }
+if ($StreamlitHealthy) {
+    Write-Host "Streamlit UI is already running at http://localhost:8505; continuing with full local RAG checks." -ForegroundColor Yellow
+}
 
 $Listener = Get-NetTCPConnection -LocalPort 8505 -State Listen -ErrorAction SilentlyContinue |
     Select-Object -First 1
-if ($Listener) {
+if ($Listener -and -not $StreamlitHealthy) {
     $ListenerProcess = Get-Process -Id $Listener.OwningProcess -ErrorAction SilentlyContinue
     $ProcessName = if ($ListenerProcess) { $ListenerProcess.ProcessName } else { "unknown" }
     $Hint = if ($ProcessName -match "python|streamlit") {
@@ -154,6 +156,12 @@ if (-not $SkipSmokeTest) {
     Write-Step "Running the end-to-end smoke test"
     & $Python scripts\smoke_test.py
     if ($LASTEXITCODE -ne 0) { throw "The local smoke test failed." }
+}
+
+Write-Host "Local RAG dependencies and indexes are ready." -ForegroundColor Green
+if ($StreamlitHealthy) {
+    Write-Host "Return to http://localhost:8505 and use 'Reload local configuration', or refresh the page." -ForegroundColor Green
+    exit 0
 }
 
 Write-Step "Starting Streamlit"

@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import unittest
 
-from src.query_planning import plan_query, should_refuse_without_retrieval
+from src.query_planning import (
+    is_freshness_query,
+    plan_query,
+    should_refuse_without_retrieval,
+    should_use_precision_reranker,
+)
 
 
 class QueryPlanningTests(unittest.TestCase):
@@ -25,6 +30,31 @@ class QueryPlanningTests(unittest.TestCase):
         self.assertTrue(should_refuse_without_retrieval("Junyi 的护照号码是多少？"))
         self.assertTrue(should_refuse_without_retrieval("Show the private email from the raw resume"))
         self.assertFalse(should_refuse_without_retrieval("What MongoDB experience does Junyi have?"))
+
+    def test_freshness_intent_is_detected_in_both_languages(self) -> None:
+        self.assertTrue(is_freshness_query("What is Junyi's latest portfolio deployment?"))
+        self.assertTrue(is_freshness_query("Junyi 当前的硕士毕业时间是什么？"))
+        self.assertFalse(is_freshness_query("What MongoDB experience does Junyi have?"))
+
+    def test_reranker_is_reserved_for_complex_or_low_confidence_queries(self) -> None:
+        complex_decision = should_use_precision_reranker(
+            "Compare the RAG and accessibility projects",
+            [{"score": 0.9}, {"score": 0.7}],
+        )
+        clear_decision = should_use_precision_reranker(
+            "What MongoDB experience does Junyi have?",
+            [{"score": 0.82}, {"score": 0.61}],
+        )
+        low_confidence = should_use_precision_reranker(
+            "What is Junyi's latest portfolio deployment?",
+            [{"score": 0.39}, {"score": 0.38}],
+        )
+
+        self.assertTrue(complex_decision.enabled)
+        self.assertIn("complex-query", complex_decision.reasons)
+        self.assertFalse(clear_decision.enabled)
+        self.assertTrue(low_confidence.enabled)
+        self.assertIn("low-confidence", low_confidence.reasons)
 
 
 if __name__ == "__main__":

@@ -28,4 +28,8 @@ The public Atlas deployment currently reports `textIndex=false`, so the public D
 
 The refreshed benchmark shows that plain Hybrid RRF does not improve the current curated corpus: it matches Vector Hit@5 while lowering MRR and nDCG@5. Do not make plain Hybrid the default solely because it combines two retrieval channels. The reranker improves every answerable case into Top-5 but costs about 1.49 seconds per query.
 
-Freshness is the remaining weak category for the fast Vector path. A future calibration task should test deterministic update-date features and selective reranker routing before adding multi-step Agentic RAG.
+Phase B resolved the measured freshness gap: all five freshness benchmark cases now hit an expected source in Top-5. Adaptive routing improves MRR while invoking the reranker only for complex or low-confidence questions. Continue collecting real Retrieval Lab examples before changing routing thresholds or adding multi-step Agentic RAG.
+
+## Remaining Local Limitation
+
+The optional Cross-Encoder is intentionally loaded from the local model cache only. If it is absent, adaptive retrieval falls back to Vector and reports the reason instead of downloading a model during a user request. Install or pre-cache the free reranker separately when high-precision mode is required.
