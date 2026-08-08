@@ -1,6 +1,6 @@
 {
     "schema_version":  1,
-    "active_branch":  "feat/phase-b-retrieval-calibration",
+    "active_branch":  "main",
     "active_phase":  "Phase B retrieval calibration",
     "tasks":  [
                   {
@@ -162,6 +162,6 @@
               ],
     "last_verified":  "2026-08-08",
     "known_blockers":  [],
-    "next_action":  "Merge the verified Phase B branch to main, restart the local Streamlit process, and collect future Retrieval Lab evidence before expanding scope.",
-    "updated_at":  "2026-08-08T18:30:00+10:00"
+    "next_action":  "Collect real Retrieval Lab evidence before changing adaptive routing thresholds or expanding the RAG architecture.",
+    "updated_at":  "2026-08-08T18:45:00+10:00"
 }

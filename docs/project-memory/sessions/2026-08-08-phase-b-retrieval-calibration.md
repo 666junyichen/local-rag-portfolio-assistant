@@ -28,6 +28,6 @@ Calibrate local configuration reload, runtime diagnostics, freshness ranking, an
 
 ## Handoff
 
-- Complete the milestone suite, merge to `main`, and restart the local Streamlit process.
+- The milestone suite passed and the Phase B branch was fast-forwarded into `main`.
 - Collect future Retrieval Lab evidence before changing thresholds or expanding Phase B.
 - Confirm [Current State](../CURRENT_STATE.md) and `state.json` agree.

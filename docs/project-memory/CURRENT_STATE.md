@@ -1,10 +1,10 @@
 # Current State
 
-- Active branch: `feat/phase-b-retrieval-calibration`
+- Active branch: `main`
 - Active phase: `Phase B retrieval calibration`
 - Last verified: `2026-08-08`
-- Updated: `2026-08-08T18:30:00+10:00`
-- Next action: Merge the verified Phase B branch to main, restart the local Streamlit process, and collect future Retrieval Lab evidence before expanding scope.
+- Updated: `2026-08-08T18:45:00+10:00`
+- Next action: Collect real Retrieval Lab evidence before changing adaptive routing thresholds or expanding the RAG architecture.
 
 ## Status
 
