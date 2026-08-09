@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { Bot, Languages, Send, SlidersHorizontal, UserRound } from "lucide-react";
 import type { ChatTurn, Language, Source } from "@/lib/cloud-rag/types";
 import { EvidenceRail } from "./evidence-rail";
+import { KnowledgeSpaceSelector, usePublicKnowledgeSpaces } from "./knowledge-space-selector";
 
 type Message = ChatTurn & { sources?: Source[] };
 
@@ -41,6 +42,9 @@ export function ChatInterface() {
   const [threshold, setThreshold] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [spaceIds, setSpaceIds] = useState(["portfolio"]);
+  const [crossSpace, setCrossSpace] = useState(false);
+  const { spaces, error: spacesError } = usePublicKnowledgeSpaces();
   const text = copy[language];
 
   async function ask(value: string) {
@@ -50,7 +54,7 @@ export function ChatInterface() {
     setMessages((current) => [...current, { role: "user", content: trimmed }, { role: "assistant", content: "" }]);
     setQuestion(""); setSources([]); setBusy(true);
     try {
-      const response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: trimmed, language, history, settings: { topK, scoreThreshold: threshold } }) });
+      const response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: trimmed, language, history, settings: { topK, scoreThreshold: threshold, spaceIds } }) });
       if (!response.ok || !response.body) throw new Error((await response.json()).error || "Request failed");
       const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = "";
       while (true) {
@@ -81,6 +85,11 @@ export function ChatInterface() {
           <button className="iconButton" title="Retrieval settings" aria-label="Retrieval settings" onClick={() => setSettingsOpen(!settingsOpen)}><SlidersHorizontal size={18}/></button>
           <div className="segmented" aria-label="Language"><Languages size={16}/>{(["zh", "en"] as Language[]).map((value) => <button key={value} className={language === value ? "selected" : ""} onClick={() => setLanguage(value)}>{value === "zh" ? "中文" : "EN"}</button>)}</div>
         </div>
+      </div>
+      <div className="spaceToolbar">
+        <KnowledgeSpaceSelector spaces={spaces} value={spaceIds} onChange={setSpaceIds} multiple={crossSpace}/>
+        <label className="toggleLabel"><input type="checkbox" checked={crossSpace} onChange={(event) => { setCrossSpace(event.target.checked); if (!event.target.checked) setSpaceIds((current) => [current[0] || "portfolio"]); }}/>Cross-space query</label>
+        {spacesError ? <small className="inlineError">{spacesError}</small> : null}
       </div>
       {settingsOpen && <div className="settingsBar"><label>Top-K <input type="range" min="1" max="10" value={topK} onChange={(e) => setTopK(Number(e.target.value))}/><strong>{topK}</strong></label><label>Threshold <input type="number" min="0" max="1" step="0.05" placeholder="Off" value={threshold ?? ""} onChange={(e) => setThreshold(e.target.value === "" ? null : Number(e.target.value))}/></label></div>}
       <div className="chatLog" aria-live="polite">

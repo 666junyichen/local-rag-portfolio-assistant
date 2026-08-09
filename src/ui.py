@@ -34,7 +34,12 @@ def render_source(source: dict[str, Any]) -> None:
     channel_label = "+".join(channels) if channels else "vector"
     fusion = source.get("fusion_score") or source.get("fusionScore")
     reranker = source.get("reranker_score")
-    diagnostics = [f"score `{score:.3f}`", f"channel `{channel_label}`"]
+    space_name = source.get("space_name") or metadata.get("space_name") or source.get("space_id") or "Portfolio"
+    diagnostics = [
+        f"space `{space_name}`",
+        f"score `{score:.3f}`",
+        f"channel `{channel_label}`",
+    ]
     if source.get("vector_rank") is not None:
         diagnostics.append(f"vector rank `{int(source['vector_rank'])}`")
     if source.get("bm25_rank") is not None:

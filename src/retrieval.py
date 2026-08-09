@@ -9,11 +9,21 @@ from typing import Any, Iterable, Sequence
 from src.query_planning import is_freshness_query
 
 
+def normalize_space_ids(space_ids: Sequence[str] | None) -> tuple[str, ...]:
+    normalized = tuple(
+        dict.fromkeys(space_id.strip() for space_id in (space_ids or ("portfolio",)) if space_id.strip())
+    )
+    if not 1 <= len(normalized) <= 5:
+        raise ValueError("space_ids must contain between 1 and 5 unique spaces")
+    return normalized
+
+
 @dataclass(frozen=True)
 class RetrievalSettings:
     top_k: int = 5
     score_threshold: float | None = None
     scope: str = "public"
+    space_ids: tuple[str, ...] = ("portfolio",)
 
     def __post_init__(self) -> None:
         if not 1 <= self.top_k <= 10:
@@ -22,6 +32,7 @@ class RetrievalSettings:
             raise ValueError("score_threshold must be between 0 and 1")
         if self.scope not in {"public", "all"}:
             raise ValueError("scope must be public or all")
+        object.__setattr__(self, "space_ids", normalize_space_ids(self.space_ids))
 
 
 def tokenize_for_search(value: str) -> list[str]:
@@ -256,12 +267,18 @@ def select_results(rows: Iterable[dict[str, Any]], settings: RetrievalSettings) 
     selected = []
     for row in rows:
         visibility = row.get("visibility") or (row.get("metadata") or {}).get("visibility") or "public"
+        space_id = str(
+            row.get("space_id") or (row.get("metadata") or {}).get("space_id") or "portfolio"
+        )
         score = float(row.get("score", 0))
         if settings.scope == "public" and visibility != "public":
+            continue
+        if space_id not in settings.space_ids:
             continue
         if settings.score_threshold is not None and score < settings.score_threshold:
             continue
         item = dict(row)
+        item["space_id"] = space_id
         raw_body = str(item.get("raw_body") or item.get("body") or "")
         parent_body = str(item.get("parent_body") or "")
         item["matched_child_body"] = raw_body
@@ -298,6 +315,24 @@ def select_results(rows: Iterable[dict[str, Any]], settings: RetrievalSettings) 
         if group_id:
             seen_groups.add(group_id)
         diversified.append(item)
-        if len(diversified) >= settings.top_k:
+
+    if len(settings.space_ids) == 1:
+        return diversified[: settings.top_k]
+
+    balanced: list[dict[str, Any]] = []
+    selected_keys: set[str] = set()
+    for space_id in settings.space_ids:
+        candidate = next((item for item in diversified if item["space_id"] == space_id), None)
+        if candidate is None:
+            continue
+        balanced.append(candidate)
+        selected_keys.add(_row_key(candidate))
+        if len(balanced) >= settings.top_k:
+            return balanced
+    for item in diversified:
+        if _row_key(item) in selected_keys:
+            continue
+        balanced.append(item)
+        if len(balanced) >= settings.top_k:
             break
-    return diversified
+    return balanced

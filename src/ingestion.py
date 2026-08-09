@@ -143,6 +143,15 @@ def build_chunk_records(
     for raw in documents:
         default_visibility = raw.get("visibility") or (raw.get("metadata") or {}).get("visibility") or "private"
         document = normalize_document(raw, default_visibility=default_visibility)
+        space_id = str(raw.get("space_id") or (raw.get("metadata") or {}).get("space_id") or "portfolio")
+        space_name = str(raw.get("space_name") or (raw.get("metadata") or {}).get("space_name") or space_id)
+        document["space_id"] = space_id
+        document["space_name"] = space_name
+        document["metadata"] = {
+            **dict(document.get("metadata") or {}),
+            "space_id": space_id,
+            "space_name": space_name,
+        }
         if document["content_hash"] in seen_hashes:
             continue
         seen_hashes.add(document["content_hash"])
@@ -177,6 +186,13 @@ def build_chunk_records(
                     "title": document["title"],
                     "source": document.get("source"),
                     "relative_path": document.get("relative_path"),
+                    "space_id": space_id,
+                    "space_name": space_name,
+                    "metadata": {
+                        **dict(child.metadata),
+                        "space_id": space_id,
+                        "space_name": space_name,
+                    },
                     "chunk_unit": "tokens",
                     "processing_profile_hash": hierarchy.processing_profile_hash,
                     "processing_profile": document_profile.to_dict(),

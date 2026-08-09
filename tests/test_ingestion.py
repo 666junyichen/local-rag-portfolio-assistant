@@ -158,6 +158,23 @@ class IngestionTests(unittest.TestCase):
             self.assertEqual(len(documents), 2)
             self.assertEqual(sum(item["visibility"] == "private" for item in documents), 1)
 
+    def test_chunk_records_keep_document_space_metadata(self) -> None:
+        chunks = build_chunk_records(
+            [
+                {
+                    "title": "RAG notes",
+                    "body": "Hybrid retrieval evidence.",
+                    "visibility": "private",
+                    "space_id": "rag-learning",
+                    "space_name": "RAG Learning",
+                }
+            ]
+        )
+
+        self.assertEqual(chunks[0]["space_id"], "rag-learning")
+        self.assertEqual(chunks[0]["space_name"], "RAG Learning")
+        self.assertEqual(chunks[0]["metadata"]["space_id"], "rag-learning")
+
 
 if __name__ == "__main__":
     unittest.main()

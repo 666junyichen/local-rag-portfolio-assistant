@@ -19,6 +19,7 @@ from src.portfolio_rag import (  # noqa: E402
     try_load_reranker,
 )
 from src.local_runtime import ServiceStatus, check_ollama, check_search_index  # noqa: E402
+from src.streamlit_spaces import local_catalog, render_space_selector  # noqa: E402
 from src.ui import apply_streamlit_theme, render_source  # noqa: E402
 
 
@@ -117,6 +118,10 @@ with st.sidebar:
     st.markdown(f"#### {text['settings']}")
     scope_label = st.radio(text["scope"], [text["public"], text["all"]])
     scope = "public" if scope_label == text["public"] else "all"
+    space_ids = render_space_selector(
+        local_catalog(ROOT / "data"),
+        key_prefix="chat",
+    )
     top_k = st.slider("Top-K", 1, 10, 5)
     use_threshold = st.toggle(text["threshold"], value=False)
     threshold = st.slider("Score threshold", 0.0, 1.0, 0.55, 0.01, disabled=not use_threshold)
@@ -256,6 +261,7 @@ if query:
                 retrieval_mode="adaptive",
                 force_reranker=use_reranker,
                 diagnostics=retrieval_diagnostics,
+                space_ids=space_ids,
             )
         path = retrieval_diagnostics.get("retrieval_path", "vector")
         reasons = ", ".join(retrieval_diagnostics.get("reranker_reasons", [])) or "fast-path"

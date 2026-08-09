@@ -15,6 +15,12 @@ from src.processing_profiles import ProcessingProfile, profile_from_legacy
 
 
 CATALOG_STATUSES = {"discovered", "active", "excluded", "parse_error", "needs_ocr"}
+SPACE_STATUSES = {"active", "archived"}
+DEFAULT_KNOWLEDGE_SPACES = (
+    ("portfolio", "Portfolio", "Resumes, internships, and personal projects."),
+    ("rag-learning", "RAG Learning", "RAG books, courses, and learning notes."),
+    ("project-docs", "Project Docs", "Documentation for standalone projects."),
+)
 
 
 def _utc_now() -> str:
@@ -65,6 +71,7 @@ class LocalCatalog:
                     body TEXT NOT NULL,
                     summary TEXT NOT NULL DEFAULT '',
                     visibility TEXT NOT NULL DEFAULT 'private',
+                    space_id TEXT NOT NULL DEFAULT 'portfolio',
                     status TEXT NOT NULL DEFAULT 'discovered',
                     source TEXT NOT NULL DEFAULT '',
                     source_path TEXT NOT NULL DEFAULT '',
@@ -95,6 +102,14 @@ class LocalCatalog:
                 CREATE INDEX IF NOT EXISTS idx_documents_file_type ON documents(file_type);
                 CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project);
                 CREATE INDEX IF NOT EXISTS idx_documents_hash ON documents(content_hash);
+                CREATE TABLE IF NOT EXISTS knowledge_spaces (
+                    space_id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    description TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL DEFAULT 'active',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
             columns = {row[1] for row in connection.execute("PRAGMA table_info(documents)").fetchall()}
@@ -108,6 +123,25 @@ class LocalCatalog:
                 connection.execute("ALTER TABLE documents ADD COLUMN processing_profile_json TEXT")
             if "processing_profile_hash" not in columns:
                 connection.execute("ALTER TABLE documents ADD COLUMN processing_profile_hash TEXT")
+            if "space_id" not in columns:
+                connection.execute(
+                    "ALTER TABLE documents ADD COLUMN space_id TEXT NOT NULL DEFAULT 'portfolio'"
+                )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_documents_space ON documents(space_id)"
+            )
+            now = _utc_now()
+            connection.executemany(
+                """
+                INSERT INTO knowledge_spaces (space_id, name, description, status, created_at, updated_at)
+                VALUES (?, ?, ?, 'active', ?, ?)
+                ON CONFLICT(space_id) DO NOTHING
+                """,
+                [(space_id, name, description, now, now) for space_id, name, description in DEFAULT_KNOWLEDGE_SPACES],
+            )
+            connection.execute(
+                "UPDATE documents SET space_id = 'portfolio' WHERE space_id IS NULL OR TRIM(space_id) = ''"
+            )
 
     def _record(self, raw: dict[str, Any], status: str) -> dict[str, Any]:
         normalized = normalize_document(raw, default_visibility="private")
@@ -134,6 +168,7 @@ class LocalCatalog:
         now = _utc_now()
         parse_status = str(raw.get("parse_status") or metadata.get("parse_status") or "ready")
         effective_status = parse_status if parse_status in {"parse_error", "needs_ocr"} else status
+        space_id = str(raw.get("space_id") or metadata.get("space_id") or "portfolio")
         return {
             "doc_id": stable_document_id(raw),
             "content_hash": normalized["content_hash"],
@@ -141,6 +176,7 @@ class LocalCatalog:
             "body": normalized["body"],
             "summary": str(raw.get("summary") or ""),
             "visibility": "private",
+            "space_id": space_id,
             "status": effective_status,
             "source": source,
             "source_path": source_path,
@@ -174,7 +210,7 @@ class LocalCatalog:
         updates = ", ".join(
             f"{column}=excluded.{column}"
             for column in columns
-            if column not in {"doc_id", "status", "created_at", "summary", "is_latest", "version_group_id"}
+            if column not in {"doc_id", "status", "space_id", "created_at", "summary", "is_latest", "version_group_id"}
         )
         sql = (
             f"INSERT INTO documents ({', '.join(columns)}) VALUES ({placeholders}) "
@@ -205,7 +241,7 @@ class LocalCatalog:
             return self._row(connection.execute("SELECT * FROM documents WHERE doc_id = ?", (doc_id,)).fetchone())
 
     def _filter_sql(self, filters: dict[str, Any], search: str = "") -> tuple[str, list[Any]]:
-        allowed = {"status", "source", "file_type", "project", "parse_status", "visibility"}
+        allowed = {"status", "source", "file_type", "project", "parse_status", "visibility", "space_id"}
         conditions: list[str] = []
         values: list[Any] = []
         for key, value in filters.items():
@@ -261,6 +297,98 @@ class LocalCatalog:
                 (summary.strip(), _utc_now(), doc_id),
             )
         return cursor.rowcount > 0
+
+    def list_spaces(self, *, include_archived: bool = True) -> list[dict[str, Any]]:
+        where = "" if include_archived else "WHERE spaces.status = 'active'"
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT spaces.*, COUNT(documents.doc_id) AS document_count
+                FROM knowledge_spaces AS spaces
+                LEFT JOIN documents ON documents.space_id = spaces.space_id
+                {where}
+                GROUP BY spaces.space_id
+                ORDER BY CASE spaces.space_id
+                    WHEN 'portfolio' THEN 0
+                    WHEN 'rag-learning' THEN 1
+                    WHEN 'project-docs' THEN 2
+                    ELSE 3
+                END, spaces.name
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def create_space(self, name: str, description: str = "") -> dict[str, Any]:
+        normalized_name = name.strip()
+        if not normalized_name:
+            raise ValueError("Knowledge space name is required")
+        base = re.sub(r"[^a-z0-9]+", "-", normalized_name.lower()).strip("-") or "space"
+        space_id = base
+        now = _utc_now()
+        with self._connect() as connection:
+            suffix = 2
+            while connection.execute(
+                "SELECT 1 FROM knowledge_spaces WHERE space_id = ?", (space_id,)
+            ).fetchone():
+                space_id = f"{base}-{suffix}"
+                suffix += 1
+            connection.execute(
+                """
+                INSERT INTO knowledge_spaces (space_id, name, description, status, created_at, updated_at)
+                VALUES (?, ?, ?, 'active', ?, ?)
+                """,
+                (space_id, normalized_name, description.strip(), now, now),
+            )
+        return next(space for space in self.list_spaces() if space["space_id"] == space_id)
+
+    def update_space(
+        self,
+        space_id: str,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        status: str | None = None,
+    ) -> bool:
+        if status is not None and status not in SPACE_STATUSES:
+            raise ValueError("Unsupported knowledge space status")
+        if space_id == "portfolio" and status == "archived":
+            raise ValueError("The default Portfolio space cannot be archived")
+        updates: list[str] = []
+        values: list[Any] = []
+        for column, value in (("name", name), ("description", description), ("status", status)):
+            if value is not None:
+                cleaned = value.strip()
+                if column == "name" and not cleaned:
+                    raise ValueError("Knowledge space name is required")
+                updates.append(f"{column} = ?")
+                values.append(cleaned)
+        if not updates:
+            return False
+        updates.append("updated_at = ?")
+        values.append(_utc_now())
+        values.append(space_id)
+        with self._connect() as connection:
+            cursor = connection.execute(
+                f"UPDATE knowledge_spaces SET {', '.join(updates)} WHERE space_id = ?",
+                values,
+            )
+        return cursor.rowcount > 0
+
+    def move_documents(self, doc_ids: Iterable[str], space_id: str) -> int:
+        ids = list(dict.fromkeys(doc_ids))
+        if not ids:
+            return 0
+        with self._connect() as connection:
+            space = connection.execute(
+                "SELECT status FROM knowledge_spaces WHERE space_id = ?", (space_id,)
+            ).fetchone()
+            if space is None or space["status"] != "active":
+                raise ValueError("Target knowledge space must be active")
+            cursor = connection.executemany(
+                "UPDATE documents SET space_id = ?, updated_at = ? WHERE doc_id = ?",
+                [(space_id, _utc_now(), doc_id) for doc_id in ids],
+            )
+        return cursor.rowcount
 
     def update_chunking(
         self,
@@ -432,7 +560,20 @@ class LocalCatalog:
 
     def active_documents(self) -> list[dict[str, Any]]:
         with self._connect() as connection:
-            rows = connection.execute("SELECT * FROM documents WHERE status = 'active' ORDER BY title").fetchall()
+            rows = connection.execute(
+                """
+                SELECT documents.*
+                FROM documents
+                JOIN knowledge_spaces
+                  ON knowledge_spaces.space_id = documents.space_id
+                WHERE documents.status = 'active'
+                  AND knowledge_spaces.status = 'active'
+                ORDER BY documents.title
+                """
+            ).fetchall()
+        space_names = {
+            space["space_id"]: space["name"] for space in self.list_spaces()
+        }
         documents = []
         for row in rows:
             item = self._row(row)
@@ -451,6 +592,7 @@ class LocalCatalog:
                     },
                     "processing_profile": item["processing_profile"],
                     "processing_profile_hash": item["processing_profile_hash"],
+                    "space_id": item["space_id"],
                 }
             )
             documents.append(
@@ -459,6 +601,8 @@ class LocalCatalog:
                     "title": item["title"],
                     "body": item["summary"] or item["body"],
                     "visibility": "private",
+                    "space_id": item["space_id"],
+                    "space_name": space_names.get(item["space_id"], item["space_id"]),
                     "content_hash": item["content_hash"],
                     "source": item["source"],
                     "relative_path": item["relative_path"],

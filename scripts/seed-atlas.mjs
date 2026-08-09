@@ -47,11 +47,19 @@ export function normalizePublicDocuments(rows) {
       visibility: "public",
       status: "published",
       source_origin: "repo_seed",
+      space_id: String(raw.space_id || metadata.space_id || "portfolio"),
+      space_name: String(raw.space_name || metadata.space_name || "Portfolio"),
       summary: String(raw.summary || body.slice(0, 240)).trim(),
       category: String(raw.category || metadata.category || "portfolio"),
       language: raw.language === "zh" || metadata.language === "zh" ? "zh" : "en",
       source_url: raw.source_url || raw.url || null,
-      metadata: { ...metadata, visibility: "public", source_origin: "repo_seed" },
+      metadata: {
+        ...metadata,
+        visibility: "public",
+        source_origin: "repo_seed",
+        space_id: String(raw.space_id || metadata.space_id || "portfolio"),
+        space_name: String(raw.space_name || metadata.space_name || "Portfolio"),
+      },
     };
   });
 }
@@ -103,6 +111,8 @@ export async function syncRepoSeedCatalog({ documentsCollection, documents, sess
         $set: {
           doc_id: document.doc_id,
           source_origin: "repo_seed",
+          space_id: document.space_id,
+          space_name: document.space_name,
           title: document.title,
           summary: document.summary,
           category: document.category,
@@ -148,9 +158,10 @@ async function main() {
   console.log(`Validated ${documents.length} public documents and ${chunks.length} chunks.`);
   if (process.argv.includes("--validate")) return;
   const catalogOnly = process.argv.includes("--catalog-only");
+  const spacesOnly = process.argv.includes("--spaces-only");
   if (!process.env.MONGODB_URI) throw new Error("MONGODB_URI is required");
-  if (!catalogOnly && !process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is required");
-  if (!catalogOnly) {
+  if (!catalogOnly && !spacesOnly && !process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is required");
+  if (!catalogOnly && !spacesOnly) {
     for (let index = 0; index < chunks.length; index += 1) {
       chunks[index].embedding = await embedDocument(chunks[index].retrieval_text);
       console.log(`Embedded ${index + 1}/${chunks.length}`);
@@ -162,7 +173,58 @@ async function main() {
   const collection = db.collection(process.env.CLOUD_COLLECTION_NAME || "portfolio_knowledge_public");
   const documentsCollection = db.collection(process.env.CLOUD_DOCUMENTS_COLLECTION_NAME || "portfolio_public_documents");
   const metadataCollection = db.collection(process.env.CLOUD_METADATA_COLLECTION_NAME || "portfolio_public_metadata");
+  const spacesCollection = db.collection(process.env.CLOUD_SPACES_COLLECTION_NAME || "portfolio_public_spaces");
   const now = new Date();
+
+  await spacesCollection.bulkWrite([
+    ["portfolio", "Portfolio", "Public resume, internship, and project evidence."],
+    ["rag-learning", "RAG Learning", "Public RAG books, courses, experiments, and study notes."],
+    ["project-docs", "Project Docs", "Public documentation for standalone software and data projects."],
+  ].map(([spaceId, name, description]) => ({ updateOne: {
+    filter: { space_id: spaceId },
+    update: { $setOnInsert: { space_id: spaceId, name, description, status: "active", visibility: "public", created_at: now, updated_at: now } },
+    upsert: true,
+  } })));
+  await spacesCollection.createIndex({ space_id: 1 }, { unique: true });
+  await Promise.all([
+    documentsCollection.updateMany({ space_id: { $exists: false } }, { $set: { space_id: "portfolio", space_name: "Portfolio" } }),
+    collection.updateMany({ space_id: { $exists: false } }, { $set: {
+      space_id: "portfolio",
+      space_name: "Portfolio",
+      "metadata.space_id": "portfolio",
+      "metadata.space_name": "Portfolio",
+    } }),
+  ]);
+
+  if (spacesOnly) {
+    const indexName = process.env.CLOUD_VECTOR_INDEX_NAME || "vector_index_public";
+    const textIndexName = process.env.CLOUD_TEXT_INDEX_NAME || "text_index_public";
+    const indexes = await collection.listSearchIndexes().toArray().catch(() => []);
+    const vectorIndex = indexes.find((index) => index.name === indexName);
+    const vectorDefinition = vectorIndex?.latestDefinition || vectorIndex?.definition;
+    if (vectorDefinition && !vectorDefinition.fields?.some((field) => field.path === "space_id")) {
+      await collection.updateSearchIndex(indexName, {
+        ...vectorDefinition,
+        fields: [...(vectorDefinition.fields || []), { type: "filter", path: "space_id" }],
+      });
+    }
+    const textIndex = indexes.find((index) => index.name === textIndexName);
+    const textDefinition = textIndex?.latestDefinition || textIndex?.definition;
+    if (textDefinition && !textDefinition.mappings?.fields?.space_id) {
+      await collection.updateSearchIndex(textIndexName, {
+        ...textDefinition,
+        mappings: {
+          ...textDefinition.mappings,
+          fields: { ...(textDefinition.mappings?.fields || {}), space_id: { type: "token" } },
+        },
+      }).catch(() => console.warn("Atlas text index could not be updated; vector retrieval remains available."));
+    }
+    await collection.createIndex({ visibility: 1, space_id: 1, doc_id: 1 });
+    await documentsCollection.createIndex({ doc_id: 1 }, { unique: true });
+    await client.close();
+    console.log("Space migration complete without generating embeddings.");
+    return;
+  }
 
   if (catalogOnly) {
     const session = client.startSession();
@@ -226,31 +288,38 @@ async function main() {
     await session.endSession();
   }
 
-  if (!existingSearchIndexes.some((index) => index.name === indexName)) {
-    await collection.createSearchIndex({ name: indexName, type: "vectorSearch", definition: { fields: [
+  const vectorIndexDefinition = { fields: [
       { type: "vector", path: "embedding", numDimensions: embeddingDimensions, similarity: "cosine" },
       { type: "filter", path: "visibility" },
+      { type: "filter", path: "space_id" },
       { type: "filter", path: "metadata.category" },
       { type: "filter", path: "metadata.language" },
-    ] } });
-  }
-  if (!existingSearchIndexes.some((index) => index.name === textIndexName)) {
+    ] };
+  if (!existingSearchIndexes.some((index) => index.name === indexName)) await collection.createSearchIndex({ name: indexName, type: "vectorSearch", definition: vectorIndexDefinition });
+  else if (!vectorDefinition?.fields?.some((field) => field.path === "space_id")) await collection.updateSearchIndex(indexName, vectorIndexDefinition);
+
+  const textIndexDefinition = { mappings: {
+    dynamic: false,
+    fields: {
+      title: { type: "string" },
+      body: { type: "string" },
+      retrieval_text: { type: "string" },
+      visibility: { type: "token" },
+      space_id: { type: "token" },
+      metadata: { type: "document", dynamic: true },
+    },
+  } };
+  const existingTextIndex = existingSearchIndexes.find((index) => index.name === textIndexName);
+  if (!existingTextIndex) {
     try {
-      await collection.createSearchIndex({ name: textIndexName, type: "search", definition: { mappings: {
-        dynamic: false,
-        fields: {
-          title: { type: "string" },
-          body: { type: "string" },
-          retrieval_text: { type: "string" },
-          visibility: { type: "token" },
-          metadata: { type: "document", dynamic: true },
-        },
-      } } });
+      await collection.createSearchIndex({ name: textIndexName, type: "search", definition: textIndexDefinition });
     } catch {
       console.warn("Atlas text index was not created; vector retrieval remains available.");
     }
+  } else if (!existingTextIndex.latestDefinition?.mappings?.fields?.space_id && !existingTextIndex.definition?.mappings?.fields?.space_id) {
+    await collection.updateSearchIndex(textIndexName, textIndexDefinition).catch(() => console.warn("Atlas text index could not be updated; vector retrieval remains available."));
   }
-  await collection.createIndex({ visibility: 1, doc_id: 1 });
+  await collection.createIndex({ visibility: 1, space_id: 1, doc_id: 1 });
   await collection.createIndex({ chunk_id: 1 }, { unique: true, sparse: true });
   await documentsCollection.createIndex({ doc_id: 1 }, { unique: true });
   const ownerUploadCount = await collection.countDocuments({ source_origin: "owner_upload" });

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -17,6 +18,36 @@ class LocalCatalogTests(unittest.TestCase):
         first = {"source": "resume_root", "relative_path": "master/resume.docx", "body": "old"}
         second = {"source": "resume_root", "relative_path": "master/resume.docx", "body": "new"}
         self.assertEqual(stable_document_id(first), stable_document_id(second))
+
+    def test_existing_catalog_adds_space_column_before_creating_index(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "catalog.sqlite3"
+            LocalCatalog(path)
+            connection = sqlite3.connect(path)
+            try:
+                connection.execute("DROP INDEX idx_documents_space")
+                connection.execute("ALTER TABLE documents DROP COLUMN space_id")
+                connection.commit()
+            finally:
+                connection.close()
+
+            migrated = LocalCatalog(path)
+            connection = sqlite3.connect(path)
+            try:
+                columns = {
+                    row[1]
+                    for row in connection.execute("PRAGMA table_info(documents)").fetchall()
+                }
+                indexes = {
+                    row[1]
+                    for row in connection.execute("PRAGMA index_list(documents)").fetchall()
+                }
+            finally:
+                connection.close()
+
+            self.assertIn("space_id", columns)
+            self.assertIn("idx_documents_space", indexes)
+            self.assertEqual(migrated.list_spaces()[0]["space_id"], "portfolio")
 
     def test_migration_marks_selected_documents_active(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -199,4 +230,79 @@ class LocalCatalogTests(unittest.TestCase):
             catalog.upsert_documents([row], active_ids={doc_id})
             saved = catalog.get(doc_id)
             self.assertEqual(saved["status"], "needs_ocr")
+            self.assertEqual(catalog.active_documents(), [])
+
+    def test_catalog_creates_default_spaces_and_migrates_documents_to_portfolio(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            catalog = self.make_catalog(Path(temp_dir))
+            row = {
+                "source": "resume_root",
+                "relative_path": "master/resume.docx",
+                "title": "Resume",
+                "body": "Portfolio evidence.",
+            }
+            doc_id = stable_document_id(row)
+            catalog.upsert_documents([row], active_ids={doc_id})
+
+            spaces = catalog.list_spaces()
+            saved = catalog.get(doc_id)
+
+            self.assertEqual(
+                [space["space_id"] for space in spaces[:3]],
+                ["portfolio", "rag-learning", "project-docs"],
+            )
+            self.assertEqual(saved["space_id"], "portfolio")
+
+    def test_documents_can_move_spaces_without_changing_content_hash(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            catalog = self.make_catalog(Path(temp_dir))
+            row = {
+                "source": "project_activity_root",
+                "relative_path": "rag/notes.md",
+                "title": "RAG notes",
+                "body": "Retrieval notes.",
+            }
+            doc_id = stable_document_id(row)
+            catalog.upsert_documents([row], active_ids={doc_id})
+            before = catalog.get(doc_id)
+
+            changed = catalog.move_documents([doc_id], "rag-learning")
+            after = catalog.get(doc_id)
+
+            self.assertEqual(changed, 1)
+            self.assertEqual(after["space_id"], "rag-learning")
+            self.assertEqual(after["content_hash"], before["content_hash"])
+
+    def test_archived_space_cannot_receive_documents(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            catalog = self.make_catalog(Path(temp_dir))
+            row = {
+                "source": "project_activity_root",
+                "relative_path": "docs/readme.md",
+                "title": "Project docs",
+                "body": "Project evidence.",
+            }
+            doc_id = stable_document_id(row)
+            catalog.upsert_documents([row], active_ids={doc_id})
+            catalog.update_space("project-docs", status="archived")
+
+            with self.assertRaises(ValueError):
+                catalog.move_documents([doc_id], "project-docs")
+
+    def test_active_documents_excludes_archived_spaces(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            catalog = self.make_catalog(Path(temp_dir))
+            row = {
+                "source": "project_activity_root",
+                "relative_path": "docs/readme.md",
+                "title": "Project docs",
+                "body": "Project evidence.",
+                "space_id": "project-docs",
+            }
+            doc_id = stable_document_id(row)
+            catalog.upsert_documents([row], active_ids={doc_id})
+
+            self.assertEqual(len(catalog.active_documents()), 1)
+            catalog.update_space("project-docs", status="archived")
+
             self.assertEqual(catalog.active_documents(), [])

@@ -27,10 +27,10 @@ describe("cloud RAG contracts", () => {
     expect(source?.snippet).toBe("Portfolio RAG uses MongoDB Vector Search.");
   });
 
-  it("uses only indexed visibility fields in the vector pre-filter", () => {
+  it("uses indexed visibility and knowledge-space fields in the vector pre-filter", () => {
     const pipeline = buildVectorPipeline([0.1, 0.2], 5, 30);
     expect(pipeline[0]).toEqual(expect.objectContaining({
-      $vectorSearch: expect.objectContaining({ filter: { visibility: "public" } }),
+      $vectorSearch: expect.objectContaining({ filter: { visibility: "public", space_id: "portfolio" } }),
     }));
     expect(pipeline).toContainEqual({
       $match: { $or: [{ validity_status: "active" }, { validity_status: { $exists: false } }] },

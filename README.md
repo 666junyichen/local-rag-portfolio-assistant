@@ -207,6 +207,7 @@ GEMINI_CHAT_MODEL=gemini-3.5-flash
 CLOUD_DOCUMENTS_COLLECTION_NAME=portfolio_public_documents
 CLOUD_DRAFTS_COLLECTION_NAME=portfolio_public_drafts
 CLOUD_METADATA_COLLECTION_NAME=portfolio_public_metadata
+CLOUD_SPACES_COLLECTION_NAME=portfolio_public_spaces
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=...
 CLERK_SECRET_KEY=...
 NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
@@ -227,6 +228,12 @@ When the retrieval chunks already exist and only the new public Knowledge catalo
 node scripts/seed-atlas.mjs --catalog-only
 ```
 
+After upgrading an existing Atlas deployment to Knowledge Spaces, run the quota-free metadata and index migration. It assigns legacy records to `portfolio` and adds `space_id` filters without regenerating embeddings:
+
+```powershell
+node scripts/seed-atlas.mjs --spaces-only
+```
+
 The Vercel application provides:
 
 - `/` streaming bilingual Chat with expandable sources.
@@ -235,6 +242,19 @@ The Vercel application provides:
 - `/architecture` privacy boundaries, runtime evidence, and screenshots.
 - `/studio` Owner-only Publish Studio after Clerk and `OWNER_EMAILS` are configured.
 - `/api/health` Atlas, Gemini, and vector index status without secret values.
+
+### Knowledge Spaces
+
+Both runtimes organize documents into spaces instead of mixing unrelated subjects into one retrieval pool. The starter spaces are **Portfolio**, **RAG Learning**, and **Project Docs**; the Owner may add more. A document belongs to one space, while a question may select one space or compare up to five.
+
+- Chat, Retrieval Lab, Knowledge, and Publish Studio share the same space contract.
+- A missing selection defaults to `portfolio` for backward compatibility.
+- Multi-space retrieval embeds the question once, retrieves inside each selected space, and reserves evidence from every space with matches before filling the remaining Top-K positions.
+- Moving a document only updates catalog and chunk metadata; it does not regenerate embeddings or spend Gemini quota.
+- Archived spaces stop appearing in public APIs and stop retrieval immediately, while their documents remain recoverable.
+- Local SQLite spaces and private documents never appear in Vercel or public APIs.
+
+The local one-command startup runs `scripts/migrate_knowledge_spaces.py` before index checks. Existing SQLite documents and MongoDB chunks are assigned to Portfolio, and the Vector/BM25 index definitions gain a `space_id` filter without changing embeddings.
 
 ### Owner Publish Studio
 

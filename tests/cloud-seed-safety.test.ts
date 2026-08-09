@@ -32,6 +32,15 @@ describe("cloud seed safety", () => {
     expect(() => normalizePublicDocuments(rows)).toThrow(/Duplicate doc_id/);
   });
 
+  it("assigns repository seed documents to the default Portfolio space", async () => {
+    const { chunkDocuments, normalizePublicDocuments } = await import("../scripts/seed-atlas.mjs");
+    const [document] = normalizePublicDocuments([{ title: "Public note", body: "Unique public evidence." }]);
+    const [chunk] = chunkDocuments([document]);
+    expect(document.space_id).toBe("portfolio");
+    expect(chunk.space_id).toBe("portfolio");
+    expect(chunk.metadata.space_name).toBe("Portfolio");
+  });
+
   it("runs database writes in a transaction and records the embedding contract", () => {
     expect(script).toContain("withTransaction");
     expect(script).toContain("repo_seed_embedding");
@@ -62,5 +71,10 @@ describe("cloud seed safety", () => {
       }),
     ]));
     expect(calls[1]?.value).toEqual({ source_origin: "repo_seed", doc_id: { $nin: ["public-doc"] } });
+  });
+
+  it("supports a spaces-only migration that never calls Gemini embeddings", () => {
+    expect(script).toContain("--spaces-only");
+    expect(script).toContain("Space migration complete without generating embeddings");
   });
 });

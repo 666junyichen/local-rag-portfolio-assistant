@@ -3,7 +3,13 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from src.portfolio_rag import Settings, adaptive_search, full_text_search, hybrid_search
+from src.portfolio_rag import (
+    Settings,
+    adaptive_search,
+    full_text_search,
+    hybrid_search,
+    vector_candidates,
+)
 
 
 class PortfolioRetrievalTests(unittest.TestCase):
@@ -126,6 +132,36 @@ class PortfolioRetrievalTests(unittest.TestCase):
         )
 
         self.assertEqual(results[0]["chunk_id"], "b")
+
+    @patch("src.portfolio_rag.embed_texts", return_value=[[0.1, 0.2]])
+    def test_multi_space_vector_search_embeds_query_once_and_filters_each_space(
+        self, embed_texts
+    ) -> None:
+        class Collection:
+            def __init__(self):
+                self.pipelines = []
+
+            def aggregate(self, pipeline):
+                self.pipelines.append(pipeline)
+                space_id = pipeline[0]["$vectorSearch"]["filter"]["space_id"]
+                return [{"chunk_id": space_id, "space_id": space_id, "score": 0.8}]
+
+        collection = Collection()
+
+        results = vector_candidates(
+            collection,
+            object(),
+            self.settings,
+            "Compare evidence",
+            space_ids=("portfolio", "rag-learning"),
+        )
+
+        embed_texts.assert_called_once()
+        self.assertEqual(len(collection.pipelines), 2)
+        self.assertEqual(
+            [row["space_id"] for row in results],
+            ["portfolio", "rag-learning"],
+        )
 
 
 if __name__ == "__main__":

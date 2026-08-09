@@ -21,6 +21,7 @@ from src.portfolio_rag import (  # noqa: E402
 )
 from src.evaluation import evaluate_rankings, load_benchmark  # noqa: E402
 from src.query_planning import should_refuse_without_retrieval  # noqa: E402
+from src.streamlit_spaces import local_catalog, render_space_selector  # noqa: E402
 from src.ui import apply_streamlit_theme, render_source  # noqa: E402
 
 EVAL_PATH = ROOT / "data" / "local_eval_questions.json"
@@ -46,6 +47,10 @@ with st.sidebar:
             st.session_state.pop(key, None)
         st.rerun()
     top_k = st.slider("Top-K", 1, 10, 5, key="lab_top_k")
+    space_ids = render_space_selector(
+        local_catalog(ROOT / "data"),
+        key_prefix="lab",
+    )
     use_threshold = st.toggle("启用 score threshold", value=False)
     threshold = st.slider("Threshold", 0.0, 1.0, 0.55, 0.01, key="lab_threshold", disabled=not use_threshold)
     scope = st.radio("资料范围", ["public", "all"], key="lab_scope", format_func=lambda value: "仅公开" if value == "public" else "公开 + 私有")
@@ -103,6 +108,7 @@ if run or generate:
                 scope=scope,
                 retrieval_mode="adaptive",
                 diagnostics=diagnostics,
+                space_ids=space_ids,
             )
         else:
             results = vector_search(
@@ -115,6 +121,7 @@ if run or generate:
                 scope=scope,
                 mode="hybrid" if mode == "hybrid-rerank" else mode,
                 reranker=reranker,
+                space_ids=space_ids,
             )
         elapsed_ms = (time.perf_counter() - started) * 1000
         channel_counts: dict[str, int] = {}
@@ -153,6 +160,7 @@ if run or generate:
                 reranker=reranker,
                 retrieval_mode="hybrid" if mode == "hybrid-rerank" else mode,
                 force_reranker=mode == "hybrid-rerank",
+                space_ids=space_ids,
             )
             st.write(answer)
     except Exception as error:
@@ -189,6 +197,7 @@ if st.button("运行当前模式评测", use_container_width=True):
                     top_k=10,
                     scope=case.scope,
                     retrieval_mode="adaptive",
+                    space_ids=space_ids,
                 )
             else:
                 rankings[case.case_id] = vector_search(
@@ -200,6 +209,7 @@ if st.button("运行当前模式评测", use_container_width=True):
                     scope=case.scope,
                     mode="hybrid" if mode == "hybrid-rerank" else mode,
                     reranker=reranker,
+                    space_ids=space_ids,
                 )
             latencies[case.case_id] = (time.perf_counter() - started) * 1000
             progress.progress(index / len(cases), text=f"{index}/{len(cases)} · {case.case_id}")

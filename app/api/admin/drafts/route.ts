@@ -30,7 +30,7 @@ export async function POST(request: Request) {
         else errors.push({ fileName: file.name, code: "parse_failed", message: "The file could not be parsed." });
       }
     }
-    const drafts = await createDrafts(owner, parsed);
+    const drafts = await createDrafts(owner, parsed, String(form.get("spaceId") || "portfolio"));
     return Response.json({ drafts, errors }, { status: errors.length ? 207 : 201 });
   } catch (error) {
     return publishApiError(error);

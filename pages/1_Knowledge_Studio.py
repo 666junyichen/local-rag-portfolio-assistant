@@ -106,6 +106,29 @@ def index_state(item: dict[str, Any], indexed: dict[str, set[str]]) -> str:
     return "indexed" if item.get("content_hash") in hashes else "outdated"
 
 
+def sync_index_space_metadata(
+    doc_ids: list[str], space_id: str, space_name: str
+) -> tuple[int, str | None]:
+    """Move already-indexed chunks without regenerating their embeddings."""
+    try:
+        settings = load_settings(ROOT / ".env")
+        _, collection, _ = get_collections(settings)
+        result = collection.update_many(
+            {"doc_id": {"$in": doc_ids}},
+            {
+                "$set": {
+                    "space_id": space_id,
+                    "space_name": space_name,
+                    "metadata.space_id": space_id,
+                    "metadata.space_name": space_name,
+                }
+            },
+        )
+        return int(result.modified_count), None
+    except Exception as error:
+        return 0, str(error)
+
+
 def upload_tab(local_catalog: LocalCatalog) -> None:
     st.subheader("上传与智能切片")
     st.caption("原始上传文件只保存在本机；新资料默认是私有资料。")
@@ -123,6 +146,16 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
     if not parsed:
         st.info("上传文件后，这里会显示解析正文、PII 风险、智能切片建议和临时召回测试。")
         return
+
+    active_spaces = local_catalog.list_spaces(include_archived=False)
+    space_by_id = {space["space_id"]: space for space in active_spaces}
+    selected_space_id = st.selectbox(
+        "目标知识空间",
+        list(space_by_id),
+        format_func=lambda value: space_by_id[value]["name"],
+        help="每份资料属于一个空间；以后可以在资料库中批量移动，且无需重新生成 Embedding。",
+    )
+    selected_space_name = str(space_by_id[selected_space_id]["name"])
 
     selected_index = st.selectbox(
         "预览文档",
@@ -335,11 +368,14 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
             source_name = str((item.get("metadata") or {}).get("source") or item["title"])
             enriched = {
                 **item,
+                "space_id": selected_space_id,
                 "source": "manual_upload",
                 "relative_path": source_name,
                 "path": str(UPLOADS / source_name),
                 "metadata": {
                     **(item.get("metadata") or {}),
+                    "space_id": selected_space_id,
+                    "space_name": selected_space_name,
                     "source_path": str(UPLOADS / source_name),
                     "processing_profile": item_profile.to_dict(),
                 },
@@ -362,8 +398,11 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
     ):
         public_document = {
             **edited_document,
+            "space_id": selected_space_id,
             "metadata": {
                 **(edited_document.get("metadata") or {}),
+                "space_id": selected_space_id,
+                "space_name": selected_space_name,
                 "processing_profile": profile.to_dict(),
             },
         }
@@ -373,6 +412,9 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
 
 
 def private_library(local_catalog: LocalCatalog, indexed: dict[str, set[str]]) -> None:
+    spaces = local_catalog.list_spaces()
+    active_spaces = [space for space in spaces if space["status"] == "active"]
+    space_by_id = {space["space_id"]: space for space in spaces}
     filter_columns = st.columns(4)
     search = filter_columns[0].text_input("搜索标题、正文或路径")
     status = filter_columns[1].selectbox("状态", ["active", "all", "discovered", "excluded", "parse_error", "needs_ocr"])
@@ -382,6 +424,11 @@ def private_library(local_catalog: LocalCatalog, indexed: dict[str, set[str]]) -
     source = detail_filters[0].text_input("来源", placeholder="resume_root / manual_upload")
     project = detail_filters[1].text_input("项目", placeholder="项目目录名")
     parse_status = detail_filters[2].selectbox("解析状态", ["all", "ready", "needs_ocr", "parse_error"])
+    space_filter = st.selectbox(
+        "知识空间",
+        ["all", *space_by_id],
+        format_func=lambda value: "全部空间" if value == "all" else space_by_id[value]["name"],
+    )
     page = st.number_input("页码", min_value=1, value=1, step=1)
     result = local_catalog.query(
         search=search,
@@ -391,6 +438,7 @@ def private_library(local_catalog: LocalCatalog, indexed: dict[str, set[str]]) -
             "source": source,
             "project": project,
             "parse_status": parse_status,
+            "space_id": space_filter,
         },
         page=int(page),
         page_size=50,
@@ -406,6 +454,7 @@ def private_library(local_catalog: LocalCatalog, indexed: dict[str, set[str]]) -
             {
                 "选择": False,
                 "doc_id": item["doc_id"],
+                "知识空间": item.get("space_name") or space_by_id.get(item.get("space_id"), {}).get("name", "Portfolio"),
                 "标题": item["title"],
                 "状态": item["status"],
                 "来源": item["source"],
@@ -428,6 +477,31 @@ def private_library(local_catalog: LocalCatalog, indexed: dict[str, set[str]]) -
         key="private-library-table",
     )
     selected_ids = [row["doc_id"] for row in edited if row["选择"]]
+    move_columns = st.columns([3, 1])
+    move_space_id = move_columns[0].selectbox(
+        "移动所选资料到",
+        [space["space_id"] for space in active_spaces],
+        format_func=lambda value: space_by_id[value]["name"],
+        key="private-library-move-space",
+    )
+    if move_columns[1].button(
+        "移动",
+        disabled=not selected_ids,
+        use_container_width=True,
+    ):
+        moved = local_catalog.move_documents(selected_ids, move_space_id)
+        indexed_chunks, sync_error = sync_index_space_metadata(
+            selected_ids,
+            move_space_id,
+            str(space_by_id[move_space_id]["name"]),
+        )
+        st.success(
+            f"已移动 {moved} 份资料并更新 {indexed_chunks} 个索引片段；"
+            "正文与 Embedding 保持不变。"
+        )
+        if sync_error:
+            st.warning(f"目录已更新，但 MongoDB 元数据暂未同步：{sync_error}")
+        st.rerun()
     actions = st.columns(3)
     if actions[0].button("启用所选", disabled=not selected_ids, use_container_width=True):
         local_catalog.set_status(selected_ids, "active")
@@ -441,6 +515,9 @@ def private_library(local_catalog: LocalCatalog, indexed: dict[str, set[str]]) -
 
     detail_id = st.selectbox("查看资料详情", list(by_id), format_func=lambda doc_id: by_id[doc_id]["title"])
     item = by_id[detail_id]
+    st.caption(
+        f"知识空间：{item.get('space_name') or space_by_id.get(item.get('space_id'), {}).get('name', 'Portfolio')}"
+    )
     detail_columns = st.columns(4)
     detail_columns[0].metric("状态", item["status"])
     detail_columns[1].metric("索引", index_state(item, indexed))
@@ -561,8 +638,59 @@ def public_library(indexed: dict[str, set[str]]) -> None:
         st.rerun()
 
 
+def space_manager(local_catalog: LocalCatalog) -> None:
+    with st.expander("知识空间管理"):
+        spaces = local_catalog.list_spaces()
+        st.dataframe(
+            [
+                {
+                    "ID": space["space_id"],
+                    "名称": space["name"],
+                    "状态": space["status"],
+                    "资料数": space["document_count"],
+                    "说明": space["description"],
+                }
+                for space in spaces
+            ],
+            hide_index=True,
+            use_container_width=True,
+        )
+        create_columns = st.columns([2, 3, 1])
+        new_name = create_columns[0].text_input("新空间名称")
+        new_description = create_columns[1].text_input("空间说明")
+        if create_columns[2].button("创建", disabled=not new_name.strip(), use_container_width=True):
+            local_catalog.create_space(new_name, new_description)
+            st.rerun()
+
+        selected_space_id = st.selectbox(
+            "编辑空间",
+            [space["space_id"] for space in spaces],
+            format_func=lambda value: next(space["name"] for space in spaces if space["space_id"] == value),
+        )
+        selected_space = next(space for space in spaces if space["space_id"] == selected_space_id)
+        edit_columns = st.columns([2, 3, 1])
+        edit_name = edit_columns[0].text_input("名称", selected_space["name"], key="edit-space-name")
+        edit_description = edit_columns[1].text_input(
+            "说明", selected_space["description"], key="edit-space-description"
+        )
+        if edit_columns[2].button("保存", use_container_width=True):
+            local_catalog.update_space(
+                selected_space_id,
+                name=edit_name,
+                description=edit_description,
+            )
+            st.rerun()
+        if selected_space_id != "portfolio":
+            next_status = "active" if selected_space["status"] == "archived" else "archived"
+            label = "恢复空间" if next_status == "active" else "归档空间"
+            if st.button(label):
+                local_catalog.update_space(selected_space_id, status=next_status)
+                st.rerun()
+
+
 def library_tab(local_catalog: LocalCatalog) -> None:
     st.subheader("资料库")
+    space_manager(local_catalog)
     indexed = indexed_fingerprints()
     visibility = st.segmented_control("资料范围", ["私有资料", "公开资料"], default="私有资料")
     if visibility == "私有资料":

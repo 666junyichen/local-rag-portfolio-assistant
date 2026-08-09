@@ -28,6 +28,8 @@ describe("publish contracts", () => {
     });
     expect(view).toEqual({
       docId: "doc-1",
+      spaceId: "portfolio",
+      spaceName: "Portfolio",
       title: "Public RAG",
       summary: "A public summary",
       category: "project",

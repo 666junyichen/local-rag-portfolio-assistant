@@ -10,6 +10,7 @@ export type DraftRecord = {
   draftId: string;
   docId?: string;
   ownerId: string;
+  spaceId: string;
   title: string;
   summary: string;
   category: string;
@@ -69,10 +70,12 @@ export function buildPublication(draft: DraftRecord, embeddings: number[][], now
   const contentHash = digest(draft.cleanedBody, 64);
   const version = Math.max(1, draft.publicationVersion || 1);
   const sourceUrl = publicHttpUrl(draft.sourceUrl);
+  const spaceId = draft.spaceId || "portfolio";
   const document = {
     doc_id: docId,
     owner_id: draft.ownerId,
     source_origin: "owner_upload",
+    space_id: spaceId,
     title: draft.title.trim(),
     summary: draft.summary.trim(),
     category: draft.category.trim() || "portfolio",
@@ -92,6 +95,7 @@ export function buildPublication(draft: DraftRecord, embeddings: number[][], now
     chunk_id: `${docId}_v${version}_${digest(`${chunk.chunkId}:${chunk.retrievalText}`, 16)}`,
     parent_chunk_id: chunk.parentChunkId,
     source_origin: "owner_upload",
+    space_id: spaceId,
     owner_id: draft.ownerId,
     title: draft.title.trim(),
     summary: draft.summary.trim(),
@@ -114,6 +118,7 @@ export function buildPublication(draft: DraftRecord, embeddings: number[][], now
       language: draft.language,
       visibility: "public",
       source_origin: "owner_upload",
+      space_id: spaceId,
     },
     updated_at: now,
   }));

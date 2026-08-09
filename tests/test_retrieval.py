@@ -216,6 +216,42 @@ class RetrievalTests(unittest.TestCase):
         selected = select_results(rows, RetrievalSettings(scope="all"))
         self.assertEqual(len(selected), 1)
 
+    def test_space_selection_filters_out_other_knowledge_spaces(self) -> None:
+        rows = [
+            {"chunk_id": "portfolio", "space_id": "portfolio", "score": 0.8},
+            {"chunk_id": "rag", "space_id": "rag-learning", "score": 0.9},
+        ]
+
+        selected = select_results(
+            rows,
+            RetrievalSettings(scope="all", space_ids=("portfolio",)),
+        )
+
+        self.assertEqual([row["chunk_id"] for row in selected], ["portfolio"])
+
+    def test_multi_space_results_reserve_one_candidate_per_space(self) -> None:
+        rows = [
+            {"chunk_id": "p1", "space_id": "portfolio", "score": 0.99},
+            {"chunk_id": "p2", "space_id": "portfolio", "score": 0.98},
+            {"chunk_id": "p3", "space_id": "portfolio", "score": 0.97},
+            {"chunk_id": "rag", "space_id": "rag-learning", "score": 0.65},
+        ]
+
+        selected = select_results(
+            rows,
+            RetrievalSettings(
+                top_k=2,
+                scope="all",
+                space_ids=("portfolio", "rag-learning"),
+            ),
+        )
+
+        self.assertEqual({row["space_id"] for row in selected}, {"portfolio", "rag-learning"})
+
+    def test_space_selection_accepts_at_most_five_unique_spaces(self) -> None:
+        with self.assertRaises(ValueError):
+            RetrievalSettings(space_ids=tuple(f"space-{index}" for index in range(6)))
+
 
 if __name__ == "__main__":
     unittest.main()

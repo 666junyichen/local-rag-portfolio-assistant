@@ -4,6 +4,7 @@ import { enforceRateLimit } from "@/lib/cloud-rag/rate-limit";
 import { retrieveForQuestion } from "@/lib/cloud-rag/retrieval";
 import { sse } from "@/lib/cloud-rag/sse";
 import { chatRequestSchema } from "@/lib/cloud-rag/validation";
+import { requireActivePublicSpaces } from "@/lib/cloud-publish/spaces";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -13,6 +14,7 @@ const encoder = new TextEncoder();
 export async function POST(request: Request) {
   try {
     const body = chatRequestSchema.parse(await request.json());
+    body.settings.spaceIds = await requireActivePublicSpaces(body.settings.spaceIds);
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
     if (!(await enforceRateLimit(ip))) {
       return Response.json({ error: "Too many requests. Please try again in one minute." }, { status: 429 });

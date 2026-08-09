@@ -39,6 +39,8 @@ export function publicDocumentView(doc: Record<string, unknown>) {
   const sourceUrl = publicHttpUrl(doc.source_url);
   return {
     docId: String(doc.doc_id || ""),
+    spaceId: String(doc.space_id || "portfolio"),
+    spaceName: String(doc.space_name || "Portfolio"),
     title: String(doc.title || "Untitled"),
     summary: String(doc.summary || ""),
     category: String(doc.category || "portfolio"),

@@ -32,6 +32,7 @@ from src.retrieval import (
     bm25_rank,
     reciprocal_rank_fusion,
     rerank_with_cross_encoder,
+    normalize_space_ids,
     select_results,
 )
 
@@ -137,6 +138,7 @@ def create_vector_index(
                     "similarity": "cosine",
                 },
                 {"type": "filter", "path": "visibility"},
+                {"type": "filter", "path": "space_id"},
                 {"type": "filter", "path": "metadata.category"},
                 {"type": "filter", "path": "metadata.language"},
             ]
@@ -175,6 +177,7 @@ def create_text_index(
                     "body": {"type": "string"},
                     "retrieval_text": {"type": "string"},
                     "visibility": {"type": "token"},
+                    "space_id": {"type": "token"},
                     "metadata": {
                         "type": "document",
                         "fields": {"category": {"type": "string"}},
@@ -218,30 +221,35 @@ def vector_candidates(
     query: str,
     top_k: int = 50,
     scope: str = "all",
+    space_ids: tuple[str, ...] | list[str] | None = None,
 ) -> list[dict[str, Any]]:
     query_embedding = embed_texts(model, [query], input_type="query")[0]
-    vector_stage: dict[str, Any] = {
-        "index": settings.vector_index_name,
-        "queryVector": query_embedding,
-        "path": "embedding",
-        "numCandidates": max(top_k * 10, 100),
-        "limit": min(top_k, 100),
-    }
-    if scope == "public":
-        vector_stage["filter"] = {"visibility": "public"}
-    pipeline = [
-        {
-            "$vectorSearch": vector_stage
-        },
-        {
-            "$project": {
-                "_id": 0,
-                "embedding": 0,
-                "score": {"$meta": "vectorSearchScore"},
-            }
-        },
-    ]
-    return list(collection.aggregate(pipeline))
+    selected_spaces = normalize_space_ids(space_ids)
+    candidates: list[dict[str, Any]] = []
+    for space_id in selected_spaces:
+        filters: list[dict[str, Any]] = [{"space_id": space_id}]
+        if scope == "public":
+            filters.append({"visibility": "public"})
+        vector_stage: dict[str, Any] = {
+            "index": settings.vector_index_name,
+            "queryVector": query_embedding,
+            "path": "embedding",
+            "numCandidates": max(top_k * 10, 100),
+            "limit": min(top_k, 100),
+            "filter": filters[0] if len(filters) == 1 else {"$and": filters},
+        }
+        pipeline = [
+            {"$vectorSearch": vector_stage},
+            {
+                "$project": {
+                    "_id": 0,
+                    "embedding": 0,
+                    "score": {"$meta": "vectorSearchScore"},
+                }
+            },
+        ]
+        candidates.extend(collection.aggregate(pipeline))
+    return candidates
 
 
 def sparse_search(
@@ -251,6 +259,7 @@ def sparse_search(
     *,
     top_k: int = 50,
     scope: str = "all",
+    space_ids: tuple[str, ...] | list[str] | None = None,
 ) -> list[dict[str, Any]]:
     text_clause: dict[str, Any] = {
         "text": {
@@ -258,31 +267,35 @@ def sparse_search(
             "path": ["title", "retrieval_text", "body", "metadata.category"],
         }
     }
-    search_query: dict[str, Any] = text_clause
-    if scope == "public":
-        search_query = {
-            "compound": {
-                "must": [text_clause],
-                "filter": [{"equals": {"path": "visibility", "value": "public"}}],
-            }
+    selected_spaces = normalize_space_ids(space_ids)
+    candidates: list[dict[str, Any]] = []
+    for space_id in selected_spaces:
+        filters = [{"equals": {"path": "space_id", "value": space_id}}]
+        if scope == "public":
+            filters.append({"equals": {"path": "visibility", "value": "public"}})
+        search_query: dict[str, Any] = {
+            "compound": {"must": [text_clause], "filter": filters}
         }
-    pipeline = [
-        {"$search": {"index": settings.text_index_name, **search_query}},
-        {"$limit": min(max(top_k, 1), 100)},
-        {
-            "$project": {
-                "_id": 0,
-                "embedding": 0,
-                "bm25_score": {"$meta": "searchScore"},
-            }
-        },
-    ]
-    try:
-        return list(collection.aggregate(pipeline))
-    except Exception:
-        query_filter = {"visibility": "public"} if scope == "public" else {}
-        rows = list(collection.find(query_filter, {"embedding": 0}).limit(5000))
-        return bm25_rank(rows, query, top_k=top_k)
+        pipeline = [
+            {"$search": {"index": settings.text_index_name, **search_query}},
+            {"$limit": min(max(top_k, 1), 100)},
+            {
+                "$project": {
+                    "_id": 0,
+                    "embedding": 0,
+                    "bm25_score": {"$meta": "searchScore"},
+                }
+            },
+        ]
+        try:
+            candidates.extend(collection.aggregate(pipeline))
+        except Exception:
+            query_filter: dict[str, Any] = {"space_id": space_id}
+            if scope == "public":
+                query_filter["visibility"] = "public"
+            rows = list(collection.find(query_filter, {"embedding": 0}).limit(5000))
+            candidates.extend(bm25_rank(rows, query, top_k=top_k))
+    return candidates
 
 
 def full_text_search(
@@ -293,6 +306,7 @@ def full_text_search(
     top_k: int = 5,
     score_threshold: float | None = None,
     scope: str = "all",
+    space_ids: tuple[str, ...] | list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Run BM25/full-text retrieval and return the same evidence shape as vector search."""
     rows = sparse_search(
@@ -301,6 +315,7 @@ def full_text_search(
         query,
         top_k=min(max(top_k * 10, 30), 50),
         scope=scope,
+        space_ids=space_ids,
     )
     max_score = max((float(row.get("bm25_score", 0.0)) for row in rows), default=0.0)
     candidates: list[dict[str, Any]] = []
@@ -316,6 +331,7 @@ def full_text_search(
             top_k=min(max(top_k, 1), 10),
             score_threshold=score_threshold,
             scope=scope,
+            space_ids=normalize_space_ids(space_ids),
         ),
     )
 
@@ -330,14 +346,30 @@ def hybrid_search(
     score_threshold: float | None = None,
     scope: str = "all",
     reranker: Any | None = None,
+    space_ids: tuple[str, ...] | list[str] | None = None,
 ) -> list[dict[str, Any]]:
     candidate_limit = min(max(top_k * 10, 30), 50)
     vector_rows = apply_keyword_rerank(
-        vector_candidates(collection, model, settings, query, top_k=candidate_limit, scope=scope),
+        vector_candidates(
+            collection,
+            model,
+            settings,
+            query,
+            top_k=candidate_limit,
+            scope=scope,
+            space_ids=space_ids,
+        ),
         query,
     )
     vector_rows.sort(key=lambda row: float(row.get("rank_score", row.get("score", 0))), reverse=True)
-    sparse_rows = sparse_search(collection, settings, query, top_k=candidate_limit, scope=scope)
+    sparse_rows = sparse_search(
+        collection,
+        settings,
+        query,
+        top_k=candidate_limit,
+        scope=scope,
+        space_ids=space_ids,
+    )
     fused = reciprocal_rank_fusion(vector_rows, sparse_rows, vector_weight=2.0, sparse_weight=0.7)
     max_bm25 = max((float(row.get("bm25_score", 0)) for row in fused), default=0.0)
     for row in fused:
@@ -347,6 +379,7 @@ def hybrid_search(
         top_k=min(max(top_k, 1), 10),
         score_threshold=score_threshold,
         scope=scope,
+        space_ids=normalize_space_ids(space_ids),
     )
     fused = apply_section_intent_rerank(fused, query)
     selected = select_results(fused, settings_filter)
@@ -403,6 +436,7 @@ def vector_search(
     *,
     mode: str | None = None,
     reranker: Any | None = None,
+    space_ids: tuple[str, ...] | list[str] | None = None,
 ) -> list[dict[str, Any]]:
     active_mode = (mode or settings.retrieval_mode).lower()
     if active_mode in {"full-text", "full_text", "bm25"}:
@@ -413,6 +447,7 @@ def vector_search(
             top_k=top_k,
             score_threshold=score_threshold,
             scope=scope,
+            space_ids=space_ids,
         )
     if active_mode == "hybrid":
         return hybrid_search(
@@ -424,16 +459,30 @@ def vector_search(
             score_threshold=score_threshold,
             scope=scope,
             reranker=reranker,
+            space_ids=space_ids,
         )
     candidates = apply_keyword_rerank(
-        vector_candidates(collection, model, settings, query, top_k=min(top_k * 5, 50), scope=scope),
+        vector_candidates(
+            collection,
+            model,
+            settings,
+            query,
+            top_k=min(top_k * 5, 50),
+            scope=scope,
+            space_ids=space_ids,
+        ),
         query,
     )
     candidates = apply_section_intent_rerank(candidates, query)
     candidates = apply_freshness_rerank(candidates, query)
     return select_results(
         candidates,
-        RetrievalSettings(top_k=top_k, score_threshold=score_threshold, scope=scope),
+        RetrievalSettings(
+            top_k=top_k,
+            score_threshold=score_threshold,
+            scope=scope,
+            space_ids=normalize_space_ids(space_ids),
+        ),
     )
 
 
@@ -449,6 +498,7 @@ def adaptive_search(
     force_reranker: bool = False,
     reranker: Any | None = None,
     diagnostics: dict[str, Any] | None = None,
+    space_ids: tuple[str, ...] | list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Use fast Vector retrieval first and load precision ranking only when justified."""
     started = time.perf_counter()
@@ -461,6 +511,7 @@ def adaptive_search(
         score_threshold=score_threshold,
         scope=scope,
         mode="baseline",
+        space_ids=space_ids,
     )
     decision = should_use_precision_reranker(
         query,
@@ -484,6 +535,7 @@ def adaptive_search(
                 score_threshold=score_threshold,
                 scope=scope,
                 reranker=active_reranker,
+                space_ids=space_ids,
             )
             path = "hybrid-rerank"
     if diagnostics is not None:
@@ -518,6 +570,7 @@ def retrieve_for_question(
     retrieval_mode: str | None = None,
     force_reranker: bool = False,
     diagnostics: dict[str, Any] | None = None,
+    space_ids: tuple[str, ...] | list[str] | None = None,
 ) -> list[dict[str, Any]]:
     if should_refuse_without_retrieval(query):
         return []
@@ -534,12 +587,13 @@ def retrieve_for_question(
             force_reranker=force_reranker,
             reranker=reranker,
             diagnostics=diagnostics,
+            space_ids=space_ids,
         )
     plan = plan_query(query)
     if plan.mode == "simple":
         return vector_search(
             collection, model, settings, query, top_k, score_threshold, scope,
-            mode=retrieval_mode, reranker=reranker,
+            mode=retrieval_mode, reranker=reranker, space_ids=space_ids,
         )
     merged: dict[str, dict[str, Any]] = {}
     for subquery in plan.subqueries:
@@ -553,6 +607,7 @@ def retrieve_for_question(
             scope=scope,
             mode=retrieval_mode,
             reranker=reranker,
+            space_ids=space_ids,
         )
         for row in rows:
             key = str(row.get("chunk_id") or row.get("doc_id") or "")
@@ -646,6 +701,7 @@ def generate_answer_with_sources(
     retrieval_mode: str | None = None,
     force_reranker: bool = False,
     diagnostics: dict[str, Any] | None = None,
+    space_ids: tuple[str, ...] | list[str] | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
     results = retrieve_for_question(
         collection,
@@ -659,6 +715,7 @@ def generate_answer_with_sources(
         retrieval_mode=retrieval_mode,
         force_reranker=force_reranker,
         diagnostics=diagnostics,
+        space_ids=space_ids,
     )
     if not results:
         message = (

@@ -1,8 +1,10 @@
-import type { Document } from "mongodb";
+import type { Collection, Document } from "mongodb";
 import { cloudDb } from "./mongodb";
 import { embedQuery } from "./gemini";
 import type { RetrievalSettings, Source } from "./types";
 import { planQuery, shouldRefuseWithoutRetrieval } from "./query-planning";
+import { DEFAULT_SPACE_ID, normalizeSpaceIds, spaceFilter } from "./spaces";
+import { spaceNameMap } from "../cloud-publish/spaces";
 
 export function mapSource(doc: Document): Source | null {
   if (doc.visibility !== "public") return null;
@@ -17,6 +19,8 @@ export function mapSource(doc: Document): Source | null {
     ...(doc.url || doc.source_url ? { url: String(doc.url || doc.source_url) } : {}),
     snippet: String(doc.parent_body || doc.raw_body || doc.body || "").slice(0, 1200),
     score: Number(doc.score || 0),
+    spaceId: String(doc.space_id || DEFAULT_SPACE_ID),
+    spaceName: String(doc.space_name || doc.metadata?.space_name || "Portfolio"),
     ...(Array.isArray(doc.retrieval_channels) ? { retrievalChannels: doc.retrieval_channels } : {}),
     ...(doc.vector_rank ? { vectorRank: Number(doc.vector_rank) } : {}),
     ...(doc.bm25_rank ? { bm25Rank: Number(doc.bm25_rank) } : {}),
@@ -41,7 +45,8 @@ export function reciprocalRankFusion(vectorRows: Document[], sparseRows: Documen
   return [...fused.values()].sort((left, right) => Number(right.fusion_score) - Number(left.fusion_score));
 }
 
-export function buildVectorPipeline(queryVector: number[], topK: number, candidateLimit: number): Document[] {
+export function buildVectorPipeline(queryVector: number[], topK: number, candidateLimit: number, rawSpaceIds?: string[]): Document[] {
+  const selectedSpaceFilter = spaceFilter(rawSpaceIds);
   return [
     { $vectorSearch: {
       index: process.env.CLOUD_VECTOR_INDEX_NAME || "vector_index_public",
@@ -49,39 +54,83 @@ export function buildVectorPipeline(queryVector: number[], topK: number, candida
       queryVector,
       numCandidates: Math.max(topK * 20, 100),
       limit: candidateLimit,
-      filter: { visibility: "public" },
+      filter: { visibility: "public", ...selectedSpaceFilter },
     } },
     { $match: { $or: [{ validity_status: "active" }, { validity_status: { $exists: false } }] } },
     { $project: { _id: 0, embedding: 0, score: { $meta: "vectorSearchScore" } } },
   ];
 }
 
+const sourceRank = (source: Source) => source.fusionScore || source.score;
+
+export function mergeSpaceCandidates(
+  groups: Source[][],
+  topK: number,
+  scoreThreshold: number | null,
+): Source[] {
+  const eligible = groups.map((group) => group
+    .filter((source) => scoreThreshold === null || source.score >= scoreThreshold)
+    .sort((left, right) => sourceRank(right) - sourceRank(left)));
+  const selected: Source[] = [];
+  const seen = new Set<string>();
+  const add = (source: Source) => {
+    const key = source.chunkId || source.docId;
+    if (seen.has(key) || selected.length >= topK) return;
+    seen.add(key);
+    selected.push(source);
+  };
+  for (const group of eligible) if (group[0]) add(group[0]);
+  const remaining = eligible.flatMap((group) => group.slice(1))
+    .sort((left, right) => sourceRank(right) - sourceRank(left));
+  for (const source of remaining) add(source);
+  return selected;
+}
+
+async function retrieveSpaceCandidates(
+  collection: Collection<Document>,
+  question: string,
+  queryVector: number[],
+  spaceId: string,
+  settings: RetrievalSettings,
+): Promise<Source[]> {
+  const candidateLimit = Math.min(Math.max(settings.topK * 10, 30), 50);
+  const [vectorDocs, sparseDocs] = await Promise.all([
+    collection.aggregate(buildVectorPipeline(queryVector, settings.topK, candidateLimit, [spaceId])).toArray(),
+    collection.aggregate([
+      { $search: {
+        index: process.env.CLOUD_TEXT_INDEX_NAME || "text_index_public",
+        compound: {
+          must: [{ text: { query: question, path: ["title", "retrieval_text", "body", "metadata.category"] } }],
+          filter: [
+            { equals: { path: "visibility", value: "public" } },
+            { equals: { path: "space_id", value: spaceId } },
+          ],
+        },
+      } },
+      { $limit: candidateLimit },
+      { $project: { _id: 0, embedding: 0, bm25_score: { $meta: "searchScore" } } },
+    ]).toArray().catch(() => []),
+  ]);
+  const docs = reciprocalRankFusion(vectorDocs, sparseDocs);
+  const maxBm25 = Math.max(0, ...docs.map((doc) => Number(doc.bm25_score || 0)));
+  docs.forEach((doc) => {
+    doc.space_id = doc.space_id || spaceId;
+    if (doc.score === undefined) doc.score = maxBm25 ? Number(doc.bm25_score || 0) / maxBm25 : 0;
+  });
+  return docs.map(mapSource).filter((source): source is Source => Boolean(source));
+}
+
 export async function retrieve(question: string, settings: RetrievalSettings): Promise<Source[]> {
   const db = await cloudDb();
   const collection = db.collection(process.env.CLOUD_COLLECTION_NAME || "portfolio_knowledge_public");
   const queryVector = await embedQuery(question);
-  const candidateLimit = Math.min(Math.max(settings.topK * 10, 30), 50);
-  const [vectorDocs, sparseDocs] = await Promise.all([collection.aggregate(
-    buildVectorPipeline(queryVector, settings.topK, candidateLimit),
-  ).toArray(), collection.aggregate([
-    { $search: {
-      index: process.env.CLOUD_TEXT_INDEX_NAME || "text_index_public",
-      compound: {
-        must: [{ text: { query: question, path: ["title", "retrieval_text", "body", "metadata.category"] } }],
-        filter: [{ equals: { path: "visibility", value: "public" } }],
-      },
-    } },
-    { $limit: candidateLimit },
-    { $project: { _id: 0, embedding: 0, bm25_score: { $meta: "searchScore" } } },
-  ]).toArray().catch(() => [])]);
-  const docs = reciprocalRankFusion(vectorDocs, sparseDocs);
-  const maxBm25 = Math.max(0, ...docs.map((doc) => Number(doc.bm25_score || 0)));
-  docs.forEach((doc) => {
-    if (doc.score === undefined) doc.score = maxBm25 ? Number(doc.bm25_score || 0) / maxBm25 : 0;
-  });
-  return docs.map(mapSource).filter((source): source is Source => Boolean(source))
-    .filter((source) => settings.scoreThreshold === null || source.score >= settings.scoreThreshold)
-    .slice(0, settings.topK);
+  const spaceIds = normalizeSpaceIds(settings.spaceIds);
+  const [groups, names] = await Promise.all([
+    Promise.all(spaceIds.map((spaceId) => retrieveSpaceCandidates(collection, question, queryVector, spaceId, settings))),
+    spaceNameMap(spaceIds),
+  ]);
+  groups.flat().forEach((source) => { source.spaceName = names.get(source.spaceId) || source.spaceName || source.spaceId; });
+  return mergeSpaceCandidates(groups, settings.topK, settings.scoreThreshold);
 }
 
 export async function retrieveForQuestion(question: string, settings: RetrievalSettings): Promise<Source[]> {

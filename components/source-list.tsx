@@ -7,7 +7,7 @@ export function SourceList({ sources, compact = false }: { sources: Source[]; co
     <details className="sourceItem" key={source.chunkId || `${source.docId}-${index}`} open={!compact && index === 0}>
       <summary>
         <span className="sourceIndex">{index + 1}</span>
-        <span className="sourceTitle"><strong>{source.title}</strong><small>{source.category} · {source.score.toFixed(3)}</small></span>
+        <span className="sourceTitle"><strong>{source.title}</strong><small><span className="spaceBadge">{source.spaceName}</span>{source.category} · {source.score.toFixed(3)}</small></span>
         <FileText size={16}/>
       </summary>
       <p>{source.snippet}</p>
