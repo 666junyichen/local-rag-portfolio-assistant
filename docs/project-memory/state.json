@@ -1,6 +1,6 @@
 {
     "schema_version":  1,
-    "active_branch":  "feat/owner-publish-studio",
+    "active_branch":  "main",
     "active_phase":  "Owner Publish Studio",
     "tasks":  [
                   {
@@ -192,5 +192,5 @@
                             "Clerk Marketplace terms and production keys must be configured before Owner login can be verified on Vercel."
                         ],
     "next_action":  "Configure Clerk in Vercel, deploy the verified branch, and complete production Owner login validation.",
-    "updated_at":  "2026-08-09T20:30:00+10:00"
+    "updated_at":  "2026-08-09T20:51:29+10:00"
 }
