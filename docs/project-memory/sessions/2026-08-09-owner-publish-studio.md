@@ -23,6 +23,7 @@ Complete the public Owner publishing workflow, public Knowledge catalog, authent
 | `python -m pytest` | 251 tests passed with 3 subtests |
 | `node scripts/seed-atlas.mjs --catalog-only` | 27 repository documents backfilled without generating embeddings |
 | Browser checks | Public catalog, Chinese chat, Retrieval Lab, mobile layout, and fail-closed Owner route verified |
+| Production visitor check | Vercel Knowledge rendered 27 records; guest navigation omitted Studio; `/studio` failed closed pending Clerk configuration |
 
 ## Decisions And Concerns
 
@@ -33,6 +34,6 @@ Complete the public Owner publishing workflow, public Knowledge catalog, authent
 
 ## Handoff
 
-- Validate the project-memory documents, review and commit the branch, then merge and deploy the public application.
-- Configure Clerk production keys and `OWNER_EMAILS`, then verify the complete Owner login and publication flow on Vercel.
+- The verified branch was fast-forwarded to `main`, pushed, and automatically deployed to Vercel.
+- Accept the Clerk Marketplace terms, configure production keys and `OWNER_EMAILS`, then verify the complete Owner login and publication flow on Vercel.
 - [Current State](../CURRENT_STATE.md) and `state.json` record the same next action and blocker.

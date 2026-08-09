@@ -183,14 +183,20 @@
                                                 "result":  "27 public documents, Chinese grounded chat, read-only Retrieval Lab, Owner fail-closed state, and 390x844 responsive layout passed",
                                                 "outcome":  "passed",
                                                 "verified_at":  "2026-08-09"
+                                            },
+                                            {
+                                                "command":  "production browser acceptance on Vercel",
+                                                "result":  "Knowledge rendered 27 public records with visitor-only navigation; direct Studio access failed closed pending Clerk configuration",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-09"
                                             }
                                         ]
                   }
               ],
     "last_verified":  "2026-08-09",
     "known_blockers":  [
-                            "Clerk Marketplace terms and production keys must be configured before Owner login can be verified on Vercel."
+                            "Clerk Marketplace terms must be accepted and production keys plus OWNER_EMAILS configured before Owner login can be verified on Vercel."
                         ],
-    "next_action":  "Configure Clerk in Vercel, deploy the verified branch, and complete production Owner login validation.",
-    "updated_at":  "2026-08-09T20:51:29+10:00"
+    "next_action":  "Accept the Clerk Marketplace terms, configure Clerk production keys and OWNER_EMAILS in Vercel, then verify Owner login and publication.",
+    "updated_at":  "2026-08-09T21:10:03+10:00"
 }

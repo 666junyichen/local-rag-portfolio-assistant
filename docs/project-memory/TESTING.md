@@ -46,6 +46,7 @@ The tests cover valid temporary Git repositories, missing required files and key
 - The Next.js production build passed with `/studio` rendered dynamically and all admin, knowledge, chat, retrieval, and health routes compiled.
 - `node scripts/seed-atlas.mjs --validate` validated 27 public documents and 27 chunks. The quota-free `--catalog-only` path backfilled 27 catalog records while preserving Owner records and making no Gemini embedding calls.
 - Browser acceptance passed at desktop and 390x844: guest navigation omitted Studio, the public catalog listed 27 records and filtered MongoDB results, Chinese Chat returned a grounded answer with five sources, Retrieval Lab returned five public-only chunks, and missing Clerk configuration failed closed.
+- Production visitor acceptance on 2026-08-09: the Vercel Knowledge page rendered 27 records with no Studio navigation for guests; direct `/studio` access showed the intended fail-closed Clerk configuration state. Owner login and publication remain unverified until Clerk production configuration is available.
 - The Python milestone remained green at `251 passed, 3 subtests passed`; Task 10 changed only the cloud TypeScript/Next.js surface after that run, so the suite was not repeated unnecessarily.
 - Task 0 focused evidence is recorded in `state.json` and the bootstrap session note.
 

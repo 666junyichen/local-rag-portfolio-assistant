@@ -3,12 +3,12 @@
 - Active branch: `main`
 - Active phase: `Owner Publish Studio`
 - Last verified: `2026-08-09`
-- Updated: `2026-08-09T20:51:29+10:00`
-- Next action: Configure Clerk in Vercel, deploy the verified branch, and complete production Owner login validation.
+- Updated: `2026-08-09T21:10:03+10:00`
+- Next action: Accept the Clerk Marketplace terms, configure Clerk production keys and OWNER_EMAILS in Vercel, then verify Owner login and publication.
 
 ## Status
 
-Tasks 0-9 are completed and reviewed. Task 10's code and local browser acceptance are complete: the cloud app now has an Owner-only Publish Studio, a searchable public Knowledge catalog, transient upload parsing, mandatory PII cleanup, previewable chunking, transactional publication, revision/unpublish/delete/export workflows, and server-side authorization on every admin route. Production Owner login remains pending only because Clerk Marketplace terms and keys are not yet configured in Vercel.
+Tasks 0-9 are completed and reviewed. Task 10's code, merge, push, public deployment, and visitor acceptance are complete: the cloud app now has an Owner-only Publish Studio, a searchable public Knowledge catalog, transient upload parsing, mandatory PII cleanup, previewable chunking, transactional publication, revision/unpublish/delete/export workflows, and server-side authorization on every admin route. The production Knowledge page renders all 27 public records, while direct access to `/studio` fails closed with a Clerk configuration notice. Production Owner login and publication remain pending only because Clerk Marketplace terms and keys are not yet configured in Vercel.
 
 The public catalog was backfilled with 27 repository documents without regenerating Gemini embeddings. A real Chinese cloud question returned five grounded sources after the legacy Atlas Vector Search filter was made compatible with the existing index. The public Retrieval Lab returned five public-only chunks, and the catalog rendered without horizontal overflow at 390x844.
 
@@ -28,10 +28,10 @@ Phase B's adaptive path triggered the reranker for 15 of 50 benchmark questions.
 | 7 | completed | true | true | Vector, BM25, Hybrid, and Hybrid + Rerank diagnostics |
 | 8 | completed | true | true | Real catalog migration, local reindex, full tests, cloud checks, and documentation |
 | 9 | completed | true | true | File-authoritative local configuration, split runtime health, freshness ranking, and adaptive reranker routing |
-| 10 | in_progress | true | false | Implementation and local acceptance passed; production Clerk login remains pending |
+| 10 | in_progress | true | false | Public deployment and visitor acceptance passed; production Clerk login and publication remain pending |
 
 ## Known Blockers
 
-- Clerk Marketplace terms and production keys must be configured before Owner login can be verified on Vercel.
+- Clerk Marketplace terms must be accepted and production keys plus OWNER_EMAILS configured before Owner login can be verified on Vercel.
 
 See [Known Issues](KNOWN_ISSUES.md) for acceptance criteria and [Testing](TESTING.md) for the evidence contract.
