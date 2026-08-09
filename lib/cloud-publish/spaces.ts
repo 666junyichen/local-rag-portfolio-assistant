@@ -49,6 +49,13 @@ export function withTextSpaceFilter(definition: Document): Document {
   };
 }
 
+export function publicDocumentCountMatch(): Document {
+  return {
+    visibility: "public",
+    $or: [{ status: "published" }, { status: { $exists: false } }],
+  };
+}
+
 const stableSuffix = (value: string) => createHash("sha256").update(value).digest("hex").slice(0, 6);
 
 export function slugifySpaceName(value: string): string {
@@ -124,7 +131,7 @@ export async function ensureCloudSpaces(): Promise<void> {
 async function withDocumentCounts(rows: Document[]): Promise<KnowledgeSpace[]> {
   const db = await cloudDb();
   const counts = await db.collection(documentsName()).aggregate([
-    { $match: { visibility: "public", status: "published" } },
+    { $match: publicDocumentCountMatch() },
     { $group: { _id: "$space_id", count: { $sum: 1 } } },
   ]).toArray();
   const bySpace = new Map(counts.map((item) => [String(item._id || DEFAULT_SPACE_ID), Number(item.count || 0)]));

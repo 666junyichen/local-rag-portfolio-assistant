@@ -12,6 +12,7 @@ import { retrieveRequestSchema } from "../lib/cloud-rag/validation";
 import { DEFAULT_PROCESSING_PROFILE, buildChunkPreview } from "../lib/cloud-publish/processing";
 import {
   DEFAULT_PUBLIC_SPACES,
+  publicDocumentCountMatch,
   withTextSpaceFilter,
   withVectorSpaceFilter,
 } from "../lib/cloud-publish/spaces";
@@ -29,6 +30,13 @@ describe("cloud knowledge spaces", () => {
     const text = withTextSpaceFilter({ mappings: { dynamic: false, fields: { body: { type: "string" } } } });
     expect(text.mappings.fields.space_id).toEqual({ type: "token" });
     expect(withTextSpaceFilter(text)).toEqual(text);
+  });
+
+  it("counts legacy repository documents that predate publication status", () => {
+    expect(publicDocumentCountMatch()).toEqual({
+      visibility: "public",
+      $or: [{ status: "published" }, { status: { $exists: false } }],
+    });
   });
 
   it("defaults empty selections to portfolio and rejects more than five spaces", () => {
