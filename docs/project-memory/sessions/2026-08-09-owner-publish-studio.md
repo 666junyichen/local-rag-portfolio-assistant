@@ -29,11 +29,11 @@ Complete the public Owner publishing workflow, public Knowledge catalog, authent
 
 - Original cloud uploads are intentionally not persisted.
 - Cloud drafts expire after seven days and cannot publish while PII findings remain.
-- Clerk production login remains an external deployment gate until Marketplace terms and production keys are configured.
+- On 2026-08-10 the Marketplace terms were accepted, Clerk was provisioned and connected, and the Owner allowlist was stored as a sensitive Production variable. The authenticated acceptance flow still requires the resulting production rebuild.
 - Public retrieval remains isolated from all local private data.
 
 ## Handoff
 
 - The verified branch was fast-forwarded to `main`, pushed, and automatically deployed to Vercel.
-- Accept the Clerk Marketplace terms, configure production keys and `OWNER_EMAILS`, then verify the complete Owner login and publication flow on Vercel.
+- Trigger a production rebuild from Git, then verify the complete Owner login and publication flow on Vercel.
 - [Current State](../CURRENT_STATE.md) and `state.json` record the same next action and blocker.

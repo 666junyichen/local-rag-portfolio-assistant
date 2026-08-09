@@ -193,10 +193,10 @@
                                         ]
                   }
               ],
-    "last_verified":  "2026-08-09",
+    "last_verified":  "2026-08-10",
     "known_blockers":  [
-                            "Clerk Marketplace terms must be accepted and production keys plus OWNER_EMAILS configured before Owner login can be verified on Vercel."
+                            "The Vercel CLI session expired during the direct redeploy attempt; the next Git push will trigger the production rebuild instead."
                         ],
-    "next_action":  "Accept the Clerk Marketplace terms, configure Clerk production keys and OWNER_EMAILS in Vercel, then verify Owner login and publication.",
-    "updated_at":  "2026-08-09T21:10:03+10:00"
+    "next_action":  "Complete the Git-triggered production rebuild, then verify Owner sign-in, PII blocking, publication, retrieval, and unpublish.",
+    "updated_at":  "2026-08-10T01:11:51+10:00"
 }

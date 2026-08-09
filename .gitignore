@@ -28,3 +28,4 @@ evals/latest-report*.json
 
 # Local-only project memory. Never commit private notes or document bodies.
 .project-memory/private/
+.env*
