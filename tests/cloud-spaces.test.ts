@@ -10,11 +10,25 @@ import {
 } from "../lib/cloud-rag/spaces";
 import { retrieveRequestSchema } from "../lib/cloud-rag/validation";
 import { DEFAULT_PROCESSING_PROFILE, buildChunkPreview } from "../lib/cloud-publish/processing";
-import { DEFAULT_PUBLIC_SPACES } from "../lib/cloud-publish/spaces";
+import {
+  DEFAULT_PUBLIC_SPACES,
+  withTextSpaceFilter,
+  withVectorSpaceFilter,
+} from "../lib/cloud-publish/spaces";
 
 describe("cloud knowledge spaces", () => {
   it("ships the three intended starter spaces", () => {
     expect(DEFAULT_PUBLIC_SPACES.map((space) => space.space_id)).toEqual(["portfolio", "rag-learning", "project-docs"]);
+  });
+
+  it("adds space filters to existing Atlas index definitions idempotently", () => {
+    const vector = withVectorSpaceFilter({ fields: [{ type: "vector", path: "embedding", numDimensions: 3 }] });
+    expect(vector.fields).toContainEqual({ type: "filter", path: "space_id" });
+    expect(withVectorSpaceFilter(vector)).toEqual(vector);
+
+    const text = withTextSpaceFilter({ mappings: { dynamic: false, fields: { body: { type: "string" } } } });
+    expect(text.mappings.fields.space_id).toEqual({ type: "token" });
+    expect(withTextSpaceFilter(text)).toEqual(text);
   });
 
   it("defaults empty selections to portfolio and rejects more than five spaces", () => {

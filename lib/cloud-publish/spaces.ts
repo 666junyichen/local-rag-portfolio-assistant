@@ -23,6 +23,32 @@ export const DEFAULT_PUBLIC_SPACES = [
   { space_id: "project-docs", name: "Project Docs", description: "Public documentation for standalone software and data projects." },
 ] as const;
 
+export function withVectorSpaceFilter(definition: Document): Document {
+  const fields = Array.isArray(definition.fields) ? definition.fields : [];
+  if (fields.some((field) => field?.path === "space_id")) return definition;
+  return {
+    ...definition,
+    fields: [...fields, { type: "filter", path: "space_id" }],
+  };
+}
+
+export function withTextSpaceFilter(definition: Document): Document {
+  const mappings = definition.mappings && typeof definition.mappings === "object"
+    ? definition.mappings
+    : {};
+  const fields = mappings.fields && typeof mappings.fields === "object"
+    ? mappings.fields
+    : {};
+  if (fields.space_id) return definition;
+  return {
+    ...definition,
+    mappings: {
+      ...mappings,
+      fields: { ...fields, space_id: { type: "token" } },
+    },
+  };
+}
+
 const stableSuffix = (value: string) => createHash("sha256").update(value).digest("hex").slice(0, 6);
 
 export function slugifySpaceName(value: string): string {
@@ -54,9 +80,40 @@ export async function ensureCloudSpaces(): Promise<void> {
     })));
     await Promise.all([
       db.collection(draftsName()).updateMany({ space_id: { $exists: false } }, { $set: { space_id: DEFAULT_SPACE_ID } }),
-      db.collection(documentsName()).updateMany({ space_id: { $exists: false } }, { $set: { space_id: DEFAULT_SPACE_ID } }),
-      db.collection(chunksName()).updateMany({ space_id: { $exists: false } }, { $set: { space_id: DEFAULT_SPACE_ID, space_name: "Portfolio" } }),
+      db.collection(documentsName()).updateMany(
+        { space_id: { $exists: false } },
+        { $set: { space_id: DEFAULT_SPACE_ID, space_name: "Portfolio" } },
+      ),
+      db.collection(chunksName()).updateMany(
+        { space_id: { $exists: false } },
+        { $set: {
+          space_id: DEFAULT_SPACE_ID,
+          space_name: "Portfolio",
+          "metadata.space_id": DEFAULT_SPACE_ID,
+          "metadata.space_name": "Portfolio",
+        } },
+      ),
     ]);
+
+    const chunks = db.collection(chunksName());
+    const indexes = await chunks.listSearchIndexes().toArray().catch(() => []) as Document[];
+    const vectorName = process.env.CLOUD_VECTOR_INDEX_NAME || "vector_index_public";
+    const textName = process.env.CLOUD_TEXT_INDEX_NAME || "text_index_public";
+
+    const vectorIndex = indexes.find((index) => index.name === vectorName);
+    const vectorDefinition = vectorIndex?.latestDefinition || vectorIndex?.definition;
+    if (vectorDefinition && !vectorDefinition.fields?.some((field: Document) => field.path === "space_id")) {
+      await chunks.updateSearchIndex(vectorName, withVectorSpaceFilter(vectorDefinition));
+    }
+
+    const textIndex = indexes.find((index) => index.name === textName);
+    const textDefinition = textIndex?.latestDefinition || textIndex?.definition;
+    if (textDefinition && !textDefinition.mappings?.fields?.space_id) {
+      await chunks.updateSearchIndex(textName, withTextSpaceFilter(textDefinition)).catch(() => {
+        console.warn("Atlas text index could not be updated; vector retrieval remains available.");
+      });
+    }
+    await chunks.createIndex({ visibility: 1, space_id: 1, doc_id: 1 });
   })().catch((error) => {
     migrationReady = undefined;
     throw error;
