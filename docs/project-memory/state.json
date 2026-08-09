@@ -1,7 +1,7 @@
 {
     "schema_version":  1,
-    "active_branch":  "main",
-    "active_phase":  "Phase B retrieval calibration",
+    "active_branch":  "feat/owner-publish-studio",
+    "active_phase":  "Owner Publish Studio",
     "tasks":  [
                   {
                       "id":  0,
@@ -158,10 +158,39 @@
                                                 "verified_at":  "2026-08-08"
                                             }
                                         ]
+                  },
+                  {
+                      "id":  10,
+                      "title":  "Owner Publish Studio and public knowledge catalog",
+                      "status":  "in_progress",
+                      "reviewed":  true,
+                      "final_quality_approved":  false,
+                      "test_evidence":  [
+                                            {
+                                                "command":  "npm test",
+                                                "result":  "46 passed across 9 Vitest files",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-09"
+                                            },
+                                            {
+                                                "command":  "npm run build",
+                                                "result":  "Next.js production build passed with 16 API/page routes and dynamic Owner Studio",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-09"
+                                            },
+                                            {
+                                                "command":  "local browser acceptance on port 3010",
+                                                "result":  "27 public documents, Chinese grounded chat, read-only Retrieval Lab, Owner fail-closed state, and 390x844 responsive layout passed",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-09"
+                                            }
+                                        ]
                   }
               ],
-    "last_verified":  "2026-08-08",
-    "known_blockers":  [],
-    "next_action":  "Collect real Retrieval Lab evidence before changing adaptive routing thresholds or expanding the RAG architecture.",
-    "updated_at":  "2026-08-08T18:45:00+10:00"
+    "last_verified":  "2026-08-09",
+    "known_blockers":  [
+                            "Clerk Marketplace terms and production keys must be configured before Owner login can be verified on Vercel."
+                        ],
+    "next_action":  "Configure Clerk in Vercel, deploy the verified branch, and complete production Owner login validation.",
+    "updated_at":  "2026-08-09T20:30:00+10:00"
 }

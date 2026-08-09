@@ -1,0 +1,239 @@
+"use client";
+
+import {
+  Archive,
+  Check,
+  ChevronRight,
+  Download,
+  Eye,
+  FileText,
+  LoaderCircle,
+  RefreshCw,
+  RotateCcw,
+  Send,
+  ShieldAlert,
+  Trash2,
+  Upload,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+
+type ProcessingProfile = {
+  chunkMode: "standard" | "parent_child" | "resume_semantic";
+  delimiter: string;
+  childMaxTokens: number;
+  childOverlapTokens: number;
+  parentMaxTokens: number;
+  normalizeWhitespace: boolean;
+  removeUrls: boolean;
+  removeEmails: boolean;
+};
+
+type PreviewChunk = {
+  chunkId: string;
+  parentChunkId: string;
+  rawBody: string;
+  parentBody: string;
+  sectionType: string;
+  sectionPath: string;
+  tokenCount: number;
+  charCount: number;
+};
+
+type Draft = {
+  draftId: string;
+  docId?: string;
+  title: string;
+  summary: string;
+  category: string;
+  language: "zh" | "en";
+  sourceUrl: string;
+  fileName: string;
+  fileType: string;
+  sizeBytes: number;
+  parsedBody: string;
+  cleanedBody: string;
+  processingProfile: ProcessingProfile;
+  preview?: { parents: PreviewChunk[]; children: PreviewChunk[]; averageChildTokens: number };
+  piiFindings: Array<{ kind: string; label: string }>;
+  status: string;
+  failureCode: string;
+  publicationVersion: number;
+  expiresAt: string;
+};
+
+type PublishedDocument = {
+  docId: string;
+  title: string;
+  summary: string;
+  category: string;
+  language: "zh" | "en";
+  updatedAt: string;
+  sourceUrl?: string;
+  status: string;
+  publicationVersion: number;
+};
+
+const steps = ["Upload & parse", "Clean & inspect", "Chunk preview", "Publish"];
+
+async function requestJson(url: string, init?: RequestInit) {
+  const response = await fetch(url, init);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || `Request failed (${response.status})`);
+  return payload;
+}
+
+export function PublishStudio() {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [documents, setDocuments] = useState<PublishedDocument[]>([]);
+  const [selected, setSelected] = useState<Draft | null>(null);
+  const [tab, setTab] = useState<"drafts" | "published" | "archived">("drafts");
+  const [step, setStep] = useState(0);
+  const [busy, setBusy] = useState("");
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+
+  async function refresh() {
+    setBusy("refresh");
+    try {
+      const payload = await requestJson("/api/admin/drafts", { cache: "no-store" });
+      setDrafts(payload.drafts || []);
+      setDocuments(payload.documents || []);
+      if (selected) {
+        const updated = (payload.drafts || []).find((draft: Draft) => draft.draftId === selected.draftId);
+        if (updated) setSelected(updated);
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to load Publish Studio.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  useEffect(() => { void refresh(); }, []);
+
+  async function uploadFiles(files: FileList | null) {
+    if (!files?.length) return;
+    setBusy("upload"); setError(""); setNotice("");
+    try {
+      const form = new FormData();
+      Array.from(files).slice(0, 10).forEach((file) => form.append("files", file));
+      const response = await fetch("/api/admin/drafts", { method: "POST", body: form });
+      const payload = await response.json();
+      if (!response.ok && response.status !== 207) throw new Error(payload.error || "Upload failed.");
+      setNotice(`${payload.drafts?.length || 0} draft(s) created${payload.errors?.length ? `; ${payload.errors.length} file(s) need attention` : ""}.`);
+      await refresh();
+      if (payload.drafts?.[0]) { setSelected(payload.drafts[0]); setStep(0); setTab("drafts"); }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Upload failed.");
+    } finally {
+      if (inputRef.current) inputRef.current.value = "";
+      setBusy("");
+    }
+  }
+
+  function update<K extends keyof Draft>(key: K, value: Draft[K]) {
+    setSelected((current) => current ? { ...current, [key]: value } : current);
+  }
+
+  function updateProfile<K extends keyof ProcessingProfile>(key: K, value: ProcessingProfile[K]) {
+    setSelected((current) => current ? { ...current, processingProfile: { ...current.processingProfile, [key]: value } } : current);
+  }
+
+  async function saveDraft(current = selected) {
+    if (!current) throw new Error("Choose a draft first.");
+    const payload = await requestJson(`/api/admin/drafts/${current.draftId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: current.title,
+        summary: current.summary,
+        category: current.category,
+        language: current.language,
+        sourceUrl: current.sourceUrl,
+        cleanedBody: current.cleanedBody,
+        processingProfile: current.processingProfile,
+      }),
+    });
+    setSelected(payload.draft);
+    return payload.draft as Draft;
+  }
+
+  async function previewDraft() {
+    if (!selected) throw new Error("Choose a draft first.");
+    setBusy("preview"); setError(""); setNotice("");
+    try {
+      const saved = await saveDraft(selected);
+      const payload = await requestJson(`/api/admin/drafts/${saved.draftId}/preview`, { method: "POST" });
+      setSelected(payload.draft);
+      setDrafts((current) => current.map((draft) => draft.draftId === payload.draft.draftId ? payload.draft : draft));
+      setNotice(payload.draft.piiFindings.length ? "Preview updated. Remove all detected PII before publishing." : "Preview is ready to publish.");
+      return payload.draft as Draft;
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function publish() {
+    if (!selected) return;
+    setBusy("publish"); setError(""); setNotice("");
+    try {
+      const ready = await previewDraft();
+      if (ready.piiFindings.length) { setStep(1); return; }
+      const payload = await requestJson(`/api/admin/drafts/${ready.draftId}/publish`, { method: "POST" });
+      setNotice(`Published ${payload.chunkCount} searchable chunks.`);
+      setSelected(null); setTab("published"); setStep(0);
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Publishing failed. The draft was kept.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function documentAction(action: "unpublish" | "revise" | "delete", document: PublishedDocument) {
+    if (action === "delete" && !window.confirm(`Permanently delete “${document.title}”?`)) return;
+    setBusy(`${action}:${document.docId}`); setError(""); setNotice("");
+    try {
+      if (action === "delete") await requestJson(`/api/admin/documents/${document.docId}`, { method: "DELETE" });
+      else {
+        const payload = await requestJson(`/api/admin/documents/${document.docId}/${action}`, { method: "POST" });
+        if (action === "revise" && payload.draft) { setSelected(payload.draft); setTab("drafts"); setStep(1); }
+      }
+      setNotice(action === "unpublish" ? "Document removed from public retrieval." : action === "revise" ? "Revision draft created." : "Document permanently deleted.");
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The action failed.");
+    } finally { setBusy(""); }
+  }
+
+  const visibleDocuments = documents.filter((document) => tab === "archived" ? document.status === "archived" : document.status === "published");
+
+  return <div className="studioFrame">
+    <header className="studioHeader"><div><span className="eyebrow">OWNER PUBLISHING</span><h1>Publish Studio</h1><p>Prepare public evidence without retaining the original uploaded file.</p></div><div className="studioHeaderActions"><a className="secondaryButton compactButton" href="/api/admin/export"><Download size={16}/>Export JSON</a><button className="iconButton" title="Refresh workspace" aria-label="Refresh workspace" onClick={() => void refresh()}><RefreshCw className={busy === "refresh" ? "spin" : ""} size={18}/></button></div></header>
+    {notice ? <div className="successBanner"><Check size={17}/>{notice}</div> : null}
+    {error ? <div className="errorBanner">{error}</div> : null}
+    <div className="studioLayout">
+      <aside className="studioSidebar">
+        <input ref={inputRef} className="srOnly" type="file" multiple accept=".pdf,.docx,.md,.markdown,.txt,.csv" onChange={(event) => void uploadFiles(event.target.files)}/>
+        <button className="primaryButton uploadButton" onClick={() => inputRef.current?.click()} disabled={Boolean(busy)}>{busy === "upload" ? <LoaderCircle className="spin" size={17}/> : <Upload size={17}/>}Upload public candidates</button>
+        <p className="uploadNote">PDF, DOCX, MD, TXT, CSV · 4 MB each<br/>Original files are discarded after parsing.</p>
+        <div className="studioTabs" role="tablist">
+          <button className={tab === "drafts" ? "selected" : ""} onClick={() => setTab("drafts")}>Drafts <span>{drafts.filter((item) => item.status !== "published").length}</span></button>
+          <button className={tab === "published" ? "selected" : ""} onClick={() => setTab("published")}>Published <span>{documents.filter((item) => item.status === "published").length}</span></button>
+          <button className={tab === "archived" ? "selected" : ""} onClick={() => setTab("archived")}>Archived <span>{documents.filter((item) => item.status === "archived").length}</span></button>
+        </div>
+        <div className="studioList">{tab === "drafts" ? drafts.filter((item) => item.status !== "published").map((draft) => <button key={draft.draftId} className={selected?.draftId === draft.draftId ? "studioListItem selected" : "studioListItem"} onClick={() => { setSelected(draft); setStep(0); }}><FileText size={17}/><span><strong>{draft.title}</strong><small>{draft.status} · {draft.fileType.toUpperCase()}</small></span><ChevronRight size={15}/></button>) : visibleDocuments.map((document) => <div className="publishedListItem" key={document.docId}><span><strong>{document.title}</strong><small>v{document.publicationVersion} · {document.status}</small></span><div><button title="Create revision" aria-label="Create revision" onClick={() => void documentAction("revise", document)}><RotateCcw size={15}/></button>{document.status === "published" ? <button title="Unpublish" aria-label="Unpublish" onClick={() => void documentAction("unpublish", document)}><Archive size={15}/></button> : null}<button title="Permanently delete" aria-label="Permanently delete" onClick={() => void documentAction("delete", document)}><Trash2 size={15}/></button></div></div>)}</div>
+      </aside>
+      <section className="studioWorkspace">
+        {!selected ? <div className="studioEmpty"><Upload size={26}/><h2>Select a draft or upload a document</h2><p>Every upload becomes an expiring draft. Nothing enters public retrieval until the final confirmation.</p></div> : <>
+          <div className="stepper" aria-label="Publishing steps">{steps.map((label, index) => <button key={label} className={step === index ? "active" : step > index ? "complete" : ""} onClick={() => setStep(index)}><span>{step > index ? <Check size={14}/> : index + 1}</span>{label}</button>)}</div>
+          {step === 0 ? <div className="studioPane"><div className="paneHeading"><div><span className="eyebrow">STEP 1</span><h2>Upload & parse</h2></div><span className="statusBadge">Parsed</span></div><dl className="fileFacts"><div><dt>File</dt><dd>{selected.fileName}</dd></div><div><dt>Type</dt><dd>{selected.fileType.toUpperCase()}</dd></div><div><dt>Size</dt><dd>{Math.max(1, Math.round(selected.sizeBytes / 1024))} KB</dd></div><div><dt>Retention</dt><dd>Text draft expires in 7 days</dd></div></dl><label className="fieldLabel">Parsed text<textarea value={selected.parsedBody} readOnly rows={16}/></label><div className="paneActions"><button className="primaryButton" onClick={() => setStep(1)}>Continue <ChevronRight size={16}/></button></div></div> : null}
+          {step === 1 ? <div className="studioPane"><div className="paneHeading"><div><span className="eyebrow">STEP 2</span><h2>Clean & inspect</h2></div>{selected.piiFindings.length ? <span className="dangerBadge"><ShieldAlert size={14}/>{selected.piiFindings.length} PII finding(s)</span> : <span className="statusBadge"><Check size={14}/>PII clear</span>}</div><div className="fieldGrid"><label className="fieldLabel">Title<input value={selected.title} onChange={(event) => update("title", event.target.value)}/></label><label className="fieldLabel">Category<input value={selected.category} onChange={(event) => update("category", event.target.value)}/></label><label className="fieldLabel wide">Summary<textarea rows={3} value={selected.summary} onChange={(event) => update("summary", event.target.value)}/></label><label className="fieldLabel">Language<select value={selected.language} onChange={(event) => update("language", event.target.value as "zh" | "en")}><option value="zh">中文</option><option value="en">English</option></select></label><label className="fieldLabel">Public source URL<input type="url" value={selected.sourceUrl} onChange={(event) => update("sourceUrl", event.target.value)}/></label></div>{selected.piiFindings.length ? <div className="piiPanel"><ShieldAlert size={19}/><div><strong>Publishing is blocked</strong><p>Remove the detected {selected.piiFindings.map((item) => item.label).join(", ")} from the clean text, then run the check again. Detected values are not shown in errors or logs.</p></div></div> : null}<label className="fieldLabel">Clean public text<textarea rows={18} value={selected.cleanedBody} onChange={(event) => update("cleanedBody", event.target.value)}/></label><div className="paneActions"><button className="secondaryButton" onClick={() => void saveDraft().then(() => setNotice("Draft saved. Preview must be regenerated."))}>Save draft</button><button className="primaryButton" onClick={() => { void previewDraft().then(() => setStep(2)).catch((cause) => setError(cause instanceof Error ? cause.message : "Preview failed.")); }}>Run PII check & preview <Eye size={16}/></button></div></div> : null}
+          {step === 2 ? <div className="studioPane"><div className="paneHeading"><div><span className="eyebrow">STEP 3</span><h2>Chunk configuration</h2></div><span className="statusBadge">{selected.preview?.children.length || 0} retrieval chunks</span></div><div className="profileGrid"><label className="fieldLabel">Mode<select value={selected.processingProfile.chunkMode} onChange={(event) => updateProfile("chunkMode", event.target.value as ProcessingProfile["chunkMode"])}><option value="standard">Standard</option><option value="parent_child">Parent-child</option><option value="resume_semantic">Resume semantic</option></select></label><label className="fieldLabel">Delimiter<input value={selected.processingProfile.delimiter.replace(/\n/g, "\\n")} onChange={(event) => updateProfile("delimiter", event.target.value.replace(/\\n/g, "\n"))}/></label><label className="fieldLabel">Child max tokens<input type="number" min={50} max={1000} value={selected.processingProfile.childMaxTokens} onChange={(event) => updateProfile("childMaxTokens", Number(event.target.value))}/></label><label className="fieldLabel">Child overlap<input type="number" min={0} max={Math.floor(selected.processingProfile.childMaxTokens * .25)} value={selected.processingProfile.childOverlapTokens} onChange={(event) => updateProfile("childOverlapTokens", Number(event.target.value))}/></label><label className="fieldLabel">Parent max tokens<input type="number" min={selected.processingProfile.childMaxTokens} max={2000} value={selected.processingProfile.parentMaxTokens} onChange={(event) => updateProfile("parentMaxTokens", Number(event.target.value))}/></label></div><div className="checkRow"><label><input type="checkbox" checked={selected.processingProfile.normalizeWhitespace} onChange={(event) => updateProfile("normalizeWhitespace", event.target.checked)}/>Normalize whitespace</label><label><input type="checkbox" checked={selected.processingProfile.removeUrls} onChange={(event) => updateProfile("removeUrls", event.target.checked)}/>Remove URLs</label><label><input type="checkbox" checked={selected.processingProfile.removeEmails} onChange={(event) => updateProfile("removeEmails", event.target.checked)}/>Remove emails</label></div><div className="previewMetrics"><div><strong>{selected.preview?.parents.length || 0}</strong><span>answer parents</span></div><div><strong>{selected.preview?.children.length || 0}</strong><span>retrieval children</span></div><div><strong>{selected.preview?.averageChildTokens || 0}</strong><span>avg. child tokens</span></div></div><div className="chunkPreview">{selected.preview?.children.slice(0, 20).map((chunk, index) => <details key={chunk.chunkId}><summary><span>#{index + 1}</span><strong>{chunk.sectionPath}</strong><small>{chunk.tokenCount} tokens · {chunk.charCount} chars</small></summary><div><h3>Matched child</h3><p>{chunk.rawBody}</p><h3>Returned parent</h3><p>{chunk.parentBody}</p></div></details>)}</div><div className="paneActions"><button className="secondaryButton" onClick={() => void previewDraft().catch((cause) => setError(cause instanceof Error ? cause.message : "Preview failed."))}>{busy === "preview" ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>}Regenerate preview</button><button className="primaryButton" onClick={() => setStep(3)}>Review publication <ChevronRight size={16}/></button></div></div> : null}
+          {step === 3 ? <div className="studioPane"><div className="paneHeading"><div><span className="eyebrow">STEP 4</span><h2>Publish confirmation</h2></div></div><div className="publishChecklist"><div className={selected.piiFindings.length ? "blocked" : "ok"}>{selected.piiFindings.length ? <ShieldAlert/> : <Check/>}<span><strong>PII gate</strong><small>{selected.piiFindings.length ? "Blocked until clean text is edited" : "No blocking PII detected"}</small></span></div><div className={selected.preview?.children.length ? "ok" : "blocked"}>{selected.preview?.children.length ? <Check/> : <ShieldAlert/>}<span><strong>Chunk preview</strong><small>{selected.preview?.children.length || 0} child chunks · {selected.preview?.parents.length || 0} parent contexts</small></span></div><div className="ok"><Check/><span><strong>Public boundary</strong><small>Only cleaned text and embeddings will be stored in public Atlas collections</small></span></div></div>{selected.failureCode === "free_quota_unavailable" ? <div className="quotaBanner">Gemini free quota is currently unavailable. Your draft is intact; retry later without uploading again.</div> : null}<div className="publishSummary"><h3>{selected.title}</h3><p>{selected.summary || "No public summary yet."}</p><span>{selected.category} · {selected.language.toUpperCase()} · version {selected.publicationVersion}</span></div><div className="paneActions"><button className="secondaryButton" onClick={() => setStep(2)}>Back to preview</button><button className="primaryButton" disabled={Boolean(busy) || Boolean(selected.piiFindings.length) || !selected.preview?.children.length} onClick={() => void publish()}>{busy === "publish" ? <LoaderCircle className="spin" size={16}/> : <Send size={16}/>}Publish to public RAG</button></div></div> : null}
+        </>}
+      </section>
+    </div>
+  </div>;
+}

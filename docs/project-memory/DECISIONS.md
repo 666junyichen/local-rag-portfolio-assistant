@@ -35,3 +35,15 @@ For local Streamlit execution, the repository `.env` overrides stale or empty va
 ## 2026-08-08: Adaptive Retrieval Is The Interactive Default
 
 Keep Vector as the fast first pass. Apply deterministic recency features only when the query expresses freshness intent, and invoke the cached local Cross-Encoder only for complex, explicitly requested, or low-confidence queries. If the free local reranker is unavailable, report the fallback and continue with Vector instead of downloading during a request.
+
+## 2026-08-09: Cloud Upload Is Owner-Only And Public-Only
+
+Do not create an anonymous or multi-tenant upload product. Cloud uploads require a Clerk identity whose verified primary email is allowlisted by `OWNER_EMAILS`, and every accepted document is a draft for eventual public publication. Local SQLite, private uploads, and `portfolio_knowledge_local` never enter this path.
+
+## 2026-08-09: Original Cloud Uploads Are Transient
+
+Parse supported files in the request, then discard the original binary. Store only draft text, metadata, processing configuration, PII findings, and preview data with a seven-day TTL. Do not add Vercel Blob until a measured requirement justifies retaining source files.
+
+## 2026-08-09: Catalog Backfills Must Not Spend Embedding Quota
+
+Keep retrieval-chunk seeding separate from document-catalog maintenance. `--catalog-only` may synchronize `repo_seed` document metadata without calling Gemini or rewriting retrieval chunks, while full seed remains responsible for embedding/index contracts. Both modes preserve `owner_upload` records.

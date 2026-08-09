@@ -12,21 +12,25 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 ROOT = Path(__file__).resolve().parents[1]
+COMPANY_RESUME_ROOT = ROOT.parents[1]
 
 SOURCE_ROOTS = [
     {
         "name": "project_activity_root",
-        "path": "C:\\\u7b80\u5386\u6295\u9012\\Company-resume\\\u6700\u8fd1\u7684project \u548c\u6d3b\u52a8\u6765\u4e00\u76f4\u66f4\u65b0",
+        "path": Path(os.environ.get("PORTFOLIO_PROJECTS_ROOT", str(ROOT.parent))),
         "description": "Local project and activity materials",
     },
     {
         "name": "resume_root",
-        "path": "C:\\\u7b80\u5386\u6295\u9012\\Company-resume\\resumes",
+        "path": Path(os.environ.get("PORTFOLIO_RESUMES_ROOT", str(COMPANY_RESUME_ROOT / "resumes"))),
         "description": "Local resume drafts and master resumes",
     },
     {
         "name": "ranking_jobs_skill",
-        "path": r"C:\Users\20430\.agents\skills\ranking-jobs-from-resume",
+        "path": Path(os.environ.get(
+            "RANKING_JOBS_SKILL_ROOT",
+            str(Path.home() / ".agents" / "skills" / "ranking-jobs-from-resume"),
+        )),
         "description": "Local ranking-jobs-from-resume skill notes and evidence inventory",
     },
 ]

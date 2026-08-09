@@ -55,6 +55,39 @@ export async function embedQuery(text: string): Promise<number[]> {
   return values;
 }
 
+export async function embedDocuments(texts: string[], fetcher: Fetcher = fetch): Promise<number[][]> {
+  if (!texts.length) return [];
+  if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured");
+  const model = embeddingModel();
+  const output: number[][] = [];
+  const batchSize = 20;
+  for (let start = 0; start < texts.length; start += batchSize) {
+    const batch = texts.slice(start, start + batchSize);
+    const result = await requestWithRetry<{ embeddings?: Array<{ values?: number[] }> }>(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:batchEmbedContents`,
+      {
+        method: "POST",
+        headers: { "x-goog-api-key": process.env.GEMINI_API_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requests: batch.map((text) => ({
+            model: `models/${model}`,
+            taskType: "RETRIEVAL_DOCUMENT",
+            content: { parts: [{ text }] },
+          })),
+        }),
+      },
+      fetcher,
+      sleep,
+    );
+    const embeddings = result.embeddings || [];
+    if (embeddings.length !== batch.length || embeddings.some((embedding) => !embedding.values?.length)) {
+      throw new Error("Gemini embedding response is incomplete");
+    }
+    output.push(...embeddings.map((embedding) => embedding.values!));
+  }
+  return output;
+}
+
 export function buildGenerationPayload(prompt: string, thinkingEnabled: boolean) {
   return {
     contents: [{ role: "user", parts: [{ text: prompt }] }],

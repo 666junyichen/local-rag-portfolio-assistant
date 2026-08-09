@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapSource, reciprocalRankFusion } from "../lib/cloud-rag/retrieval";
+import { buildVectorPipeline, mapSource, reciprocalRankFusion } from "../lib/cloud-rag/retrieval";
 import { sse } from "../lib/cloud-rag/sse";
 import { chatRequestSchema } from "../lib/cloud-rag/validation";
 
@@ -16,9 +16,25 @@ describe("cloud RAG contracts", () => {
 
   it("never exposes private search results", () => {
     expect(mapSource({ visibility: "private", body: "secret" })).toBeNull();
+    expect(mapSource({ visibility: "public", validity_status: "archived", body: "old" })).toBeNull();
     const source = mapSource({ visibility: "public", doc_id: "d1", chunk_id: "c1", title: "Project", body: "Public evidence", score: 0.9, metadata: { language: "en" } });
     expect(source?.snippet).toBe("Public evidence");
     expect(source).not.toHaveProperty("embedding");
+  });
+
+  it("returns the parent answer context for owner-uploaded child matches", () => {
+    const source = mapSource({ visibility: "public", validity_status: "active", child_body: "MongoDB", parent_body: "Portfolio RAG uses MongoDB Vector Search.", score: 0.9 });
+    expect(source?.snippet).toBe("Portfolio RAG uses MongoDB Vector Search.");
+  });
+
+  it("uses only indexed visibility fields in the vector pre-filter", () => {
+    const pipeline = buildVectorPipeline([0.1, 0.2], 5, 30);
+    expect(pipeline[0]).toEqual(expect.objectContaining({
+      $vectorSearch: expect.objectContaining({ filter: { visibility: "public" } }),
+    }));
+    expect(pipeline).toContainEqual({
+      $match: { $or: [{ validity_status: "active" }, { validity_status: { $exists: false } }] },
+    });
   });
 
   it("formats custom SSE events", () => {

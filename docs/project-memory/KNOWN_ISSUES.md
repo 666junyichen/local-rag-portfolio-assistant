@@ -33,3 +33,9 @@ Phase B resolved the measured freshness gap: all five freshness benchmark cases 
 ## Remaining Local Limitation
 
 The optional Cross-Encoder is intentionally loaded from the local model cache only. If it is absent, adaptive retrieval falls back to Vector and reports the reason instead of downloading a model during a user request. Install or pre-cache the free reranker separately when high-precision mode is required.
+
+## Owner Publish Studio Deployment Gate
+
+The Owner publishing implementation, public catalog, admin authorization tests, build, catalog backfill, and local browser acceptance passed on 2026-08-09. Production Owner login is not active until the Vercel project has a Clerk integration or manually supplied Clerk keys plus `OWNER_EMAILS`. The application fails closed while these values are absent: visitors cannot see a Studio navigation item, `/studio` shows a configuration notice, and admin APIs return an unavailable/unauthorized response.
+
+The public Knowledge catalog does not share this blocker. It already contains the 27 repository-seeded records, and the catalog-only seed path can refresh metadata without calling Gemini or changing retrieval embeddings.

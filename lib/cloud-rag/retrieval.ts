@@ -6,6 +6,7 @@ import { planQuery, shouldRefuseWithoutRetrieval } from "./query-planning";
 
 export function mapSource(doc: Document): Source | null {
   if (doc.visibility !== "public") return null;
+  if (doc.validity_status && doc.validity_status !== "active") return null;
   const metadata = doc.metadata || {};
   return {
     docId: String(doc.doc_id || ""),
@@ -13,8 +14,8 @@ export function mapSource(doc: Document): Source | null {
     title: String(doc.title || "Untitled"),
     category: String(metadata.category || "portfolio"),
     language: metadata.language === "zh" ? "zh" : "en",
-    ...(doc.url ? { url: String(doc.url) } : {}),
-    snippet: String(doc.raw_body || doc.body || "").slice(0, 1200),
+    ...(doc.url || doc.source_url ? { url: String(doc.url || doc.source_url) } : {}),
+    snippet: String(doc.parent_body || doc.raw_body || doc.body || "").slice(0, 1200),
     score: Number(doc.score || 0),
     ...(Array.isArray(doc.retrieval_channels) ? { retrievalChannels: doc.retrieval_channels } : {}),
     ...(doc.vector_rank ? { vectorRank: Number(doc.vector_rank) } : {}),
@@ -40,22 +41,29 @@ export function reciprocalRankFusion(vectorRows: Document[], sparseRows: Documen
   return [...fused.values()].sort((left, right) => Number(right.fusion_score) - Number(left.fusion_score));
 }
 
+export function buildVectorPipeline(queryVector: number[], topK: number, candidateLimit: number): Document[] {
+  return [
+    { $vectorSearch: {
+      index: process.env.CLOUD_VECTOR_INDEX_NAME || "vector_index_public",
+      path: "embedding",
+      queryVector,
+      numCandidates: Math.max(topK * 20, 100),
+      limit: candidateLimit,
+      filter: { visibility: "public" },
+    } },
+    { $match: { $or: [{ validity_status: "active" }, { validity_status: { $exists: false } }] } },
+    { $project: { _id: 0, embedding: 0, score: { $meta: "vectorSearchScore" } } },
+  ];
+}
+
 export async function retrieve(question: string, settings: RetrievalSettings): Promise<Source[]> {
   const db = await cloudDb();
   const collection = db.collection(process.env.CLOUD_COLLECTION_NAME || "portfolio_knowledge_public");
   const queryVector = await embedQuery(question);
   const candidateLimit = Math.min(Math.max(settings.topK * 10, 30), 50);
-  const [vectorDocs, sparseDocs] = await Promise.all([collection.aggregate([
-    { $vectorSearch: {
-      index: process.env.CLOUD_VECTOR_INDEX_NAME || "vector_index_public",
-      path: "embedding",
-      queryVector,
-      numCandidates: Math.max(settings.topK * 20, 100),
-      limit: candidateLimit,
-      filter: { visibility: "public" },
-    } },
-    { $project: { _id: 0, embedding: 0, score: { $meta: "vectorSearchScore" } } },
-  ]).toArray(), collection.aggregate([
+  const [vectorDocs, sparseDocs] = await Promise.all([collection.aggregate(
+    buildVectorPipeline(queryVector, settings.topK, candidateLimit),
+  ).toArray(), collection.aggregate([
     { $search: {
       index: process.env.CLOUD_TEXT_INDEX_NAME || "text_index_public",
       compound: {

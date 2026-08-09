@@ -15,3 +15,5 @@ Phase A follows the approved implementation plan in task order. A later task may
 | 8 | Migration, integration, and documentation | completed and reviewed |
 
 Phase A is complete. The benchmark-supported Phase B candidate is deliberately narrow: improve freshness ranking and route expensive reranking only where it adds value. Broader Agentic RAG work remains deferred.
+
+Task 10's implementation and local acceptance are complete: Clerk Owner authorization, transient file parsing, mandatory PII cleanup, previewable public chunking, transactional Atlas publication, revision lifecycle controls, and a read-only public knowledge catalog are in place. The remaining deployment gate is external Clerk configuration and production Owner-login verification. It does not connect local private sources to Vercel.

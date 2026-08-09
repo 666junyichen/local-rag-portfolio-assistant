@@ -1,5 +1,17 @@
 # Project Memory Changelog
 
+## 2026-08-09
+
+- Added a searchable public Knowledge catalog that exposes only allowlisted document metadata.
+- Added Clerk-backed Owner authorization with verified-email allowlisting and server-side checks on every admin route.
+- Added Publish Studio draft, parse, clean, PII-check, chunk-preview, publish, revise, unpublish, delete, and export workflows.
+- Added PDF, DOCX, Markdown, TXT, and CSV cloud parsing while keeping original uploads transient.
+- Added transactional and idempotent publication so concurrent retries do not duplicate chunks or versions.
+- Added a seven-day TTL for unpublished cloud drafts and graceful Gemini free-quota retry behavior.
+- Hardened repository seed operations so they preserve Owner uploads and validate embedding/index contracts.
+- Added a catalog-only seed mode that backfills metadata without spending Gemini embedding quota.
+- Restored compatibility with the existing Atlas Vector Index by applying non-indexed validity checks after Vector Search.
+
 ## 2026-08-08
 
 - Added a local configuration reload action that clears Streamlit resource and reranker caches.

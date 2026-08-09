@@ -35,7 +35,10 @@ flowchart LR
   end
   subgraph Cloud[Cloud public mode]
     PJ[portfolio_docs.json] --> GS[Validated seed]
+    OW[Owner Publish Studio] --> PC[Parse, clean, PII gate]
+    PC --> PP[Preview and confirm publication]
     GS --> GE[Gemini document embeddings]
+    PP --> GE
     GE --> MA[MongoDB Atlas public vector index]
     QC[Question] --> V[Vercel Function]
     V --> GQ[Gemini query embedding] --> MA --> GG[Gemini generation] --> NX[Next.js streaming chat]
@@ -201,6 +204,13 @@ CLOUD_COLLECTION_NAME=portfolio_knowledge_public
 CLOUD_VECTOR_INDEX_NAME=vector_index_public
 GEMINI_EMBEDDING_MODEL=gemini-embedding-001
 GEMINI_CHAT_MODEL=gemini-3.5-flash
+CLOUD_DOCUMENTS_COLLECTION_NAME=portfolio_public_documents
+CLOUD_DRAFTS_COLLECTION_NAME=portfolio_public_drafts
+CLOUD_METADATA_COLLECTION_NAME=portfolio_public_metadata
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=...
+CLERK_SECRET_KEY=...
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+OWNER_EMAILS=verified-owner@example.com
 ```
 
 Validate and publish the curated data separately from the web deployment:
@@ -211,12 +221,34 @@ npm run seed:atlas
 npm run dev
 ```
 
+When the retrieval chunks already exist and only the new public Knowledge catalog needs to be populated, use the quota-free catalog backfill. It does not call Gemini or regenerate embeddings:
+
+```powershell
+node scripts/seed-atlas.mjs --catalog-only
+```
+
 The Vercel application provides:
 
 - `/` streaming bilingual Chat with expandable sources.
+- `/knowledge` searchable public document catalog with allowlisted metadata only.
 - `/lab` read-only Retrieval Lab for Top-K and threshold inspection.
 - `/architecture` privacy boundaries, runtime evidence, and screenshots.
+- `/studio` Owner-only Publish Studio after Clerk and `OWNER_EMAILS` are configured.
 - `/api/health` Atlas, Gemini, and vector index status without secret values.
+
+### Owner Publish Studio
+
+Cloud publication is intentionally not an anonymous upload feature. A verified Clerk user whose primary email appears in `OWNER_EMAILS` can:
+
+1. Upload PDF, DOCX, Markdown, TXT, or CSV files up to 4 MB each.
+2. Edit parsed and cleaned text, then run mandatory email, phone, identity-number, and address checks.
+3. Preview Standard, Parent-child, or Resume semantic chunks before any external model receives the text.
+4. Publish only PII-clean public chunks with the existing `gemini-embedding-001` contract.
+5. Revise, unpublish, archive, permanently delete, or export Owner-created public records.
+
+Draft text expires from `portfolio_public_drafts` after seven days. Original uploaded files are never persisted. Publishing is idempotent and transactional, and quota failures keep the draft ready for a later retry. Repository seed operations update only `source_origin=repo_seed`; they never delete `owner_upload` records.
+
+Clerk public sign-up should be disabled in the Clerk dashboard. `/studio` and every `/api/admin/*` handler also perform server-side Owner authorization, returning `401` for signed-out users and `403` for authenticated non-Owners.
 
 ## Demo Questions
 
@@ -231,8 +263,9 @@ The Vercel application provides:
 - `data/local_private_docs.json`, `data/local_uploads/`, `.env*`, and local evaluation data are Git ignored.
 - `evals/rag_benchmark.json` contains questions and expected document IDs only; generated benchmark reports remain Git ignored.
 - Cloud retrieval always filters `visibility: public` and maps results through an allowlisted `Source` contract.
+- The public Knowledge API never returns cleaned bodies, chunks, embeddings, Owner IDs, or management fields.
 - Chat messages are sent for generation but are not persisted by the cloud app.
-- Uploaded documents must be previewed and explicitly approved before public publication.
+- Cloud uploads remain transient drafts until the Owner removes PII, previews chunks, and explicitly publishes them.
 
 ## Verification
 
