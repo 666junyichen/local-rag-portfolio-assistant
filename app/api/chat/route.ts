@@ -29,7 +29,6 @@ export async function POST(request: Request) {
             const fallback = body.language === "zh" ? "当前公开知识库没有足够依据回答这个问题。" : "The public knowledge base does not contain enough evidence to answer this question.";
             send("token", { text: fallback });
             send("done", {});
-            controller.close();
             return;
           }
           const answer = await generateText(buildPrompt(body.question, sources, body.history, body.language));
