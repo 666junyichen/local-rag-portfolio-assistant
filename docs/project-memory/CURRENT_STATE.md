@@ -1,14 +1,16 @@
 # Current State
 
 - Active branch: `main`
-- Active phase: `Owner Publish Studio`
+- Active phase: `Knowledge Spaces Production Acceptance`
 - Last verified: `2026-08-10`
-- Updated: `2026-08-10T01:11:51+10:00`
-- Next action: Complete the Git-triggered production rebuild, then verify Owner sign-in, PII blocking, publication, retrieval, and unpublish.
+- Updated: `2026-08-10T15:10:00+10:00`
+- Next action: Restore the WSL2 kernel, start Docker, run the local knowledge-space migration, then collect real single-space and cross-space Retrieval Lab examples.
 
 ## Status
 
-Tasks 0-9 are completed and reviewed. Task 10's code, merge, push, public deployment, and visitor acceptance are complete: the cloud app now has an Owner-only Publish Studio, a searchable public Knowledge catalog, transient upload parsing, mandatory PII cleanup, previewable chunking, transactional publication, revision/unpublish/delete/export workflows, and server-side authorization on every admin route. The Clerk Marketplace terms are accepted, the Clerk resource is connected to the Vercel project, and the server-side Owner allowlist is configured as a sensitive Production variable. A new production rebuild and authenticated Owner publication acceptance remain pending.
+Tasks 0-10 are completed and reviewed. Owner production acceptance now covers sign-in, email and phone PII blocking, sanitized preview, publication, Knowledge visibility, grounded Retrieve and Chat responses, unpublish, and permanent synthetic-data cleanup. A no-evidence Chat stream regression found during unpublish verification was fixed and deployed; an active empty space now returns a grounded refusal with HTTP 200 instead of a server error.
+
+Task 11 adds public and local Knowledge Spaces. Cloud data is migrated to the default `portfolio` space, Owner uploads can target and move between spaces, and Ask AI, Knowledge, Retrieval Lab, and Sources carry space filters and labels. Single-space isolation and cross-space evidence preservation passed production acceptance. Local code, unit tests, and all three Streamlit pages pass, but the real local MongoDB migration remains pending because the Docker engine cannot start while the WSL2 kernel file is missing.
 
 The public catalog was backfilled with 27 repository documents without regenerating Gemini embeddings. A real Chinese cloud question returned five grounded sources after the legacy Atlas Vector Search filter was made compatible with the existing index. The public Retrieval Lab returned five public-only chunks, and the catalog rendered without horizontal overflow at 390x844.
 
@@ -28,10 +30,11 @@ Phase B's adaptive path triggered the reranker for 15 of 50 benchmark questions.
 | 7 | completed | true | true | Vector, BM25, Hybrid, and Hybrid + Rerank diagnostics |
 | 8 | completed | true | true | Real catalog migration, local reindex, full tests, cloud checks, and documentation |
 | 9 | completed | true | true | File-authoritative local configuration, split runtime health, freshness ranking, and adaptive reranker routing |
-| 10 | in_progress | true | false | Public deployment and visitor acceptance passed; production Clerk login and publication remain pending |
+| 10 | completed | true | true | Owner production publication lifecycle and synthetic-data cleanup passed |
+| 11 | in_progress | true | false | Cloud knowledge spaces passed; local MongoDB migration is blocked by the missing WSL2 kernel |
 
 ## Known Blockers
 
-- The Vercel CLI session expired during the direct redeploy attempt; the next Git push will trigger the production rebuild instead.
+- The local Docker engine cannot start because the WSL2 kernel file is missing; local MongoDB knowledge-space migration remains pending.
 
 See [Known Issues](KNOWN_ISSUES.md) for acceptance criteria and [Testing](TESTING.md) for the evidence contract.

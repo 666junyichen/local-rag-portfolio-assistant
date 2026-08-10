@@ -1,5 +1,14 @@
 # Project Memory Changelog
 
+## 2026-08-10
+
+- Added Knowledge Spaces across cloud and local schemas, APIs, retrieval settings, source evidence, and user interfaces.
+- Added Portfolio, RAG Learning, and Project Docs defaults plus Owner space management and document moves without re-embedding.
+- Added single-space isolation and up-to-five-space retrieval with per-space candidate preservation.
+- Completed the Owner production publication lifecycle using a removable synthetic document and left no test data in the public catalog.
+- Fixed empty-space Chat streaming so a no-evidence query returns a localized grounded refusal instead of HTTP 500.
+- Limited Vitest discovery to the main repository so historical worktrees no longer duplicate test execution.
+
 ## 2026-08-09
 
 - Added a searchable public Knowledge catalog that exposes only allowlisted document metadata.

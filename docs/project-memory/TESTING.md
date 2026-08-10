@@ -49,6 +49,12 @@ The tests cover valid temporary Git repositories, missing required files and key
 - Production visitor acceptance on 2026-08-09: the Vercel Knowledge page rendered 27 records with no Studio navigation for guests; direct `/studio` access showed the intended fail-closed Clerk configuration state. Owner login and publication remain unverified until Clerk production configuration is available.
 - Clerk provisioning checkpoint on 2026-08-10: Marketplace terms were accepted, the Clerk resource reported `Available` and connected to the Vercel project, both Clerk key names were present in the pulled local environment, and the Owner allowlist was added as a sensitive Production variable. No key values were printed or committed.
 - The Python milestone remained green at `251 passed, 3 subtests passed`; Task 10 changed only the cloud TypeScript/Next.js surface after that run, so the suite was not repeated unnecessarily.
+- Knowledge Spaces production acceptance on 2026-08-10 used one synthetic document: email and compact-phone PII were blocked, sanitized publication appeared only in `Project Docs`, Retrieve and Chat returned grounded evidence, a Portfolio-only query excluded it, and a cross-space query preserved evidence from both selected spaces.
+- Unpublish removed the synthetic document from Knowledge, Retrieve, and Chat. Permanent cleanup removed its document and draft records, and the final public API reported zero documents in `Project Docs`.
+- The no-evidence Chat regression was reproduced by `tests/cloud-chat-route.test.ts` as `Controller is already closed`, fixed by giving the SSE stream one close path, deployed, and verified in production as HTTP 200 with retrieval, refusal, and done events.
+- Knowledge Spaces cloud milestone: `npm test` passed 60 tests across 11 main-repository Vitest files; `npm run build` compiled 17 pages and API routes.
+- Python milestone on 2026-08-10: `263 passed, 3 subtests passed` in 103.46 seconds. `scripts/check_streamlit_pages.py` passed Chat, Knowledge Studio, Retrieval Lab, and all five retrieval modes.
+- Local integration is not yet rerun: Docker Desktop processes start, but the engine reports a missing WSL2 kernel and MongoDB on the local port remains unavailable. The migration exited before changing data.
 - Task 0 focused evidence is recorded in `state.json` and the bootstrap session note.
 
 Run the full Python suite once before a feature-task handoff or merge milestone:

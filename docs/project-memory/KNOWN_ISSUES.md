@@ -34,8 +34,12 @@ Phase B resolved the measured freshness gap: all five freshness benchmark cases 
 
 The optional Cross-Encoder is intentionally loaded from the local model cache only. If it is absent, adaptive retrieval falls back to Vector and reports the reason instead of downloading a model during a user request. Install or pre-cache the free reranker separately when high-precision mode is required.
 
-## Owner Publish Studio Deployment Gate
+## Resolved: Owner Publish Studio Deployment Gate
 
-The Owner publishing implementation, public catalog, admin authorization tests, build, catalog backfill, and local browser acceptance passed on 2026-08-09. Production Owner login is not active until the Vercel project has a Clerk integration or manually supplied Clerk keys plus `OWNER_EMAILS`. The application fails closed while these values are absent: visitors cannot see a Studio navigation item, `/studio` shows a configuration notice, and admin APIs return an unavailable/unauthorized response.
+Clerk Owner sign-in and the production allowlist are active. The complete synthetic lifecycle passed on 2026-08-10: upload, PII block, sanitization, publication, public retrieval/chat, unpublish, and permanent cleanup. Anonymous visitors still cannot see Studio or call admin APIs.
 
-The public Knowledge catalog does not share this blocker. It already contains the 27 repository-seeded records, and the catalog-only seed path can refresh metadata without calling Gemini or changing retrieval embeddings.
+## Knowledge Spaces Local Runtime Blocker
+
+Cloud spaces, migration, single-space isolation, and cross-space retrieval are verified. The local migration script is implemented and tested, but its real MongoDB run remains pending because Docker cannot start without a WSL2 kernel file. The failed migration connected to no database and changed no local records. After restoring WSL2, start Docker and rerun `scripts/migrate_knowledge_spaces.py`; no re-embedding is required.
+
+The public Knowledge catalog already contains the repository-seeded records, and the catalog-only seed path can refresh metadata without calling Gemini or changing retrieval embeddings.

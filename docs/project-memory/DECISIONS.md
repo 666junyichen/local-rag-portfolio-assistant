@@ -47,3 +47,11 @@ Parse supported files in the request, then discard the original binary. Store on
 ## 2026-08-09: Catalog Backfills Must Not Spend Embedding Quota
 
 Keep retrieval-chunk seeding separate from document-catalog maintenance. `--catalog-only` may synchronize `repo_seed` document metadata without calling Gemini or rewriting retrieval chunks, while full seed remains responsible for embedding/index contracts. Both modes preserve `owner_upload` records.
+
+## 2026-08-10: Knowledge Spaces Share Collections And Indexes
+
+Represent Portfolio, RAG Learning, Project Docs, and future knowledge areas with a required `space_id` metadata field instead of separate MongoDB collections or indexes. Default to one active space, allow up to five selected public spaces, and preserve at least one candidate from each selected space that returns evidence. Moving a document changes metadata only and does not regenerate embeddings. Local private spaces remain isolated from Vercel and cloud APIs.
+
+## 2026-08-10: Empty Evidence Is A Successful Grounded Refusal
+
+An active knowledge space with no matching evidence returns a normal SSE response containing retrieval, localized refusal, and done events. It must not call Gemini and must not turn absence of evidence into an HTTP 500 error.

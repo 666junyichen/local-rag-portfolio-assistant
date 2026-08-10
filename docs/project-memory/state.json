@@ -1,7 +1,7 @@
 {
     "schema_version":  1,
     "active_branch":  "main",
-    "active_phase":  "Owner Publish Studio",
+    "active_phase":  "Knowledge Spaces Production Acceptance",
     "tasks":  [
                   {
                       "id":  0,
@@ -162,9 +162,9 @@
                   {
                       "id":  10,
                       "title":  "Owner Publish Studio and public knowledge catalog",
-                      "status":  "in_progress",
+                      "status":  "completed",
                       "reviewed":  true,
-                      "final_quality_approved":  false,
+                      "final_quality_approved":  true,
                       "test_evidence":  [
                                             {
                                                 "command":  "npm test",
@@ -186,17 +186,50 @@
                                             },
                                             {
                                                 "command":  "production browser acceptance on Vercel",
-                                                "result":  "Knowledge rendered 27 public records with visitor-only navigation; direct Studio access failed closed pending Clerk configuration",
+                                                "result":  "Owner sign-in, PII blocking, sanitized publication, grounded retrieval/chat, unpublish, and permanent synthetic-data cleanup passed",
                                                 "outcome":  "passed",
-                                                "verified_at":  "2026-08-09"
+                                                "verified_at":  "2026-08-10"
+                                            }
+                                        ]
+                  },
+                  {
+                      "id":  11,
+                      "title":  "Production acceptance and knowledge spaces",
+                      "status":  "in_progress",
+                      "reviewed":  true,
+                      "final_quality_approved":  false,
+                      "test_evidence":  [
+                                            {
+                                                "command":  "npm test",
+                                                "result":  "60 passed across 11 main-repository Vitest files",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-10"
+                                            },
+                                            {
+                                                "command":  "npm run build",
+                                                "result":  "Next.js production build passed with 17 pages and API routes",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-10"
+                                            },
+                                            {
+                                                "command":  ".\\.venv\\Scripts\\python.exe -m pytest -q",
+                                                "result":  "263 passed, 3 subtests passed",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-10"
+                                            },
+                                            {
+                                                "command":  ".\\.venv\\Scripts\\python.exe scripts\\migrate_knowledge_spaces.py",
+                                                "result":  "Blocked before migration because the local Docker engine could not start without a WSL2 kernel",
+                                                "outcome":  "failed",
+                                                "verified_at":  "2026-08-10"
                                             }
                                         ]
                   }
               ],
     "last_verified":  "2026-08-10",
     "known_blockers":  [
-                            "The Vercel CLI session expired during the direct redeploy attempt; the next Git push will trigger the production rebuild instead."
+                            "The local Docker engine cannot start because the WSL2 kernel file is missing; local MongoDB knowledge-space migration remains pending."
                         ],
-    "next_action":  "Complete the Git-triggered production rebuild, then verify Owner sign-in, PII blocking, publication, retrieval, and unpublish.",
-    "updated_at":  "2026-08-10T01:11:51+10:00"
+    "next_action":  "Restore the WSL2 kernel, start Docker, run the local knowledge-space migration, then collect real single-space and cross-space Retrieval Lab examples.",
+    "updated_at":  "2026-08-10T15:10:00+10:00"
 }
