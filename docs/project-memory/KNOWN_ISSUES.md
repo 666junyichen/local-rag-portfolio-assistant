@@ -38,8 +38,10 @@ The optional Cross-Encoder is intentionally loaded from the local model cache on
 
 Clerk Owner sign-in and the production allowlist are active. The complete synthetic lifecycle passed on 2026-08-10: upload, PII block, sanitization, publication, public retrieval/chat, unpublish, and permanent cleanup. Anonymous visitors still cannot see Studio or call admin APIs.
 
-## Knowledge Spaces Local Runtime Blocker
+## Resolved: Knowledge Spaces Local Index Migration
 
-Cloud spaces, migration, single-space isolation, and cross-space retrieval are verified. The local migration script is implemented and tested, but its real MongoDB run remains pending because Docker cannot start without a WSL2 kernel file. The failed migration connected to no database and changed no local records. After restoring WSL2, start Docker and rerun `scripts/migrate_knowledge_spaces.py`; no re-embedding is required.
+The local migration originally failed with `"mappings" is required` because MongoDB Local interpreted PyMongo's vector-index update as a standard Search definition. Passing an explicit `type` field was also rejected by that runtime. The migration now recreates only the Vector Search index definition with `type=vectorSearch`, updates the text index in place, and does not regenerate embeddings or change source documents.
+
+On 2026-08-10 both indexes reached `READY` with `space_id` filters. A real Portfolio query retrieved three sources and the local Ollama smoke test passed. The remaining operational caveat is model cold-start latency; the first generation after startup can take several minutes on CPU, while a warmed model responds much faster.
 
 The public Knowledge catalog already contains the repository-seeded records, and the catalog-only seed path can refresh metadata without calling Gemini or changing retrieval embeddings.

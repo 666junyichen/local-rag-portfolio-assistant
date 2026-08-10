@@ -33,6 +33,8 @@ class SpaceMigrationTests(unittest.TestCase):
         class Collection:
             def __init__(self):
                 self.updated = []
+                self.dropped = []
+                self.created = []
 
             def update_many(self, query, update):
                 self.query = query
@@ -43,6 +45,7 @@ class SpaceMigrationTests(unittest.TestCase):
                 return [
                     {
                         "name": "vector",
+                        "type": "vectorSearch",
                         "status": "READY",
                         "latestDefinition": {
                             "fields": [{"type": "vector", "path": "embedding"}]
@@ -50,6 +53,7 @@ class SpaceMigrationTests(unittest.TestCase):
                     },
                     {
                         "name": "text",
+                        "type": "search",
                         "status": "READY",
                         "latestDefinition": {
                             "mappings": {"fields": {"body": {"type": "string"}}}
@@ -59,6 +63,12 @@ class SpaceMigrationTests(unittest.TestCase):
 
             def update_search_index(self, name, definition):
                 self.updated.append((name, definition))
+
+            def drop_search_index(self, name):
+                self.dropped.append(name)
+
+            def create_search_index(self, model):
+                self.created.append(model.document)
 
         collection = Collection()
         result = migrate_collection_spaces(
@@ -71,6 +81,19 @@ class SpaceMigrationTests(unittest.TestCase):
         self.assertEqual(result["migrated_chunks"], 12)
         self.assertEqual(result["updated_indexes"], ["vector", "text"])
         self.assertEqual(collection.update["$set"]["space_id"], "portfolio")
+        self.assertEqual(
+            [name for name, _definition in collection.updated],
+            ["text"],
+        )
+        self.assertEqual(collection.dropped, ["vector"])
+        self.assertEqual(
+            collection.created[0]["type"],
+            "vectorSearch",
+        )
+        self.assertIn(
+            {"type": "filter", "path": "space_id"},
+            collection.created[0]["definition"]["fields"],
+        )
 
 
 if __name__ == "__main__":

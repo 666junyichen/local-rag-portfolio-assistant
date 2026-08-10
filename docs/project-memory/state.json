@@ -1,7 +1,7 @@
 {
     "schema_version":  1,
     "active_branch":  "main",
-    "active_phase":  "Knowledge Spaces Production Acceptance",
+    "active_phase":  "Knowledge Spaces Complete",
     "tasks":  [
                   {
                       "id":  0,
@@ -195,9 +195,9 @@
                   {
                       "id":  11,
                       "title":  "Production acceptance and knowledge spaces",
-                      "status":  "in_progress",
+                      "status":  "completed",
                       "reviewed":  true,
-                      "final_quality_approved":  false,
+                      "final_quality_approved":  true,
                       "test_evidence":  [
                                             {
                                                 "command":  "npm test",
@@ -219,17 +219,21 @@
                                             },
                                             {
                                                 "command":  ".\\.venv\\Scripts\\python.exe scripts\\migrate_knowledge_spaces.py",
-                                                "result":  "Blocked before migration because the local Docker engine could not start without a WSL2 kernel",
-                                                "outcome":  "failed",
+                                                "result":  "Local migration completed; vector_index and text_index are READY with space_id filters",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-10"
+                                            },
+                                            {
+                                                "command":  ".\\.venv\\Scripts\\python.exe scripts\\smoke_test.py",
+                                                "result":  "Retrieved three portfolio sources and generated a grounded Ollama answer",
+                                                "outcome":  "passed",
                                                 "verified_at":  "2026-08-10"
                                             }
                                         ]
                   }
               ],
     "last_verified":  "2026-08-10",
-    "known_blockers":  [
-                            "The local Docker engine cannot start because the WSL2 kernel file is missing; local MongoDB knowledge-space migration remains pending."
-                        ],
-    "next_action":  "Restore the WSL2 kernel, start Docker, run the local knowledge-space migration, then collect real single-space and cross-space Retrieval Lab examples.",
-    "updated_at":  "2026-08-10T15:10:00+10:00"
+    "known_blockers":  [],
+    "next_action":  "Collect representative real queries in Retrieval Lab before planning any further retrieval features.",
+    "updated_at":  "2026-08-10T17:23:28+10:00"
 }

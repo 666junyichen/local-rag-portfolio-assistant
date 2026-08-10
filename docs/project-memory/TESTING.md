@@ -54,7 +54,8 @@ The tests cover valid temporary Git repositories, missing required files and key
 - The no-evidence Chat regression was reproduced by `tests/cloud-chat-route.test.ts` as `Controller is already closed`, fixed by giving the SSE stream one close path, deployed, and verified in production as HTTP 200 with retrieval, refusal, and done events.
 - Knowledge Spaces cloud milestone: `npm test` passed 60 tests across 11 main-repository Vitest files; `npm run build` compiled 17 pages and API routes.
 - Python milestone on 2026-08-10: `263 passed, 3 subtests passed` in 103.46 seconds. `scripts/check_streamlit_pages.py` passed Chat, Knowledge Studio, Retrieval Lab, and all five retrieval modes.
-- Local integration is not yet rerun: Docker Desktop processes start, but the engine reports a missing WSL2 kernel and MongoDB on the local port remains unavailable. The migration exited before changing data.
+- Knowledge Spaces local integration on 2026-08-10: the migration completed without re-embedding; `text_index` and `vector_index` both reached `READY` with `space_id` filters. The focused migration/retrieval suite passed 26 tests, all three Streamlit pages passed AppTest, a real Portfolio query returned three sources, and `scripts/smoke_test.py` generated a grounded Ollama answer.
+- The first smoke-test attempt exceeded 180 seconds during model cold start. A four-token Ollama warm-up completed in 9.65 seconds, after which the full smoke test passed in 107.5 seconds. Treat this as local CPU/model-loading latency rather than an index failure.
 - Task 0 focused evidence is recorded in `state.json` and the bootstrap session note.
 
 Run the full Python suite once before a feature-task handoff or merge milestone:

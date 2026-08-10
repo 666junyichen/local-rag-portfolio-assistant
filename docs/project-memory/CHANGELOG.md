@@ -8,6 +8,7 @@
 - Completed the Owner production publication lifecycle using a removable synthetic document and left no test data in the public catalog.
 - Fixed empty-space Chat streaming so a no-evidence query returns a localized grounded refusal instead of HTTP 500.
 - Limited Vitest discovery to the main repository so historical worktrees no longer duplicate test execution.
+- Fixed MongoDB Local knowledge-space migration by rebuilding only the Vector Search index definition while preserving existing embeddings and source documents.
 
 ## 2026-08-09
 

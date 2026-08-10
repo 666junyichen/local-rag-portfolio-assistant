@@ -3,6 +3,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from pymongo.operations import SearchIndexModel
+
 
 def add_vector_space_filter(definition: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     fields = list(definition.get("fields") or [])
@@ -50,7 +52,17 @@ def migrate_collection_spaces(
         else:
             continue
         if changed:
-            collection.update_search_index(name, updated)
+            if name == vector_index_name:
+                collection.drop_search_index(name)
+                collection.create_search_index(
+                    SearchIndexModel(
+                        definition=updated,
+                        name=name,
+                        type="vectorSearch",
+                    )
+                )
+            else:
+                collection.update_search_index(name, updated)
             updated_indexes.append(name)
 
     if updated_indexes and wait_seconds > 0:

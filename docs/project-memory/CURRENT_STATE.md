@@ -1,16 +1,16 @@
 # Current State
 
 - Active branch: `main`
-- Active phase: `Knowledge Spaces Production Acceptance`
+- Active phase: `Knowledge Spaces Complete`
 - Last verified: `2026-08-10`
-- Updated: `2026-08-10T15:10:00+10:00`
-- Next action: Restore the WSL2 kernel, start Docker, run the local knowledge-space migration, then collect real single-space and cross-space Retrieval Lab examples.
+- Updated: `2026-08-10T17:23:28+10:00`
+- Next action: Collect representative real queries in Retrieval Lab before planning any further retrieval features.
 
 ## Status
 
 Tasks 0-10 are completed and reviewed. Owner production acceptance now covers sign-in, email and phone PII blocking, sanitized preview, publication, Knowledge visibility, grounded Retrieve and Chat responses, unpublish, and permanent synthetic-data cleanup. A no-evidence Chat stream regression found during unpublish verification was fixed and deployed; an active empty space now returns a grounded refusal with HTTP 200 instead of a server error.
 
-Task 11 adds public and local Knowledge Spaces. Cloud data is migrated to the default `portfolio` space, Owner uploads can target and move between spaces, and Ask AI, Knowledge, Retrieval Lab, and Sources carry space filters and labels. Single-space isolation and cross-space evidence preservation passed production acceptance. Local code, unit tests, and all three Streamlit pages pass, but the real local MongoDB migration remains pending because the Docker engine cannot start while the WSL2 kernel file is missing.
+Task 11 adds public and local Knowledge Spaces. Cloud data is migrated to the default `portfolio` space, Owner uploads can target and move between spaces, and Ask AI, Knowledge, Retrieval Lab, and Sources carry space filters and labels. Single-space isolation and cross-space evidence preservation passed production acceptance. The real local migration now also passes: both local indexes are `READY` with `space_id` filters, a single-space query retrieved three Portfolio sources, and the Ollama smoke test generated a grounded answer.
 
 The public catalog was backfilled with 27 repository documents without regenerating Gemini embeddings. A real Chinese cloud question returned five grounded sources after the legacy Atlas Vector Search filter was made compatible with the existing index. The public Retrieval Lab returned five public-only chunks, and the catalog rendered without horizontal overflow at 390x844.
 
@@ -31,10 +31,8 @@ Phase B's adaptive path triggered the reranker for 15 of 50 benchmark questions.
 | 8 | completed | true | true | Real catalog migration, local reindex, full tests, cloud checks, and documentation |
 | 9 | completed | true | true | File-authoritative local configuration, split runtime health, freshness ranking, and adaptive reranker routing |
 | 10 | completed | true | true | Owner production publication lifecycle and synthetic-data cleanup passed |
-| 11 | in_progress | true | false | Cloud knowledge spaces passed; local MongoDB migration is blocked by the missing WSL2 kernel |
+| 11 | completed | true | true | Cloud and local Knowledge Spaces, index migration, single/cross-space filtering, and smoke validation |
 
 ## Known Blockers
-
-- The local Docker engine cannot start because the WSL2 kernel file is missing; local MongoDB knowledge-space migration remains pending.
 
 See [Known Issues](KNOWN_ISSUES.md) for acceptance criteria and [Testing](TESTING.md) for the evidence contract.
