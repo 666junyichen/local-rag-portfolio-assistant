@@ -23,6 +23,11 @@ describe("public document processing", () => {
     expect(findings.every((finding) => finding.blocking)).toBe(true);
   });
 
+  it("detects compact Chinese and Australian mobile numbers", () => {
+    const findings = detectPii("CN: 13800138000\nAU: 0412345678");
+    expect(findings.map((finding) => finding.kind)).toEqual(["phone", "phone"]);
+  });
+
   it("indexes child chunks while retaining their parent answer context", () => {
     const text = Array.from({ length: 18 }, (_, index) => `Paragraph ${index + 1} describes MongoDB, RAG, retrieval, and project evidence.`).join("\n\n");
     const preview = buildChunkPreview(text, {

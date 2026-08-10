@@ -89,7 +89,7 @@ export function detectPii(text: string): PiiFinding[] {
   const patterns: Array<[PiiFinding["kind"], string, RegExp]> = [
     ["email", "Email address", /[\p{L}\p{N}.!#$%&'*+/=?^_`{|}~-]+@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+/giu],
     ["national_id", "National ID", /(?<!\d)\d{17}[\dXx](?!\d)/g],
-    ["phone", "Phone number", /(?<!\d)(?:\+?\d{1,3}[ -]?)?(?:\(?\d{2,4}\)?[ -])\d{3,4}[ -]\d{3,4}(?!\d)/g],
+    ["phone", "Phone number", /(?<!\d)(?:1[3-9]\d{9}|0?4\d{8}|(?:\+?\d{1,3}[ -]?)?(?:\(?\d{2,4}\)?[ -])\d{3,4}[ -]\d{3,4})(?!\d)/g],
     ["address", "Address", /(?:家庭住址|家庭地址|住址|home address|residential address)\s*[：:]\s*[^\n]+/giu],
   ];
   for (const [kind, label, regex] of patterns) {
