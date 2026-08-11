@@ -1,5 +1,9 @@
 # Known Issues
 
+## Pending: Real Knowledge Reset Execution
+
+The single-space defaults, backup generation, fingerprint validation, confirmation gates, and data-clear operations pass automated tests. The real local SQLite/MongoDB reset and production Atlas reset must still be executed after merge and deployment. Completion requires a verified local backup, a downloaded cloud JSON backup, zero remaining documents/chunks/drafts/history/runtime evaluations, and exactly one empty active `portfolio` space in each runtime.
+
 ## Resolved: Task 2 Quality Blockers
 
 Task 2 was approved on 2026-08-08 after focused regression coverage passed.

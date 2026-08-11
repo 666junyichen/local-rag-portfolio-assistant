@@ -1,7 +1,7 @@
 {
     "schema_version":  1,
-    "active_branch":  "main",
-    "active_phase":  "Knowledge Spaces Complete",
+    "active_branch":  "feat/safe-knowledge-reset",
+    "active_phase":  "Safe Knowledge Reset",
     "tasks":  [
                   {
                       "id":  0,
@@ -230,10 +230,45 @@
                                                 "verified_at":  "2026-08-10"
                                             }
                                         ]
+                  },
+                  {
+                      "id":  12,
+                      "title":  "Single-space defaults and safe knowledge reset",
+                      "status":  "in_progress",
+                      "reviewed":  false,
+                      "final_quality_approved":  false,
+                      "test_evidence":  [
+                                            {
+                                                "command":  ".\\.venv\\Scripts\\python.exe -m pytest -q",
+                                                "result":  "270 passed, 3 subtests passed",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-11"
+                                            },
+                                            {
+                                                "command":  "npm test",
+                                                "result":  "66 passed across 13 Vitest files",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-11"
+                                            },
+                                            {
+                                                "command":  "npm run build",
+                                                "result":  "Next.js production build passed with reset preview and execution routes",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-11"
+                                            },
+                                            {
+                                                "command":  ".\\.venv\\Scripts\\python.exe scripts\\check_streamlit_pages.py",
+                                                "result":  "Chat, Knowledge Studio, Retrieval Lab, and all retrieval modes passed",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-11"
+                                            }
+                                        ]
                   }
               ],
-    "last_verified":  "2026-08-10",
-    "known_blockers":  [],
-    "next_action":  "Collect representative real queries in Retrieval Lab before planning any further retrieval features.",
-    "updated_at":  "2026-08-10T17:23:28+10:00"
+    "last_verified":  "2026-08-11",
+    "known_blockers":  [
+                            "The guarded local and cloud reset operations have not yet been executed against the real data stores."
+                        ],
+    "next_action":  "Merge and deploy the guarded reset implementation, then create verified backups and execute the real local and cloud resets.",
+    "updated_at":  "2026-08-11T17:35:00+10:00"
 }

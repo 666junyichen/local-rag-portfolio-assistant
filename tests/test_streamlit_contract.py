@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from streamlit.testing.v1 import AppTest
 
 from src.portfolio_rag import Settings, try_load_reranker
+from src.streamlit_spaces import render_space_selector
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -112,6 +114,27 @@ class StreamlitContractTests(unittest.TestCase):
             "返回父块",
         ):
             self.assertIn(label, source)
+
+    def test_single_space_skips_cross_space_controls(self) -> None:
+        class OneSpaceCatalog:
+            @staticmethod
+            def list_spaces(*, include_archived: bool = False):
+                return [{"space_id": "portfolio", "name": "Portfolio"}]
+
+        with patch("src.streamlit_spaces.st.toggle") as toggle:
+            self.assertEqual(
+                render_space_selector(OneSpaceCatalog(), key_prefix="contract"),
+                ("portfolio",),
+            )
+        toggle.assert_not_called()
+
+    def test_knowledge_studio_exposes_guarded_local_reset(self) -> None:
+        source = (ROOT / "pages" / "1_Knowledge_Studio.py").read_text(encoding="utf-8")
+
+        self.assertIn("build_local_reset_preview", source)
+        self.assertIn("perform_local_reset", source)
+        self.assertIn("RESET PORTFOLIO", source)
+        self.assertIn("Download or copy this backup path before continuing", source)
 
 
 if __name__ == "__main__":

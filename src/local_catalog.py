@@ -18,8 +18,6 @@ CATALOG_STATUSES = {"discovered", "active", "excluded", "parse_error", "needs_oc
 SPACE_STATUSES = {"active", "archived"}
 DEFAULT_KNOWLEDGE_SPACES = (
     ("portfolio", "Portfolio", "Resumes, internships, and personal projects."),
-    ("rag-learning", "RAG Learning", "RAG books, courses, and learning notes."),
-    ("project-docs", "Project Docs", "Documentation for standalone projects."),
 )
 
 
@@ -110,6 +108,11 @@ class LocalCatalog:
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS catalog_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
             columns = {row[1] for row in connection.execute("PRAGMA table_info(documents)").fetchall()}
@@ -142,6 +145,87 @@ class LocalCatalog:
             connection.execute(
                 "UPDATE documents SET space_id = 'portfolio' WHERE space_id IS NULL OR TRIM(space_id) = ''"
             )
+            connection.execute(
+                """
+                DELETE FROM knowledge_spaces
+                WHERE space_id IN ('rag-learning', 'project-docs')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM documents WHERE documents.space_id = knowledge_spaces.space_id
+                  )
+                """
+            )
+
+    def get_setting(self, key: str, default: str | None = None) -> str | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT value FROM catalog_settings WHERE key = ?", (key,)
+            ).fetchone()
+        return str(row["value"]) if row is not None else default
+
+    def set_setting(self, key: str, value: str) -> None:
+        now = _utc_now()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO catalog_settings (key, value, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+                """,
+                (key, value, now),
+            )
+
+    def backup_to(self, destination: Path) -> Path:
+        target = Path(destination)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        source_connection = sqlite3.connect(self.path)
+        destination_connection = sqlite3.connect(target)
+        try:
+            source_connection.backup(destination_connection)
+        finally:
+            destination_connection.close()
+            source_connection.close()
+        return target
+
+    def reset_for_manual_upload(self) -> dict[str, Any]:
+        now = _utc_now()
+        with self._connect() as connection:
+            documents_deleted = int(connection.execute("SELECT COUNT(*) FROM documents").fetchone()[0])
+            spaces_deleted = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM knowledge_spaces WHERE space_id <> 'portfolio'"
+                ).fetchone()[0]
+            )
+            connection.execute("DELETE FROM documents")
+            connection.execute("DELETE FROM knowledge_spaces WHERE space_id <> 'portfolio'")
+            connection.execute(
+                """
+                INSERT INTO knowledge_spaces (space_id, name, description, status, created_at, updated_at)
+                VALUES ('portfolio', 'Portfolio', 'Resumes, internships, and personal projects.', 'active', ?, ?)
+                ON CONFLICT(space_id) DO UPDATE SET
+                    name = excluded.name,
+                    description = excluded.description,
+                    status = 'active',
+                    updated_at = excluded.updated_at
+                """,
+                (now, now),
+            )
+            connection.executemany(
+                """
+                INSERT INTO catalog_settings (key, value, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+                """,
+                [
+                    ("legacy_import_completed", "true", now),
+                    ("include_repo_public", "false", now),
+                    ("last_reset_at", now, now),
+                ],
+            )
+        return {
+            "documents_deleted": documents_deleted,
+            "spaces_deleted": spaces_deleted,
+            "last_reset_at": now,
+        }
 
     def _record(self, raw: dict[str, Any], status: str) -> dict[str, Any]:
         normalized = normalize_document(raw, default_visibility="private")
@@ -259,6 +343,36 @@ class LocalCatalog:
         clauses, values = self._filter_sql(filters or {})
         with self._connect() as connection:
             return int(connection.execute(f"SELECT COUNT(*) FROM documents{clauses}", values).fetchone()[0])
+
+    def reset_statistics(self) -> dict[str, int]:
+        """Return whole-catalog counts for the destructive reset preview."""
+        with self._connect() as connection:
+            documents = int(connection.execute("SELECT COUNT(*) FROM documents").fetchone()[0])
+            spaces = int(connection.execute("SELECT COUNT(*) FROM knowledge_spaces").fetchone()[0])
+            duplicate_groups = int(
+                connection.execute(
+                    """
+                    SELECT COUNT(*) FROM (
+                        SELECT content_hash FROM documents
+                        GROUP BY content_hash HAVING COUNT(*) > 1
+                    )
+                    """
+                ).fetchone()[0]
+            )
+            version_members = int(
+                connection.execute(
+                    """
+                    SELECT COUNT(*) FROM documents
+                    WHERE version_group_id IS NOT NULL AND TRIM(version_group_id) <> ''
+                    """
+                ).fetchone()[0]
+            )
+        return {
+            "documents": documents,
+            "spaces": spaces,
+            "duplicate_groups": duplicate_groups,
+            "version_members": version_members,
+        }
 
     def query(
         self,
@@ -487,14 +601,22 @@ class LocalCatalog:
         shingles = {compact[index : index + 12] for index in range(0, max(0, len(compact) - 11), 6)}
         return words | shingles
 
-    def detect_version_groups(self, similarity_threshold: float = 0.78) -> list[dict[str, Any]]:
+    def detect_version_groups(
+        self,
+        similarity_threshold: float = 0.78,
+        *,
+        space_id: str = "portfolio",
+    ) -> list[dict[str, Any]]:
         with self._connect() as connection:
             rows = connection.execute(
                 """
                 SELECT * FROM documents
-                WHERE source IN ('resume_root', 'manual_upload')
+                WHERE source = 'manual_upload'
+                  AND status = 'active'
+                  AND space_id = ?
                 ORDER BY modified_at DESC, updated_at DESC
-                """
+                """,
+                (space_id,),
             ).fetchall()
         items = [self._row(row) for row in rows]
         title_keys = {
@@ -538,7 +660,13 @@ class LocalCatalog:
 
         groups: list[dict[str, Any]] = []
         with self._connect() as connection:
-            connection.execute("UPDATE documents SET version_group_id = NULL, is_latest = 0")
+            connection.execute(
+                """
+                UPDATE documents SET version_group_id = NULL, is_latest = 0
+                WHERE source = 'manual_upload' AND status = 'active' AND space_id = ?
+                """,
+                (space_id,),
+            )
             for members in grouped.values():
                 if len(members) < 2:
                     continue
@@ -611,13 +739,16 @@ class LocalCatalog:
             )
         return documents
 
-    def exact_duplicate_groups(self) -> list[dict[str, Any]]:
+    def exact_duplicate_groups(self, *, space_id: str = "portfolio") -> list[dict[str, Any]]:
         with self._connect() as connection:
             rows = connection.execute(
                 """
                 SELECT content_hash, COUNT(*) AS count, GROUP_CONCAT(doc_id) AS doc_ids
-                FROM documents GROUP BY content_hash HAVING COUNT(*) > 1 ORDER BY count DESC
-                """
+                FROM documents
+                WHERE source = 'manual_upload' AND status = 'active' AND space_id = ?
+                GROUP BY content_hash HAVING COUNT(*) > 1 ORDER BY count DESC
+                """,
+                (space_id,),
             ).fetchall()
         return [
             {"content_hash": row["content_hash"], "count": row["count"], "doc_ids": row["doc_ids"].split(",")}

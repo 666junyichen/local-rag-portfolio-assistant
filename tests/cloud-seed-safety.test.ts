@@ -11,6 +11,12 @@ describe("cloud seed safety", () => {
     expect(script).toContain('source_origin: "owner_upload"');
   });
 
+  it("requires an explicit apply flag and confirmation phrase before database writes", () => {
+    expect(script).toContain('--apply');
+    expect(script).toContain('--confirm=SEED_PUBLIC_PORTFOLIO');
+    expect(script).toContain('Seed is validation-only by default');
+  });
+
   it("maintains both the public document catalog and retrieval chunks", () => {
     expect(script).toContain("CLOUD_DOCUMENTS_COLLECTION_NAME");
     expect(script).toContain("portfolio_public_documents");

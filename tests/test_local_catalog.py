@@ -110,31 +110,47 @@ class LocalCatalogTests(unittest.TestCase):
             docs = catalog.active_documents()
             self.assertEqual(docs[0]["body"], "Curated RAG summary.")
 
-    def test_exact_duplicate_groups_are_reported(self) -> None:
+    def test_exact_duplicate_groups_are_reported_for_active_manual_uploads(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             catalog = self.make_catalog(Path(temp_dir))
             rows = [
-                {"source": "resume_root", "relative_path": "a.docx", "title": "A", "body": "same body"},
-                {"source": "resume_root", "relative_path": "b.docx", "title": "B", "body": "same body"},
+                {"source": "manual_upload", "relative_path": "a.docx", "title": "A", "body": "same body"},
+                {"source": "manual_upload", "relative_path": "b.docx", "title": "B", "body": "same body"},
             ]
-            catalog.upsert_documents(rows)
+            catalog.upsert_documents(rows, active_ids={stable_document_id(row) for row in rows})
             groups = catalog.exact_duplicate_groups()
             self.assertEqual(len(groups), 1)
             self.assertEqual(groups[0]["count"], 2)
+
+    def test_duplicate_groups_ignore_discovered_legacy_records_and_other_spaces(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            catalog = self.make_catalog(Path(temp_dir))
+            catalog.create_space("Other")
+            rows = [
+                {"source": "resume_root", "relative_path": "legacy-a.docx", "title": "Legacy A", "body": "same body"},
+                {"source": "resume_root", "relative_path": "legacy-b.docx", "title": "Legacy B", "body": "same body"},
+                {"source": "manual_upload", "relative_path": "manual-a.docx", "title": "Manual A", "body": "manual duplicate"},
+                {"source": "manual_upload", "relative_path": "manual-b.docx", "title": "Manual B", "body": "manual duplicate"},
+            ]
+            manual_ids = {stable_document_id(row) for row in rows[2:]}
+            catalog.upsert_documents(rows, active_ids=manual_ids)
+            catalog.move_documents([stable_document_id(rows[3])], "other")
+
+            self.assertEqual(catalog.exact_duplicate_groups(), [])
 
     def test_version_detection_recommends_latest_without_excluding_old_version(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             catalog = self.make_catalog(Path(temp_dir))
             rows = [
                 {
-                    "source": "resume_root",
+                    "source": "manual_upload",
                     "relative_path": "master/resume-v1.docx",
                     "title": "Resume v1",
                     "body": "Profile education skills project experience old version.",
                     "modified_at": "2026-01-01T00:00:00+00:00",
                 },
                 {
-                    "source": "resume_root",
+                    "source": "manual_upload",
                     "relative_path": "master/resume-v2.docx",
                     "title": "Resume v2",
                     "body": "Profile education skills project experience newest version.",
@@ -232,7 +248,7 @@ class LocalCatalogTests(unittest.TestCase):
             self.assertEqual(saved["status"], "needs_ocr")
             self.assertEqual(catalog.active_documents(), [])
 
-    def test_catalog_creates_default_spaces_and_migrates_documents_to_portfolio(self) -> None:
+    def test_catalog_creates_only_portfolio_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             catalog = self.make_catalog(Path(temp_dir))
             row = {
@@ -247,15 +263,13 @@ class LocalCatalogTests(unittest.TestCase):
             spaces = catalog.list_spaces()
             saved = catalog.get(doc_id)
 
-            self.assertEqual(
-                [space["space_id"] for space in spaces[:3]],
-                ["portfolio", "rag-learning", "project-docs"],
-            )
+            self.assertEqual([space["space_id"] for space in spaces], ["portfolio"])
             self.assertEqual(saved["space_id"], "portfolio")
 
     def test_documents_can_move_spaces_without_changing_content_hash(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             catalog = self.make_catalog(Path(temp_dir))
+            catalog.create_space("RAG Learning")
             row = {
                 "source": "project_activity_root",
                 "relative_path": "rag/notes.md",
@@ -276,6 +290,7 @@ class LocalCatalogTests(unittest.TestCase):
     def test_archived_space_cannot_receive_documents(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             catalog = self.make_catalog(Path(temp_dir))
+            catalog.create_space("Project Docs")
             row = {
                 "source": "project_activity_root",
                 "relative_path": "docs/readme.md",
@@ -292,6 +307,7 @@ class LocalCatalogTests(unittest.TestCase):
     def test_active_documents_excludes_archived_spaces(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             catalog = self.make_catalog(Path(temp_dir))
+            catalog.create_space("Project Docs")
             row = {
                 "source": "project_activity_root",
                 "relative_path": "docs/readme.md",
@@ -306,3 +322,58 @@ class LocalCatalogTests(unittest.TestCase):
             catalog.update_space("project-docs", status="archived")
 
             self.assertEqual(catalog.active_documents(), [])
+
+    def test_reset_for_manual_upload_clears_catalog_and_persists_import_guards(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            catalog = self.make_catalog(Path(temp_dir))
+            other = catalog.create_space("Other")
+            row = {
+                "source": "manual_upload",
+                "relative_path": "resume.docx",
+                "title": "Resume",
+                "body": "Manual evidence.",
+            }
+            catalog.upsert_documents([row], active_ids={stable_document_id(row)})
+            catalog.move_documents([stable_document_id(row)], other["space_id"])
+
+            summary = catalog.reset_for_manual_upload()
+
+            self.assertEqual(summary["documents_deleted"], 1)
+            self.assertEqual(catalog.count(), 0)
+            self.assertEqual([space["space_id"] for space in catalog.list_spaces()], ["portfolio"])
+            self.assertEqual(catalog.get_setting("legacy_import_completed"), "true")
+            self.assertEqual(catalog.get_setting("include_repo_public"), "false")
+            self.assertTrue(catalog.get_setting("last_reset_at"))
+
+    def test_reset_statistics_cover_all_legacy_duplicates_and_versions(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            catalog = self.make_catalog(Path(temp_dir))
+            rows = [
+                {
+                    "source": "resume_root",
+                    "relative_path": "legacy/a.docx",
+                    "title": "Legacy A",
+                    "body": "Shared legacy body.",
+                },
+                {
+                    "source": "resume_root",
+                    "relative_path": "legacy/b.docx",
+                    "title": "Legacy B",
+                    "body": "Shared legacy body.",
+                },
+            ]
+            catalog.upsert_documents(rows)
+            with catalog._connect() as connection:
+                connection.execute(
+                    "UPDATE documents SET version_group_id = 'legacy-version'"
+                )
+
+            self.assertEqual(
+                catalog.reset_statistics(),
+                {
+                    "documents": 2,
+                    "spaces": 1,
+                    "duplicate_groups": 1,
+                    "version_members": 2,
+                },
+            )

@@ -101,7 +101,8 @@ def ensure_local_catalog(
 ) -> LocalCatalog:
     catalog = LocalCatalog(data_dir / "local_catalog.sqlite3")
     private_path = data_dir / "local_private_docs.json"
-    if catalog.count() == 0 and private_path.exists():
+    legacy_import_completed = catalog.get_setting("legacy_import_completed", "false") == "true"
+    if catalog.count() == 0 and private_path.exists() and not legacy_import_completed:
         rows = _load_json_list(private_path)
         selected = select_private_documents(
             rows,
@@ -110,17 +111,24 @@ def ensure_local_catalog(
         )
         active_ids = {stable_document_id(row) for row in selected}
         catalog.upsert_documents(rows, active_ids=active_ids)
+        catalog.set_setting("legacy_import_completed", "true")
     return catalog
 
 
 def load_knowledge_documents(data_dir: Path, *, include_private: bool = True) -> list[dict[str, Any]]:
     public_path = data_dir / "portfolio_docs.json"
-    documents = [normalize_document(item, default_visibility="public") for item in _load_json_list(public_path)]
+    catalog_path = data_dir / "local_catalog.sqlite3"
+    catalog = LocalCatalog(catalog_path) if catalog_path.exists() else None
+    include_repo_public = catalog is None or catalog.get_setting("include_repo_public", "true") == "true"
+    documents = (
+        [normalize_document(item, default_visibility="public") for item in _load_json_list(public_path)]
+        if include_repo_public and public_path.exists()
+        else []
+    )
 
     if include_private:
-        catalog_path = data_dir / "local_catalog.sqlite3"
-        if catalog_path.exists():
-            documents.extend(LocalCatalog(catalog_path).active_documents())
+        if catalog is not None:
+            documents.extend(catalog.active_documents())
         else:
             private_path = data_dir / "local_private_docs.json"
             if private_path.exists():

@@ -157,6 +157,14 @@ async function main() {
   const chunks = chunkDocuments(documents);
   console.log(`Validated ${documents.length} public documents and ${chunks.length} chunks.`);
   if (process.argv.includes("--validate")) return;
+  const applyRequested = process.argv.includes("--apply");
+  if (!applyRequested) {
+    console.log("Seed is validation-only by default. Pass --apply --confirm=SEED_PUBLIC_PORTFOLIO to write Atlas data.");
+    return;
+  }
+  if (!process.argv.includes("--confirm=SEED_PUBLIC_PORTFOLIO")) {
+    throw new Error("Atlas seed requires --confirm=SEED_PUBLIC_PORTFOLIO");
+  }
   const catalogOnly = process.argv.includes("--catalog-only");
   const spacesOnly = process.argv.includes("--spaces-only");
   if (!process.env.MONGODB_URI) throw new Error("MONGODB_URI is required");
@@ -178,8 +186,6 @@ async function main() {
 
   await spacesCollection.bulkWrite([
     ["portfolio", "Portfolio", "Public resume, internship, and project evidence."],
-    ["rag-learning", "RAG Learning", "Public RAG books, courses, experiments, and study notes."],
-    ["project-docs", "Project Docs", "Public documentation for standalone software and data projects."],
   ].map(([spaceId, name, description]) => ({ updateOne: {
     filter: { space_id: spaceId },
     update: { $setOnInsert: { space_id: spaceId, name, description, status: "active", visibility: "public", created_at: now, updated_at: now } },

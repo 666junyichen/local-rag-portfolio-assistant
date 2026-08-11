@@ -1,5 +1,13 @@
 # Project Memory Changelog
 
+## 2026-08-11
+
+- Reduced default knowledge spaces to one empty-ready `Portfolio` space and hid cross-space controls until a second active space exists.
+- Added a local Danger Zone with reset scope counts, ignored backups, exact confirmation, catalog/import guards, and cleanup of local chunks, chat, runtime evaluations, and internal upload copies without deleting source files.
+- Added an Owner-only cloud Danger Zone with full managed-data export, embedding-free backup, SHA-256 state fingerprint, exact confirmation, and collection-scoped reset.
+- Made repository Atlas seed validation-only by default and required an explicit apply command to write retained public JSON back to Atlas.
+- Limited duplicate and version analysis to active manual uploads in the current space after reset.
+
 ## 2026-08-10
 
 - Added Knowledge Spaces across cloud and local schemas, APIs, retrieval settings, source evidence, and user interfaces.

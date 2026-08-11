@@ -158,6 +158,26 @@ class IngestionTests(unittest.TestCase):
             self.assertEqual(len(documents), 2)
             self.assertEqual(sum(item["visibility"] == "private" for item in documents), 1)
 
+    def test_reset_catalog_does_not_reimport_legacy_or_repo_documents(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_dir = Path(temp_dir)
+            (data_dir / "portfolio_docs.json").write_text(
+                json.dumps([{"title": "Public", "body": "Repository evidence."}]), encoding="utf-8"
+            )
+            (data_dir / "local_private_docs.json").write_text(
+                json.dumps([{"source": "resume_root", "relative_path": "old.docx", "title": "Old", "body": "Legacy evidence."}]),
+                encoding="utf-8",
+            )
+            catalog = ensure_local_catalog(data_dir)
+            self.assertEqual(catalog.count(), 1)
+
+            catalog.reset_for_manual_upload()
+            reopened = ensure_local_catalog(data_dir)
+            documents = load_knowledge_documents(data_dir, include_private=True)
+
+            self.assertEqual(reopened.count(), 0)
+            self.assertEqual(documents, [])
+
     def test_chunk_records_keep_document_space_metadata(self) -> None:
         chunks = build_chunk_records(
             [

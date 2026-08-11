@@ -18,8 +18,8 @@ import {
 } from "../lib/cloud-publish/spaces";
 
 describe("cloud knowledge spaces", () => {
-  it("ships the three intended starter spaces", () => {
-    expect(DEFAULT_PUBLIC_SPACES.map((space) => space.space_id)).toEqual(["portfolio", "rag-learning", "project-docs"]);
+  it("ships only Portfolio and lets the owner create additional spaces", () => {
+    expect(DEFAULT_PUBLIC_SPACES.map((space) => space.space_id)).toEqual(["portfolio"]);
   });
 
   it("adds space filters to existing Atlas index definitions idempotently", () => {

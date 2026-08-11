@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AlertTriangle,
   Archive,
   Check,
   ChevronRight,
@@ -79,6 +80,17 @@ type PublishedDocument = {
   publicationVersion: number;
 };
 
+type ResetPreview = {
+  fingerprint: string;
+  snapshot: {
+    spaces: number;
+    drafts: number;
+    documents: number;
+    chunks: number;
+    metadata: number;
+  };
+};
+
 const steps = ["Upload & parse", "Clean & inspect", "Chunk preview", "Publish"];
 
 async function requestJson(url: string, init?: RequestInit) {
@@ -102,6 +114,9 @@ export function PublishStudio() {
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [resetPreview, setResetPreview] = useState<ResetPreview | null>(null);
+  const [resetBackupFingerprint, setResetBackupFingerprint] = useState("");
+  const [resetConfirmation, setResetConfirmation] = useState("");
 
   async function refresh() {
     setBusy("refresh");
@@ -269,6 +284,66 @@ export function PublishStudio() {
     } finally { setBusy(""); }
   }
 
+  async function previewReset() {
+    setBusy("reset:preview"); setError(""); setNotice("");
+    try {
+      const payload = await requestJson("/api/admin/reset/preview", { method: "POST" });
+      setResetPreview(payload);
+      setResetBackupFingerprint("");
+      setResetConfirmation("");
+      setNotice("Reset scope inspected. Download a fresh backup before reset is enabled.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to inspect the reset scope.");
+    } finally { setBusy(""); }
+  }
+
+  async function downloadResetBackup() {
+    setBusy("reset:backup"); setError(""); setNotice("");
+    try {
+      const response = await fetch("/api/admin/export?scope=reset", { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `Backup failed (${response.status})`);
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `portfolio-reset-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setResetPreview({ fingerprint: payload.fingerprint, snapshot: payload.snapshot });
+      setResetBackupFingerprint(payload.fingerprint);
+      setNotice("Backup downloaded. Verify the file is available locally before entering the confirmation phrase.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to download the reset backup.");
+    } finally { setBusy(""); }
+  }
+
+  async function executeReset() {
+    if (!resetPreview || resetBackupFingerprint !== resetPreview.fingerprint) return;
+    setBusy("reset:execute"); setError(""); setNotice("");
+    try {
+      await requestJson("/api/admin/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          confirmation: resetConfirmation,
+          fingerprint: resetBackupFingerprint,
+        }),
+      });
+      setSelected(null);
+      setResetPreview(null);
+      setResetBackupFingerprint("");
+      setResetConfirmation("");
+      setTab("drafts");
+      setNotice("Public knowledge reset completed. Portfolio is now the only empty knowledge space.");
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Public knowledge reset failed.");
+    } finally { setBusy(""); }
+  }
+
   const visibleDocuments = documents.filter((document) => tab === "archived" ? document.status === "archived" : document.status === "published");
 
   return <div className="studioFrame">
@@ -307,5 +382,17 @@ export function PublishStudio() {
         </>}
       </section>
     </div>
+    <section className="studioDangerZone" aria-labelledby="cloud-reset-heading">
+      <div className="dangerZoneHeading"><AlertTriangle size={20}/><div><span className="eyebrow">OWNER ONLY</span><h2 id="cloud-reset-heading">Danger Zone</h2><p>Back up and remove all public drafts, documents, searchable chunks, and non-Portfolio spaces. Atlas, indexes, Clerk, Vercel, and environment variables are kept.</p></div></div>
+      <div className="dangerZoneActions">
+        <button className="secondaryButton" disabled={Boolean(busy)} onClick={() => void previewReset()}>{busy === "reset:preview" ? <LoaderCircle className="spin" size={16}/> : <Eye size={16}/>}Preview reset</button>
+        <button className="secondaryButton" disabled={!resetPreview || Boolean(busy)} onClick={() => void downloadResetBackup()}>{busy === "reset:backup" ? <LoaderCircle className="spin" size={16}/> : <Download size={16}/>}Download reset backup</button>
+      </div>
+      {resetPreview ? <>
+        <dl className="resetSnapshot"><div><dt>Spaces</dt><dd>{resetPreview.snapshot.spaces}</dd></div><div><dt>Drafts</dt><dd>{resetPreview.snapshot.drafts}</dd></div><div><dt>Documents</dt><dd>{resetPreview.snapshot.documents}</dd></div><div><dt>Chunks</dt><dd>{resetPreview.snapshot.chunks}</dd></div><div><dt>Metadata</dt><dd>{resetPreview.snapshot.metadata}</dd></div></dl>
+        <label className="fieldLabel resetConfirmation">Type <code>RESET PORTFOLIO</code> after confirming the backup downloaded<input value={resetConfirmation} onChange={(event) => setResetConfirmation(event.target.value)} autoComplete="off"/></label>
+        <button className="dangerButton" disabled={Boolean(busy) || resetBackupFingerprint !== resetPreview.fingerprint || resetConfirmation !== "RESET PORTFOLIO"} onClick={() => void executeReset()}>{busy === "reset:execute" ? <LoaderCircle className="spin" size={16}/> : <Trash2 size={16}/>}Reset public knowledge</button>
+      </> : null}
+    </section>
   </div>;
 }

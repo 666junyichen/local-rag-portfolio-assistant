@@ -20,6 +20,8 @@ def render_space_selector(
     spaces = catalog.list_spaces(include_archived=False)
     if not spaces:
         return ("portfolio",)
+    if len(spaces) == 1:
+        return (str(spaces[0]["space_id"]),)
     names = {str(space["space_id"]): str(space["name"]) for space in spaces}
     options = list(names)
     cross_space = False

@@ -55,3 +55,7 @@ Represent Portfolio, RAG Learning, Project Docs, and future knowledge areas with
 ## 2026-08-10: Empty Evidence Is A Successful Grounded Refusal
 
 An active knowledge space with no matching evidence returns a normal SSE response containing retrieval, localized refusal, and done events. It must not call Gemini and must not turn absence of evidence into an HTTP 500 error.
+
+## 2026-08-11: Knowledge Reset Is Backup-Gated And Does Not Delete Sources
+
+Create only the `portfolio` space by default and let the Owner add another space deliberately. A reset may clear application catalogs, managed chunks, chat, drafts, runtime evaluations, and internal upload copies only after a backup and exact confirmation. It must preserve external source files, formal benchmarks, database/index infrastructure, authentication, deployment configuration, local models, and retained repository documents. Legacy and repository imports remain disabled after a local reset, and repository seeding requires an explicit apply command.

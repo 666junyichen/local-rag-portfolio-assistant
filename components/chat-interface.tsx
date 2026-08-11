@@ -45,6 +45,7 @@ export function ChatInterface() {
   const [spaceIds, setSpaceIds] = useState(["portfolio"]);
   const [crossSpace, setCrossSpace] = useState(false);
   const { spaces, error: spacesError } = usePublicKnowledgeSpaces();
+  const hasMultipleSpaces = spaces.filter((space) => space.status === "active").length > 1;
   const text = copy[language];
 
   async function ask(value: string) {
@@ -88,7 +89,7 @@ export function ChatInterface() {
       </div>
       <div className="spaceToolbar">
         <KnowledgeSpaceSelector spaces={spaces} value={spaceIds} onChange={setSpaceIds} multiple={crossSpace}/>
-        <label className="toggleLabel"><input type="checkbox" checked={crossSpace} onChange={(event) => { setCrossSpace(event.target.checked); if (!event.target.checked) setSpaceIds((current) => [current[0] || "portfolio"]); }}/>Cross-space query</label>
+        {hasMultipleSpaces ? <label className="toggleLabel"><input type="checkbox" checked={crossSpace} onChange={(event) => { setCrossSpace(event.target.checked); if (!event.target.checked) setSpaceIds((current) => [current[0] || "portfolio"]); }}/>Cross-space query</label> : null}
         {spacesError ? <small className="inlineError">{spacesError}</small> : null}
       </div>
       {settingsOpen && <div className="settingsBar"><label>Top-K <input type="range" min="1" max="10" value={topK} onChange={(e) => setTopK(Number(e.target.value))}/><strong>{topK}</strong></label><label>Threshold <input type="number" min="0" max="1" step="0.05" placeholder="Off" value={threshold ?? ""} onChange={(e) => setThreshold(e.target.value === "" ? null : Number(e.target.value))}/></label></div>}

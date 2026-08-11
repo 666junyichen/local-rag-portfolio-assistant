@@ -35,6 +35,11 @@ from src.knowledge_store import (  # noqa: E402
     update_public_document,
 )
 from src.local_catalog import LocalCatalog, stable_document_id  # noqa: E402
+from src.local_reset import (  # noqa: E402
+    RESET_CONFIRMATION,
+    build_local_reset_preview,
+    perform_local_reset,
+)
 from src.local_runtime import run_command_streaming  # noqa: E402
 from src.portfolio_rag import (  # noqa: E402
     get_collections,
@@ -58,7 +63,9 @@ ARCHIVE_PATH = DATA_DIR / "archive" / "public_docs.json"
 UPLOADS = DATA_DIR / "local_uploads"
 
 
-def read_public_documents() -> list[dict[str, Any]]:
+def read_public_documents(local_catalog: LocalCatalog | None = None) -> list[dict[str, Any]]:
+    if local_catalog and local_catalog.get_setting("include_repo_public", "true") != "true":
+        return []
     if not PUBLIC_PATH.exists():
         return []
     payload = json.loads(PUBLIC_PATH.read_text(encoding="utf-8"))
@@ -610,8 +617,8 @@ def private_library(local_catalog: LocalCatalog, indexed: dict[str, set[str]]) -
             st.success("已保存。索引状态将在重建前显示为 outdated。")
 
 
-def public_library(indexed: dict[str, set[str]]) -> None:
-    documents = read_public_documents()
+def public_library(local_catalog: LocalCatalog, indexed: dict[str, set[str]]) -> None:
+    documents = read_public_documents(local_catalog)
     search = st.text_input("搜索公开资料")
     filtered = [item for item in documents if search.lower() in (item["title"] + " " + item["body"]).lower()]
     st.caption(f"公开知识库共 {len(documents)} 条，当前显示 {len(filtered)} 条。")
@@ -696,7 +703,7 @@ def library_tab(local_catalog: LocalCatalog) -> None:
     if visibility == "私有资料":
         private_library(local_catalog, indexed)
     else:
-        public_library(indexed)
+        public_library(local_catalog, indexed)
 
 
 def versions_tab(local_catalog: LocalCatalog) -> None:
@@ -740,7 +747,7 @@ def versions_tab(local_catalog: LocalCatalog) -> None:
 
 def maintenance_tab(local_catalog: LocalCatalog) -> None:
     st.subheader("索引维护")
-    public_documents = read_public_documents()
+    public_documents = read_public_documents(local_catalog)
     active_private = local_catalog.active_documents()
     indexed = indexed_fingerprints()
     source_documents = [*public_documents, *active_private]
@@ -779,6 +786,75 @@ def maintenance_tab(local_catalog: LocalCatalog) -> None:
     st.subheader("云端公开 Demo 同步")
     st.write("公开 JSON 修改后，本地索引与云端 Atlas 需要分别更新。云端 seed 只读取 `data/portfolio_docs.json`。")
     st.code("npm run seed:atlas", language="powershell")
+
+    st.divider()
+    st.subheader("Danger Zone")
+    st.warning(
+        "This removes the local knowledge catalog, searchable chunks, chat history, "
+        "runtime evaluations, and internal upload copies. External source files are never deleted."
+    )
+    if st.button("Preview local reset", key="preview-local-reset"):
+        try:
+            settings = load_settings(ROOT / ".env")
+            _, reset_chunks, reset_history = get_collections(settings)
+            st.session_state["local_reset_preview"] = build_local_reset_preview(
+                root=ROOT,
+                catalog=local_catalog,
+                chunks=reset_chunks,
+                history=reset_history,
+            )
+        except Exception as error:
+            st.error(f"Unable to inspect local reset scope: {error}")
+
+    reset_preview = st.session_state.get("local_reset_preview")
+    if reset_preview:
+        reset_metrics = st.columns(5)
+        reset_metrics[0].metric("Documents", reset_preview["documents"])
+        reset_metrics[1].metric("Spaces", reset_preview["spaces"])
+        reset_metrics[2].metric("Chunks", reset_preview["chunks"])
+        reset_metrics[3].metric("Chat messages", reset_preview["chat_messages"])
+        reset_metrics[4].metric("Runtime eval files", reset_preview["runtime_eval_files"])
+        st.caption(
+            "A SQLite backup, chat export, reset manifest, runtime evaluations, and internal "
+            "upload copies are stored in the Git-ignored private backup directory first."
+        )
+        st.info("Download or copy this backup path before continuing; it will be shown after reset.")
+        st.caption('Required confirmation phrase: "RESET PORTFOLIO".')
+        reset_confirmation = st.text_input(
+            f'Type "{RESET_CONFIRMATION}" to confirm',
+            key="local-reset-confirmation",
+        )
+        if st.button(
+            "Back up and reset local knowledge",
+            type="primary",
+            disabled=reset_confirmation != RESET_CONFIRMATION,
+            key="execute-local-reset",
+        ):
+            try:
+                settings = load_settings(ROOT / ".env")
+                _, reset_chunks, reset_history = get_collections(settings)
+                result = perform_local_reset(
+                    root=ROOT,
+                    catalog=local_catalog,
+                    chunks=reset_chunks,
+                    history=reset_history,
+                    confirmation=reset_confirmation,
+                )
+                for key in (
+                    "local_reset_preview",
+                    "version_groups",
+                    "lab_results",
+                    "lab_answer",
+                ):
+                    st.session_state.pop(key, None)
+                st.cache_data.clear()
+                st.cache_resource.clear()
+                st.success(
+                    "Local knowledge reset completed. Backup: "
+                    f"{result['backup_dir']}"
+                )
+            except Exception as error:
+                st.error(f"Local reset failed before completion: {error}")
 
 
 st.set_page_config(page_title="Knowledge Studio", page_icon="📚", layout="wide")

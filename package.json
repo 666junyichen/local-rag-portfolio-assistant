@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
-    "seed:atlas": "node scripts/seed-atlas.mjs"
+    "seed:atlas": "node scripts/seed-atlas.mjs --validate",
+    "seed:atlas:apply": "node scripts/seed-atlas.mjs --apply --confirm=SEED_PUBLIC_PORTFOLIO"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.7.1",

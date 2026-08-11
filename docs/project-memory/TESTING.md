@@ -55,6 +55,7 @@ The tests cover valid temporary Git repositories, missing required files and key
 - Knowledge Spaces cloud milestone: `npm test` passed 60 tests across 11 main-repository Vitest files; `npm run build` compiled 17 pages and API routes.
 - Python milestone on 2026-08-10: `263 passed, 3 subtests passed` in 103.46 seconds. `scripts/check_streamlit_pages.py` passed Chat, Knowledge Studio, Retrieval Lab, and all five retrieval modes.
 - Knowledge Spaces local integration on 2026-08-10: the migration completed without re-embedding; `text_index` and `vector_index` both reached `READY` with `space_id` filters. The focused migration/retrieval suite passed 26 tests, all three Streamlit pages passed AppTest, a real Portfolio query returned three sources, and `scripts/smoke_test.py` generated a grounded Ollama answer.
+- Safe-reset milestone on 2026-08-11: `270 passed, 3 subtests passed`; `npm test` passed 66 tests across 13 files; `npm run build` compiled 19 pages and API routes; and `scripts/check_streamlit_pages.py` passed all three local pages and five retrieval modes. Real datastore reset acceptance remains pending and does not require another full-suite run.
 - The first smoke-test attempt exceeded 180 seconds during model cold start. A four-token Ollama warm-up completed in 9.65 seconds, after which the full smoke test passed in 107.5 seconds. Treat this as local CPU/model-loading latency rather than an index failure.
 - Task 0 focused evidence is recorded in `state.json` and the bootstrap session note.
 

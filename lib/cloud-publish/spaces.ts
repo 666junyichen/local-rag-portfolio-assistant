@@ -19,8 +19,6 @@ let migrationReady: Promise<void> | undefined;
 
 export const DEFAULT_PUBLIC_SPACES = [
   { space_id: DEFAULT_SPACE_ID, name: "Portfolio", description: "Public resume, internship, and project evidence." },
-  { space_id: "rag-learning", name: "RAG Learning", description: "Public RAG books, courses, experiments, and study notes." },
-  { space_id: "project-docs", name: "Project Docs", description: "Public documentation for standalone software and data projects." },
 ] as const;
 
 export function withVectorSpaceFilter(definition: Document): Document {

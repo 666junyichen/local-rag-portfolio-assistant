@@ -16,6 +16,7 @@ export function RetrievalLab() {
   const [spaceIds, setSpaceIds] = useState(["portfolio"]);
   const [crossSpace, setCrossSpace] = useState(false);
   const { spaces } = usePublicKnowledgeSpaces();
+  const hasMultipleSpaces = spaces.filter((space) => space.status === "active").length > 1;
 
   async function run(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
@@ -30,7 +31,7 @@ export function RetrievalLab() {
 
   return <div className="pageFrame">
     <div className="pageHeading"><span className="eyebrow">READ-ONLY PUBLIC INDEX</span><h1>Retrieval Lab</h1><p>检查问题实际召回了哪些公开片段，并观察 Top-K 和相关度阈值如何改变上下文。</p></div>
-    <div className="spaceToolbar labSpaceToolbar"><KnowledgeSpaceSelector spaces={spaces} value={spaceIds} onChange={setSpaceIds} multiple={crossSpace}/><label className="toggleLabel"><input type="checkbox" checked={crossSpace} onChange={(event) => { setCrossSpace(event.target.checked); if (!event.target.checked) setSpaceIds((current) => [current[0] || "portfolio"]); }}/>Cross-space query</label></div>
+    <div className="spaceToolbar labSpaceToolbar"><KnowledgeSpaceSelector spaces={spaces} value={spaceIds} onChange={setSpaceIds} multiple={crossSpace}/>{hasMultipleSpaces ? <label className="toggleLabel"><input type="checkbox" checked={crossSpace} onChange={(event) => { setCrossSpace(event.target.checked); if (!event.target.checked) setSpaceIds((current) => [current[0] || "portfolio"]); }}/>Cross-space query</label> : null}</div>
     <form className="labPanel" onSubmit={run}>
       <div className="labQuery"><label htmlFor="lab-question">测试问题</label><textarea id="lab-question" value={question} maxLength={500} onChange={(event) => setQuestion(event.target.value)} rows={3}/></div>
       <div className="labControls">

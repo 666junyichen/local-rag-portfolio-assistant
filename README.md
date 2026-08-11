@@ -159,6 +159,12 @@ The four tabs support:
 - **Versions & Duplicates:** exact duplicate groups and human-confirmed resume/upload version recommendations.
 - **Index Maintenance:** active document counts, stale-index detection, visible ingestion progress, and the separate Atlas cloud-sync reminder.
 
+#### Reset to a manual-upload knowledge base
+
+The **Index Maintenance > Danger Zone** can reset local knowledge while preserving every external Word, PDF, code, and project source file. It first creates a SQLite backup, chat export, reset manifest, runtime-evaluation copies, and internal-upload copies under the Git-ignored private backup directory. The reset requires the exact phrase `RESET PORTFOLIO`.
+
+After reset, the local catalog contains only an empty `Portfolio` space. Guard settings prevent `local_private_docs.json` and `data/portfolio_docs.json` from being imported automatically, so only documents uploaded or activated manually enter the local index. The reset clears local searchable chunks, chat history, and generated evaluation runs; it does not remove Docker volumes, Ollama models, MongoDB indexes, formal benchmarks, or external source files.
+
 DOCX resumes now default to deterministic semantic parents with child retrieval blocks. Education, internship, project, award, and skill entities are isolated; an oversized entity is split only inside itself and repeats its title. General parent-child mode defaults to roughly 700-token answer parents and 180-token retrieval children. MongoDB Vector Search and BM25 index the children, while answers and source panels expand each match to its parent evidence. Repeated summaries and skill variants share semantic groups so they cannot fill Top-K. Each document persists its complete processing profile, so preview, temporary retrieval, saved configuration, and ingestion use the same boundaries. Images and scanned PDFs are marked `needs_ocr`; OCR is intentionally not enabled in this version.
 
 The local Master resume verification produces 28 semantic parents and 40 retrieval children instead of seven mixed chunks. Its separate 10-question resume benchmark can be run with:
@@ -217,10 +223,12 @@ OWNER_EMAILS=verified-owner@example.com
 Validate and publish the curated data separately from the web deployment:
 
 ```powershell
-node scripts/seed-atlas.mjs --validate
 npm run seed:atlas
+npm run seed:atlas:apply
 npm run dev
 ```
+
+`npm run seed:atlas` is validation-only. Writing repository documents to Atlas requires the explicit `seed:atlas:apply` command and its built-in confirmation token. This prevents a retained or locally edited `data/portfolio_docs.json` from silently repopulating a deliberately empty public knowledge base.
 
 When the retrieval chunks already exist and only the new public Knowledge catalog needs to be populated, use the quota-free catalog backfill. It does not call Gemini or regenerate embeddings:
 
@@ -245,7 +253,7 @@ The Vercel application provides:
 
 ### Knowledge Spaces
 
-Both runtimes organize documents into spaces instead of mixing unrelated subjects into one retrieval pool. The starter spaces are **Portfolio**, **RAG Learning**, and **Project Docs**; the Owner may add more. A document belongs to one space, while a question may select one space or compare up to five.
+Both runtimes organize documents into spaces instead of mixing unrelated subjects into one retrieval pool. The only starter space is **Portfolio**; additional spaces are created manually when a genuinely separate knowledge base is needed. A document belongs to one space, while a question may select one space or compare up to five. Cross-space controls stay hidden until at least two active spaces exist.
 
 - Chat, Retrieval Lab, Knowledge, and Publish Studio share the same space contract.
 - A missing selection defaults to `portfolio` for backward compatibility.
@@ -269,6 +277,8 @@ Cloud publication is intentionally not an anonymous upload feature. A verified C
 Draft text expires from `portfolio_public_drafts` after seven days. Original uploaded files are never persisted. Publishing is idempotent and transactional, and quota failures keep the draft ready for a later retry. Repository seed operations update only `source_origin=repo_seed`; they never delete `owner_upload` records.
 
 Clerk public sign-up should be disabled in the Clerk dashboard. `/studio` and every `/api/admin/*` handler also perform server-side Owner authorization, returning `401` for signed-out users and `403` for authenticated non-Owners.
+
+The Owner-only **Publish Studio > Danger Zone** exports all managed public spaces, drafts, documents, chunks without embeddings, and publication metadata as JSON. A SHA-256 fingerprint binds the downloaded backup to the current cloud state; if the data changes, the reset is rejected until a fresh backup is downloaded. Entering `RESET PORTFOLIO` then clears only this application's managed collections and keeps Atlas, indexes, Clerk, Vercel configuration, and the empty `Portfolio` space.
 
 ## Demo Questions
 

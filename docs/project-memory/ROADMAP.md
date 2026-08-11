@@ -13,6 +13,7 @@ Phase A follows the approved implementation plan in task order. A later task may
 | 6 | Dify-style Knowledge Studio controls | completed and reviewed |
 | 7 | Retrieval Lab consistency and diagnostics | completed and reviewed |
 | 8 | Migration, integration, and documentation | completed and reviewed |
+| 12 | Single-space defaults and safe knowledge reset | implementation verified; real resets pending |
 
 Phase A is complete. The benchmark-supported Phase B candidate is deliberately narrow: improve freshness ranking and route expensive reranking only where it adds value. Broader Agentic RAG work remains deferred.
 
