@@ -1,8 +1,8 @@
 # Known Issues
 
-## Pending: Real Knowledge Reset Execution
+## Resolved: Real Knowledge Reset Execution
 
-The single-space defaults, backup generation, fingerprint validation, confirmation gates, and data-clear operations pass automated tests. The real local SQLite/MongoDB reset and production Atlas reset must still be executed after merge and deployment. Completion requires a verified local backup, a downloaded cloud JSON backup, zero remaining documents/chunks/drafts/history/runtime evaluations, and exactly one empty active `portfolio` space in each runtime.
+The guarded local and production resets completed on 2026-08-11. Both backups are stored under the Git-ignored private project-memory directory. Local SQLite and MongoDB now contain no knowledge documents, chunks, chat history, or runtime evaluation artifacts; production Atlas contains no drafts, documents, chunks, or publication metadata. Both runtimes retain exactly one empty active `portfolio` space, and local legacy/repository auto-import is disabled.
 
 ## Resolved: Task 2 Quality Blockers
 

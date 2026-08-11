@@ -20,13 +20,15 @@ Implement one default Portfolio space and guarded local/cloud reset workflows wi
 | `npm test` | 66 passed across 13 Vitest files |
 | `npm run build` | Next.js production build passed with 19 pages and API routes |
 | `.\\.venv\\Scripts\\python.exe scripts\\check_streamlit_pages.py` | All three Streamlit pages and five retrieval modes passed |
+| Guarded local reset | Backed up and cleared 7,049 documents, 689 chunks, 23 chat messages, and three runtime evaluation files; one empty Portfolio space remains |
+| Guarded production reset | Fingerprint-verified backup captured three spaces, one draft, 27 documents, and 27 chunks; deployed APIs now report one Portfolio space and zero knowledge documents |
 
 ## Decisions And Concerns
 
-- Real destructive reset execution remains separate from implementation verification so backups can be confirmed against the merged and deployed version.
+- Local and cloud backups remain in `.project-memory/private/backups/` and are excluded from Git and indexing.
 - Retained repository documents remain untouched and cannot silently repopulate either knowledge base.
 
 ## Handoff
 
-- Merge and deploy the guarded implementation, then execute and verify the local and cloud resets.
+- Manually upload three to five trusted Portfolio files, review parsing/cleaning/PII/chunks, rebuild the local index, and create expected-source Retrieval Lab questions.
 - [Current State](../CURRENT_STATE.md) and `state.json` agree.

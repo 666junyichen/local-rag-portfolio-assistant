@@ -1,16 +1,16 @@
 # Current State
 
-- Active branch: `feat/safe-knowledge-reset`
+- Active branch: `main`
 - Active phase: `Safe Knowledge Reset`
 - Last verified: `2026-08-11`
-- Updated: `2026-08-11T17:35:00+10:00`
-- Next action: Merge and deploy the guarded reset implementation, then create verified backups and execute the real local and cloud resets.
+- Updated: `2026-08-11T18:45:00+10:00`
+- Next action: Manually upload 3-5 trusted Portfolio files, inspect parsing, cleaning, PII, and chunks, rebuild the local index, then record expected-source questions in Retrieval Lab.
 
 ## Status
 
 Tasks 0-10 are completed and reviewed. Owner production acceptance now covers sign-in, email and phone PII blocking, sanitized preview, publication, Knowledge visibility, grounded Retrieve and Chat responses, unpublish, and permanent synthetic-data cleanup. A no-evidence Chat stream regression found during unpublish verification was fixed and deployed; an active empty space now returns a grounded refusal with HTTP 200 instead of a server error.
 
-Task 12 implements one default Portfolio space and guarded local/cloud knowledge reset workflows. Local reset backs up SQLite, chat, runtime evaluations, and internal upload copies before clearing catalog and MongoDB knowledge state; import guards prevent legacy scans and repository JSON from returning. Cloud reset requires an Owner-downloaded JSON backup, a matching data fingerprint, and the exact confirmation phrase before clearing only managed collections. The code and milestone tests pass, but the real local and production resets remain intentionally pending until the branch is merged and deployed.
+Task 12 is complete on `main` and deployed. The guarded local reset backed up and cleared 7,049 catalog documents, 689 chunks, 23 chat messages, and three runtime evaluation files. The guarded production reset backed up three spaces, one draft, 27 documents, and 27 chunks, then cleared only managed knowledge collections. Both runtimes now contain one empty active `portfolio` space; legacy scans and repository JSON are disabled from automatic local ingestion.
 
 Task 11 adds public and local Knowledge Spaces. Cloud data is migrated to the default `portfolio` space, Owner uploads can target and move between spaces, and Ask AI, Knowledge, Retrieval Lab, and Sources carry space filters and labels. Single-space isolation and cross-space evidence preservation passed production acceptance. The real local migration now also passes: both local indexes are `READY` with `space_id` filters, a single-space query retrieved three Portfolio sources, and the Ollama smoke test generated a grounded answer.
 
@@ -34,10 +34,8 @@ Phase B's adaptive path triggered the reranker for 15 of 50 benchmark questions.
 | 9 | completed | true | true | File-authoritative local configuration, split runtime health, freshness ranking, and adaptive reranker routing |
 | 10 | completed | true | true | Owner production publication lifecycle and synthetic-data cleanup passed |
 | 11 | completed | true | true | Cloud and local Knowledge Spaces, index migration, single/cross-space filtering, and smoke validation |
-| 12 | in_progress | false | false | One default Portfolio space and guarded local/cloud reset implementation passed automated verification; real resets remain pending |
+| 12 | completed | true | true | One default Portfolio space, verified ignored backups, and completed local/cloud knowledge resets |
 
 ## Known Blockers
-
-- The guarded local and cloud reset operations have not yet been executed against the real data stores.
 
 See [Known Issues](KNOWN_ISSUES.md) for acceptance criteria and [Testing](TESTING.md) for the evidence contract.

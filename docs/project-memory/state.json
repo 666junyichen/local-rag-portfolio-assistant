@@ -1,6 +1,6 @@
 {
     "schema_version":  1,
-    "active_branch":  "feat/safe-knowledge-reset",
+    "active_branch":  "main",
     "active_phase":  "Safe Knowledge Reset",
     "tasks":  [
                   {
@@ -234,9 +234,9 @@
                   {
                       "id":  12,
                       "title":  "Single-space defaults and safe knowledge reset",
-                      "status":  "in_progress",
-                      "reviewed":  false,
-                      "final_quality_approved":  false,
+                      "status":  "completed",
+                      "reviewed":  true,
+                      "final_quality_approved":  true,
                       "test_evidence":  [
                                             {
                                                 "command":  ".\\.venv\\Scripts\\python.exe -m pytest -q",
@@ -261,14 +261,24 @@
                                                 "result":  "Chat, Knowledge Studio, Retrieval Lab, and all retrieval modes passed",
                                                 "outcome":  "passed",
                                                 "verified_at":  "2026-08-11"
+                                            },
+                                            {
+                                                "command":  "guarded local reset and datastore verification",
+                                                "result":  "Backed up and cleared 7049 catalog documents, 689 chunks, 23 chat messages, and 3 runtime evaluation files; retained one empty Portfolio space and disabled legacy/repository auto-import",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-11"
+                                            },
+                                            {
+                                                "command":  "guarded production reset and public API verification",
+                                                "result":  "Backed up 3 spaces, 1 draft, 27 documents, and 27 chunks; production now exposes one Portfolio space with zero drafts, documents, chunks, and metadata",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-11"
                                             }
                                         ]
                   }
               ],
     "last_verified":  "2026-08-11",
-    "known_blockers":  [
-                            "The guarded local and cloud reset operations have not yet been executed against the real data stores."
-                        ],
-    "next_action":  "Merge and deploy the guarded reset implementation, then create verified backups and execute the real local and cloud resets.",
-    "updated_at":  "2026-08-11T17:35:00+10:00"
+    "known_blockers":  [],
+    "next_action":  "Manually upload 3-5 trusted Portfolio files, inspect parsing, cleaning, PII, and chunks, rebuild the local index, then record expected-source questions in Retrieval Lab.",
+    "updated_at":  "2026-08-11T18:45:00+10:00"
 }
