@@ -44,7 +44,7 @@ async function defaultDetectFileType(data: Uint8Array) {
 
 async function defaultParseDocx(data: Uint8Array): Promise<string> {
   const mammoth = await import("mammoth");
-  const result = await mammoth.extractRawText({ buffer: Buffer.from(data) });
+  const result = await mammoth.convertToMarkdown({ buffer: Buffer.from(data) });
   return result.value;
 }
 
@@ -70,7 +70,7 @@ function markdownTitle(body: string): string | undefined {
 }
 
 function deriveTitle(fileName: string, body: string, fileType: ParsedUpload["fileType"]): string {
-  if (fileType === "md") return markdownTitle(body) || path.parse(fileName).name;
+  if (fileType === "md" || fileType === "docx") return markdownTitle(body) || path.parse(fileName).name;
   return path.parse(fileName).name;
 }
 

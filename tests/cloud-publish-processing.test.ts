@@ -4,6 +4,7 @@ import {
   buildChunkPreview,
   cleanPublicText,
   detectPii,
+  recommendProcessingProfile,
 } from "../lib/cloud-publish/processing";
 
 describe("public document processing", () => {
@@ -75,5 +76,111 @@ describe("public document processing", () => {
     }, { title: "Master Resume" });
     expect(preview.parents.map((parent) => parent.sectionType)).toEqual(["education", "project", "internship"]);
     expect(preview.parents.some((parent) => parent.rawBody.includes("教育背景") && parent.rawBody.includes("项目经验"))).toBe(false);
+  });
+
+  it.each([
+    { fileName: "candidate.docx", fileType: "docx", title: "Candidate profile" },
+    { fileName: "notes.md", fileType: "md", title: "陈君奕简历" },
+    { fileName: "notes.txt", fileType: "txt", title: "Junyi Resume" },
+    { fileName: "notes.pdf", fileType: "pdf", title: "Junyi CV" },
+  ])("recommends resume semantic processing for $fileName", (upload) => {
+    expect(recommendProcessingProfile(upload)).toMatchObject({
+      chunkMode: "resume_semantic",
+      childMaxTokens: 180,
+      parentMaxTokens: 320,
+    });
+  });
+
+  it("keeps every resume entity in a separate semantic parent with complete metadata", () => {
+    const profile = recommendProcessingProfile({
+      fileName: "陈君奕简历.docx",
+      fileType: "docx",
+      title: "陈君奕简历",
+    });
+    const body = [
+      "个人简历",
+      "陈君奕",
+      "求职方向：AI 应用工程师",
+      "教育背景",
+      "悉尼大学 | 数据科学硕士 | 2025.02 - 2026.12",
+      "相关课程：机器学习、深度学习、数据隐私",
+      "南京师范大学 | 理学学士 | 2022.02 - 2024.12",
+      "相关课程：Python、SQL、数据分析",
+      "实习经历",
+      "南京软通动力有限公司 | AI 实习生 | 2024.06 - 2024.07",
+      "负责模型评测和数据清洗。",
+      "C51 Consulting | Student Consultant | 2025.11 - 2025.12",
+      "负责行业研究和客户报告。",
+      "项目经验",
+      "Local RAG Portfolio Assistant | 2026",
+      "技术栈：Python、MongoDB Vector Search、Ollama",
+      "成果：实现本地私有知识库检索与来源引用。",
+      "QANet Debugging and Controlled Experiments | 2026",
+      "技术栈：Python、PyTorch、QANet",
+      "成果：完成受控实验与模型修复。",
+      "专业技能",
+      "AI 与数据：RAG、机器学习、模型评测",
+      "Web 开发：React、Next.js、TypeScript",
+      "获奖经历",
+      "2025 Outstanding Quality Award",
+      "2024 Data Science Capstone Award",
+    ].join("\n\n");
+
+    const preview = buildChunkPreview(body, profile, { title: "陈君奕简历" });
+    const projects = preview.parents.filter((chunk) => chunk.sectionType === "project");
+
+    expect(projects).toHaveLength(2);
+    expect(preview.parents.filter((chunk) => chunk.sectionType === "education")).toHaveLength(2);
+    expect(preview.parents.filter((chunk) => chunk.sectionType === "internship")).toHaveLength(2);
+    expect(preview.parents.filter((chunk) => chunk.sectionType === "skill")).toHaveLength(2);
+    expect(preview.parents.filter((chunk) => chunk.sectionType === "award")).toHaveLength(2);
+    expect(projects[0].parentBody).toContain("Local RAG Portfolio Assistant");
+    expect(projects[0].parentBody).not.toContain("QANet Debugging");
+    expect(projects[1].parentBody).toContain("QANet Debugging");
+    expect(projects[1].parentBody).not.toContain("Local RAG Portfolio Assistant");
+
+    for (const parent of preview.parents) {
+      expect(parent.tokenCount).toBeLessThanOrEqual(320);
+      expect(parent.parentChunkId).toMatch(/^parent_/);
+      expect(parent.entityTitle).toBeTruthy();
+      expect(parent.sectionPath).toContain(parent.entityTitle);
+      expect(parent.semanticGroupId).toMatch(/^group_/);
+    }
+    for (const child of preview.children) {
+      const parent = preview.parents.find((item) => item.parentChunkId === child.parentChunkId);
+      expect(child.tokenCount).toBeLessThanOrEqual(180);
+      expect(child.entityTitle).toBe(parent?.entityTitle);
+      expect(child.semanticGroupId).toBe(parent?.semanticGroupId);
+    }
+  });
+
+  it("splits an oversized project only inside that entity and repeats its title", () => {
+    const profile = recommendProcessingProfile({
+      fileName: "resume.docx",
+      fileType: "docx",
+      title: "Resume",
+    });
+    const detail = Array.from(
+      { length: 45 },
+      (_, index) => `项目成果 ${index + 1}：完成检索评测、来源引用和稳定性验证。`,
+    ).join("\n\n");
+    const body = [
+      "项目经验",
+      "Local RAG Portfolio Assistant | 2026",
+      "技术栈：Python、MongoDB、Ollama",
+      detail,
+      "QANet Debugging | 2026",
+      "技术栈：Python、PyTorch",
+      "成果：完成模型修复。",
+    ].join("\n\n");
+
+    const preview = buildChunkPreview(body, profile, { title: "Resume" });
+    const ragParents = preview.parents.filter((chunk) => chunk.entityTitle.includes("Local RAG"));
+
+    expect(ragParents.length).toBeGreaterThan(1);
+    expect(new Set(ragParents.map((chunk) => chunk.semanticGroupId)).size).toBe(1);
+    expect(ragParents.every((chunk) => chunk.parentBody.includes("Local RAG Portfolio Assistant"))).toBe(true);
+    expect(ragParents.every((chunk) => !chunk.parentBody.includes("QANet Debugging"))).toBe(true);
+    expect(ragParents.every((chunk) => chunk.tokenCount <= 320)).toBe(true);
   });
 });

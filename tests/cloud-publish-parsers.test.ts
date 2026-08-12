@@ -36,6 +36,26 @@ describe("owner upload parsing", () => {
     expect(result).not.toHaveProperty("buffer");
   });
 
+  it("preserves structured DOCX headings and derives the resume title", async () => {
+    const result = await parseUpload(
+      new File([new Uint8Array([80, 75, 3, 4])], "candidate.docx"),
+      {
+        detectFileType: async () => ({ ext: "docx", mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }),
+        parseDocx: async () => [
+          "# Junyi Resume",
+          "## Education",
+          "University of Sydney | Master of Data Science | 2025 - 2026",
+          "## Projects",
+          "Local RAG Portfolio Assistant | 2026",
+        ].join("\n\n"),
+      },
+    );
+
+    expect(result.title).toBe("Junyi Resume");
+    expect(result.body).toContain("## Education");
+    expect(result.body).toContain("## Projects");
+  });
+
   it("marks image-only PDFs as needing OCR", async () => {
     await expect(parseUpload(
       new File([new Uint8Array([37, 80, 68, 70])], "scan.pdf", { type: "application/pdf" }),

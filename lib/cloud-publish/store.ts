@@ -10,6 +10,7 @@ import {
   buildChunkPreview,
   cleanPublicText,
   detectPii,
+  recommendProcessingProfile,
   type ProcessingProfile,
 } from "./processing";
 import { PublishConflictError, type DraftRecord, type Publication, type PublishRepository } from "./publishing";
@@ -103,7 +104,7 @@ function validateProfile(raw: unknown): ProcessingProfile {
   return value;
 }
 
-function makeDraft(owner: OwnerIdentity, parsed: ParsedUpload, profile = DEFAULT_PROCESSING_PROFILE, spaceId = DEFAULT_SPACE_ID) {
+function makeDraft(owner: OwnerIdentity, parsed: ParsedUpload, profile = recommendProcessingProfile(parsed), spaceId = DEFAULT_SPACE_ID) {
   const now = new Date();
   const cleanedBody = cleanPublicText(parsed.body, profile);
   const piiFindings = detectPii(cleanedBody);
@@ -139,7 +140,7 @@ export async function createDrafts(owner: OwnerIdentity, uploads: ParsedUpload[]
   await ensurePublishIndexes();
   const [spaceId] = await requireActivePublicSpaces([targetSpaceId]);
   const db = await cloudDb();
-  const records = uploads.map((upload) => makeDraft(owner, upload, DEFAULT_PROCESSING_PROFILE, spaceId));
+  const records = uploads.map((upload) => makeDraft(owner, upload, recommendProcessingProfile(upload), spaceId));
   if (records.length) await db.collection(draftsName()).insertMany(records);
   return records.map(draftView);
 }

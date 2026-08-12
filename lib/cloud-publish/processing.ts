@@ -24,6 +24,29 @@ export const DEFAULT_PROCESSING_PROFILE: ProcessingProfile = {
   removeEmails: false,
 };
 
+export type ProcessingRecommendationInput = {
+  fileName?: string;
+  fileType?: string;
+  title?: string;
+  body?: string;
+};
+
+const RESUME_MARKER = /(?:简历|履历|curriculum\s+vitae|\bresume\b|\bcv\b)/iu;
+
+export function recommendProcessingProfile(input: ProcessingRecommendationInput): ProcessingProfile {
+  const descriptor = [input.fileName, input.title, input.body?.slice(0, 500)].filter(Boolean).join("\n");
+  if (String(input.fileType || "").toLowerCase() === "docx" || RESUME_MARKER.test(descriptor)) {
+    return {
+      ...DEFAULT_PROCESSING_PROFILE,
+      chunkMode: "resume_semantic",
+      childMaxTokens: 180,
+      childOverlapTokens: 20,
+      parentMaxTokens: 320,
+    };
+  }
+  return { ...DEFAULT_PROCESSING_PROFILE };
+}
+
 export type PiiFinding = {
   kind: "email" | "phone" | "national_id" | "address";
   label: string;
@@ -41,6 +64,8 @@ export type PreviewChunk = {
   retrievalText: string;
   sectionType: string;
   sectionPath: string;
+  entityTitle: string;
+  semanticGroupId: string;
   tokenCount: number;
   charCount: number;
 };
@@ -101,7 +126,13 @@ export function detectPii(text: string): PiiFinding[] {
   return findings.sort((left, right) => left.start - right.start);
 }
 
-type Section = { body: string; sectionType: string; sectionPath: string };
+type Section = {
+  body: string;
+  sectionType: string;
+  sectionPath: string;
+  entityTitle: string;
+  semanticGroupId: string;
+};
 
 function splitLongUnit(unit: string, maxTokens: number): string[] {
   if (estimateTokens(unit) <= maxTokens) return [unit];
@@ -145,6 +176,7 @@ function packUnitsWithOverlap(units: string[], maxTokens: number, overlapTokens:
 }
 
 const HEADING_TYPES: Array<[RegExp, string]> = [
+  [/^(?:个人简历|基本信息|个人信息|personal information|contact information)$/iu, "profile"],
   [/^(?:教育背景|教育经历|education)$/iu, "education"],
   [/^(?:项目经验|项目经历|projects?|project experience)$/iu, "project"],
   [/^(?:实习经历|工作经历|工作经验|internships?|work experience)$/iu, "internship"],
@@ -153,43 +185,138 @@ const HEADING_TYPES: Array<[RegExp, string]> = [
   [/^(?:个人简介|个人总结|summary|profile)$/iu, "summary"],
 ];
 
+function plainHeading(line: string): string {
+  return line
+    .trim()
+    .replace(/^#{1,6}\s+/u, "")
+    .replace(/^[-*+]\s+/u, "")
+    .replace(/^\*\*(.+)\*\*$/u, "$1")
+    .replace(/[：:]+$/, "")
+    .trim();
+}
+
 function headingType(line: string): string | undefined {
-  const normalized = line.trim().replace(/[：:]+$/, "");
+  const normalized = plainHeading(line);
   return HEADING_TYPES.find(([pattern]) => pattern.test(normalized))?.[1];
 }
 
-function resumeSections(text: string): Section[] {
+function normalizedEntityKey(value: string): string {
+  return plainHeading(value).toLowerCase().replace(/[\s|｜:*#：-]+/gu, "");
+}
+
+function semanticGroupId(title: string, sectionType: string, entityTitle: string): string {
+  return `group_${digest(`${title}:${sectionType}:${normalizedEntityKey(entityTitle)}`, 20)}`;
+}
+
+function hasResumeDate(value: string): boolean {
+  return /(?:19|20)\d{2}(?:[./-]\d{1,2})?/u.test(value);
+}
+
+function looksLikeEntityStart(paragraph: string, nextParagraph: string, sectionType: string, isFirst: boolean): boolean {
+  const value = plainHeading(paragraph);
+  const lowered = value.toLowerCase();
+  const next = plainHeading(nextParagraph).toLowerCase();
+  const hasDate = hasResumeDate(value);
+  const hasSeparator = /[|｜]/u.test(value);
+  if (sectionType === "education") {
+    return isFirst || /(?:大学|学院|university|college|school)/iu.test(value) && (hasDate || hasSeparator);
+  }
+  if (sectionType === "internship") {
+    return isFirst || (/(?:公司|实习|顾问|intern|consultant|engineer|coordinator)/iu.test(value) && (hasDate || hasSeparator));
+  }
+  if (sectionType === "project") {
+    return isFirst
+      || /^(?:技术栈|tech stack)\s*[：:]/iu.test(next)
+      || /(?:github\s*[/|｜]\s*demo|github\/demo)/iu.test(lowered)
+      || (hasDate && hasSeparator && !/^[-*+]/u.test(paragraph.trim()));
+  }
+  if (sectionType === "skill") {
+    return isFirst || /^[^：:\n]{2,40}[：:]/u.test(value) || /^#{3,6}\s+/u.test(paragraph.trim());
+  }
+  if (sectionType === "award") {
+    return isFirst || hasDate || /(?:award|奖|荣誉)/iu.test(value);
+  }
+  if (sectionType === "summary") return true;
+  return false;
+}
+
+function resumeSections(text: string, documentTitle: string): Section[] {
   const paragraphs = text.split(/\n{2,}/).map((item) => item.trim()).filter(Boolean);
   const sections: Section[] = [];
-  let current: Section | undefined;
-  for (const paragraph of paragraphs) {
+  let sectionType = "profile";
+  let sectionLabel = "Basic information";
+  let entityTitle = sectionLabel;
+  let current: string[] = [];
+
+  const flush = () => {
+    if (!current.length) return;
+    const title = plainHeading(entityTitle || sectionLabel) || sectionLabel;
+    sections.push({
+      body: current.join("\n\n"),
+      sectionType,
+      sectionPath: `${sectionLabel} > ${title}`,
+      entityTitle: title,
+      semanticGroupId: semanticGroupId(documentTitle, sectionType, title),
+    });
+    current = [];
+  };
+
+  for (let index = 0; index < paragraphs.length; index += 1) {
+    const paragraph = paragraphs[index];
     const type = headingType(paragraph);
     if (type) {
-      if (current) sections.push(current);
-      current = { body: paragraph, sectionType: type, sectionPath: paragraph.replace(/[：:]+$/, "") };
-    } else if (current) current.body += `\n\n${paragraph}`;
-    else {
-      if (!sections.length || sections[sections.length - 1].sectionType !== "profile") {
-        sections.push({ body: paragraph, sectionType: "profile", sectionPath: "Profile" });
-      } else sections[sections.length - 1].body += `\n\n${paragraph}`;
+      flush();
+      sectionType = type;
+      sectionLabel = plainHeading(paragraph);
+      entityTitle = sectionLabel;
+      continue;
     }
+    const startsEntity = looksLikeEntityStart(paragraph, paragraphs[index + 1] || "", sectionType, !current.length);
+    if (startsEntity && current.length) flush();
+    if (!current.length) entityTitle = sectionType === "profile" ? sectionLabel : plainHeading(paragraph);
+    current.push(paragraph);
+    if (sectionType === "summary") flush();
   }
-  if (current) sections.push(current);
+  flush();
   return sections;
 }
 
-function generalSections(text: string, profile: ProcessingProfile): Section[] {
+function generalSections(text: string, profile: ProcessingProfile, documentTitle: string): Section[] {
   const delimiter = profile.delimiter || "\n\n";
   const units = text.split(delimiter).map((item) => item.trim()).filter(Boolean);
+  const base = {
+    sectionType: "general",
+    sectionPath: "Document",
+    entityTitle: "Document",
+    semanticGroupId: semanticGroupId(documentTitle, "general", "Document"),
+  };
   if (profile.chunkMode === "standard") {
     return packUnitsWithOverlap(units, profile.childMaxTokens, profile.childOverlapTokens)
-      .map((body) => ({ body, sectionType: "general", sectionPath: "Document" }));
+      .map((body) => ({ body, ...base }));
   }
-  return packUnits(units, profile.parentMaxTokens).map((body) => ({ body, sectionType: "general", sectionPath: "Document" }));
+  return packUnits(units, profile.parentMaxTokens).map((body) => ({ body, ...base }));
+}
+
+function splitResumeEntity(section: Section, maxTokens: number): string[] {
+  if (estimateTokens(section.body) <= maxTokens) return [section.body];
+  const paragraphs = section.body.split(/\n{2,}/).map((item) => item.trim()).filter(Boolean);
+  const first = paragraphs[0] || section.entityTitle;
+  const titleParagraph = normalizedEntityKey(first) === normalizedEntityKey(section.entityTitle)
+    ? first
+    : section.entityTitle;
+  const content = titleParagraph === first ? paragraphs.slice(1) : paragraphs;
+  const contentBudget = Math.max(40, maxTokens - estimateTokens(titleParagraph) - 2);
+  const parts = packUnits(content, contentBudget);
+  if (!parts.length) return splitLongUnit(titleParagraph, maxTokens);
+  return parts.flatMap((part) => {
+    const combined = `${titleParagraph}\n\n${part}`;
+    if (estimateTokens(combined) <= maxTokens) return [combined];
+    return splitLongUnit(part, contentBudget).map((subpart) => `${titleParagraph}\n\n${subpart}`);
+  });
 }
 
 function previewChunk(body: string, parentBody: string, title: string, section: Section, index: number, parentId: string): PreviewChunk {
-  const retrievalText = `[Document: ${title} | Section: ${section.sectionPath}]\n${body}`;
+  const retrievalText = `[Document: ${title} | Section: ${section.sectionPath} | Entity: ${section.entityTitle}]\n${body}`;
   return {
     chunkId: `chunk_${digest(`${parentId}:${index}:${body}`)}`,
     parentChunkId: parentId,
@@ -198,17 +325,23 @@ function previewChunk(body: string, parentBody: string, title: string, section: 
     retrievalText,
     sectionType: section.sectionType,
     sectionPath: section.sectionPath,
+    entityTitle: section.entityTitle,
+    semanticGroupId: section.semanticGroupId,
     tokenCount: estimateTokens(body),
     charCount: body.length,
   };
 }
 
 export function buildChunkPreview(text: string, profile: ProcessingProfile, metadata: { title: string }): ChunkPreview {
-  const sections = profile.chunkMode === "resume_semantic" ? resumeSections(text) : generalSections(text, profile);
+  const isResume = profile.chunkMode === "resume_semantic";
+  const sections = isResume ? resumeSections(text, metadata.title) : generalSections(text, profile, metadata.title);
   const parents: PreviewChunk[] = [];
   const children: PreviewChunk[] = [];
   for (const section of sections) {
-    for (const parentBody of packUnits(section.body.split(/\n{2,}/), profile.parentMaxTokens)) {
+    const parentBodies = isResume
+      ? splitResumeEntity(section, Math.min(profile.parentMaxTokens, 320))
+      : packUnits(section.body.split(/\n{2,}/), profile.parentMaxTokens);
+    for (const parentBody of parentBodies) {
       const parentId = `parent_${digest(`${metadata.title}:${section.sectionPath}:${parentBody}`)}`;
       parents.push(previewChunk(parentBody, parentBody, metadata.title, section, 0, parentId));
       if (profile.chunkMode === "standard") {
@@ -217,7 +350,7 @@ export function buildChunkPreview(text: string, profile: ProcessingProfile, meta
       }
       const childBodies = packUnitsWithOverlap(
         parentBody.split(/\n{2,}/),
-        profile.childMaxTokens,
+        isResume ? Math.min(profile.childMaxTokens, 180) : profile.childMaxTokens,
         profile.childOverlapTokens,
       );
       childBodies.forEach((body, index) => children.push(previewChunk(body, parentBody, metadata.title, section, index, parentId)));
