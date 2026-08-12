@@ -1,6 +1,6 @@
 {
     "schema_version":  1,
-    "active_branch":  "feat/reset-retrieval-fix",
+    "active_branch":  "main",
     "active_phase":  "Local Reset and Cloud Retrieval Accuracy",
     "tasks":  [
                   {
@@ -279,9 +279,9 @@
                   {
                       "id":  13,
                       "title":  "Local reset hardening and cloud resume v2 retrieval",
-                      "status":  "in_progress",
-                      "reviewed":  false,
-                      "final_quality_approved":  false,
+                      "status":  "completed",
+                      "reviewed":  true,
+                      "final_quality_approved":  true,
                       "test_evidence":  [
                                             {
                                                 "command":  ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_reset_local_knowledge_script.py tests\\test_local_reset.py tests\\test_local_runtime.py tests\\test_ingestion.py tests\\test_ingest_script.py -q",
@@ -300,14 +300,18 @@
                                                 "result":  "274 Python tests plus 3 subtests, 82 TypeScript tests, 19-page/API Next.js build, and all three Streamlit pages passed; DOCX parser correction then passed 22 focused tests and a fresh build",
                                                 "outcome":  "passed",
                                                 "verified_at":  "2026-08-12"
+                                            },
+                                            {
+                                                "command":  "real local reset, two restart checks, Master resume v2 publication, and production retrieval verification",
+                                                "result":  "Local remained at zero documents and duplicate groups with one Portfolio space; production ranked retrieval returned five distinct project parents and exhaustive retrieval returned eleven project parents",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-13"
                                             }
                                         ]
                   }
               ],
-    "last_verified":  "2026-08-12",
-    "known_blockers":  [
-                           "Real local reset and Master resume v2 production republish are pending final acceptance."
-                       ],
-    "next_action":  "Run the milestone tests once, merge to main, execute the guarded local reset, deploy production, republish the Master resume as semantic v2, and verify exhaustive and ranked questions.",
-    "updated_at":  "2026-08-12T23:20:00+10:00"
+    "last_verified":  "2026-08-13",
+    "known_blockers":  [],
+    "next_action":  "Upload three to five trusted files manually and collect Retrieval Lab metrics before expanding the RAG architecture.",
+    "updated_at":  "2026-08-13T03:00:00+10:00"
 }

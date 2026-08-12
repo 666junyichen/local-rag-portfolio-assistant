@@ -28,6 +28,8 @@ The tests cover valid temporary Git repositories, missing required files and key
 
 ## Phase Evidence
 
+- Task 13 production acceptance on 2026-08-13: the guarded local reset left zero documents, duplicate groups, chunks, chat records, and runtime evaluations; two fresh Streamlit starts retained the empty state and one `portfolio` space.
+- The Master resume v2 publication produced 35 semantic answer parents and 47 retrieval children. Production checks returned five distinct `project` parents for the ranked question and eleven `project` parents for the exhaustive question. The final focused parent-context regression passed 5 tests and Vercel reported the production deployment Ready.
 - Task 13 milestone on 2026-08-12: Python passed 274 tests and 3 Streamlit subtests in 84 seconds; TypeScript passed 82 tests across 15 files; Next.js compiled 19 pages and API routes; the standalone Streamlit checker passed Chat, Knowledge Studio, Retrieval Lab, and all retrieval modes.
 - The first Task 13 build exposed use of a nonexistent Mammoth `convertToMarkdown` API. A red-green parser regression replaced it with supported HTML conversion that preserves headings, list items, paragraphs, and table rows; 22 focused parser/processing tests and a fresh production build passed afterward.
 

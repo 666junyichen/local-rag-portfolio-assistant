@@ -1,8 +1,8 @@
 # Known Issues
 
-## Active: Task 13 Runtime And Production Acceptance
+## Resolved: Task 13 Runtime And Production Acceptance
 
-The reset implementation exists, but the previous local acceptance was invalidated when a stale Streamlit process repopulated the legacy catalog. Completion now requires a terminal-driven reset from the current commit, two restart checks with zero documents and duplicate groups, and one active `portfolio` space. Cloud completion separately requires deployment, an atomic Master resume v2 revision, and real exhaustive/ranked retrieval checks. Focused automated tests are green; these runtime checks are intentionally still open.
+Task 13 passed on 2026-08-13. The terminal-driven reset remained empty across two fresh Streamlit starts with one `portfolio` space. The Master resume v2 was published atomically, production parent evidence was deduplicated, and ranked and exhaustive project questions returned only distinct project sections.
 
 ## Resolved: Real Knowledge Reset Execution
 
