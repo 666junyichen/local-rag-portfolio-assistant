@@ -136,7 +136,12 @@ class IngestionTests(unittest.TestCase):
                 {"source": "project_activity_root", "relative_path": "demo/notes.txt", "title": "Notes", "body": "Extra notes."},
             ]
             (data_dir / "local_private_docs.json").write_text(json.dumps(private_rows), encoding="utf-8")
-            catalog = ensure_local_catalog(data_dir, per_project_limit=1, resume_limit=1)
+            catalog = ensure_local_catalog(
+                data_dir,
+                per_project_limit=1,
+                resume_limit=1,
+                import_legacy=True,
+            )
             self.assertEqual(catalog.count(), 3)
             self.assertEqual(catalog.count({"status": "active"}), 2)
             self.assertEqual(catalog.count({"status": "discovered"}), 1)
@@ -152,7 +157,12 @@ class IngestionTests(unittest.TestCase):
                 {"source": "resume_root", "relative_path": "b.docx", "title": "B", "body": "Excluded private evidence."},
             ]
             (data_dir / "local_private_docs.json").write_text(json.dumps(private_rows), encoding="utf-8")
-            catalog = ensure_local_catalog(data_dir, per_project_limit=0, resume_limit=2)
+            catalog = ensure_local_catalog(
+                data_dir,
+                per_project_limit=0,
+                resume_limit=2,
+                import_legacy=True,
+            )
             catalog.set_status([stable_document_id(private_rows[1])], "excluded")
             documents = load_knowledge_documents(data_dir, include_private=True)
             self.assertEqual(len(documents), 2)
@@ -168,7 +178,7 @@ class IngestionTests(unittest.TestCase):
                 json.dumps([{"source": "resume_root", "relative_path": "old.docx", "title": "Old", "body": "Legacy evidence."}]),
                 encoding="utf-8",
             )
-            catalog = ensure_local_catalog(data_dir)
+            catalog = ensure_local_catalog(data_dir, import_legacy=True)
             self.assertEqual(catalog.count(), 1)
 
             catalog.reset_for_manual_upload()
@@ -177,6 +187,27 @@ class IngestionTests(unittest.TestCase):
 
             self.assertEqual(reopened.count(), 0)
             self.assertEqual(documents, [])
+
+    def test_opening_catalog_does_not_implicitly_import_legacy_documents(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_dir = Path(temp_dir)
+            (data_dir / "local_private_docs.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "source": "resume_root",
+                            "relative_path": "legacy.docx",
+                            "title": "Legacy resume",
+                            "body": "Legacy evidence must require an explicit migration.",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            catalog = ensure_local_catalog(data_dir)
+
+            self.assertEqual(catalog.count(), 0)
 
     def test_chunk_records_keep_document_space_metadata(self) -> None:
         chunks = build_chunk_records(

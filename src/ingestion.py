@@ -98,8 +98,12 @@ def ensure_local_catalog(
     *,
     per_project_limit: int = 2,
     resume_limit: int = 12,
+    import_legacy: bool = False,
 ) -> LocalCatalog:
     catalog = LocalCatalog(data_dir / "local_catalog.sqlite3")
+    if not import_legacy:
+        return catalog
+
     private_path = data_dir / "local_private_docs.json"
     legacy_import_completed = catalog.get_setting("legacy_import_completed", "false") == "true"
     if catalog.count() == 0 and private_path.exists() and not legacy_import_completed:

@@ -68,12 +68,12 @@ try {
     $StreamlitHealthy = $false
 }
 if ($StreamlitHealthy) {
-    Write-Host "Streamlit UI is already running at http://localhost:8505; continuing with full local RAG checks." -ForegroundColor Yellow
+    throw "Streamlit UI is already running at http://localhost:8505. Refusing to reuse it because it may hold stale code or caches. Stop its terminal with Ctrl+C, then run this script again."
 }
 
 $Listener = Get-NetTCPConnection -LocalPort 8505 -State Listen -ErrorAction SilentlyContinue |
     Select-Object -First 1
-if ($Listener -and -not $StreamlitHealthy) {
+if ($Listener) {
     $ListenerProcess = Get-Process -Id $Listener.OwningProcess -ErrorAction SilentlyContinue
     $ProcessName = if ($ListenerProcess) { $ListenerProcess.ProcessName } else { "unknown" }
     $Hint = if ($ProcessName -match "python|streamlit") {
@@ -143,8 +143,10 @@ if ($LASTEXITCODE -ne 0) { throw "Could not migrate local processing profiles." 
 if ($LASTEXITCODE -ne 0) { throw "Could not migrate local knowledge spaces." }
 $IndexState = & $Python scripts\local_status.py
 if ($LASTEXITCODE -ne 0) { throw "Could not inspect the local MongoDB collection." }
-$VectorReady = $IndexState | Select-String -Pattern "^vector=[1-9][0-9]*\|READY$" -Quiet
-$TextReady = $IndexState | Select-String -Pattern "^text=[1-9][0-9]*\|READY$" -Quiet
+$VectorReady = $IndexState | Select-String -Pattern "^vector=[0-9]+\|READY$" -Quiet
+$TextReady = $IndexState | Select-String -Pattern "^text=[0-9]+\|READY$" -Quiet
+$VectorState = $IndexState | Where-Object { $_ -match "^vector=" } | Select-Object -First 1
+$DocumentCount = if ($VectorState -match "^vector=([0-9]+)\|") { [int]$Matches[1] } else { 0 }
 $NeedsIndex = $Reindex -or -not ($VectorReady -and $TextReady)
 if ($NeedsIndex) {
     Write-Host "Building embeddings plus Vector Search and BM25 text indexes." -ForegroundColor Yellow
@@ -154,17 +156,15 @@ if ($NeedsIndex) {
     Write-Host "Existing local retrieval indexes are ready ($($IndexState -join ', '))." -ForegroundColor Green
 }
 
-if (-not $SkipSmokeTest) {
+if ($DocumentCount -eq 0) {
+    Write-Host "Knowledge base is empty. Services and indexes are ready; upload documents before running the content smoke test." -ForegroundColor Yellow
+} elseif (-not $SkipSmokeTest) {
     Write-Step "Running the end-to-end smoke test"
     & $Python scripts\smoke_test.py
     if ($LASTEXITCODE -ne 0) { throw "The local smoke test failed." }
 }
 
 Write-Host "Local RAG dependencies and indexes are ready." -ForegroundColor Green
-if ($StreamlitHealthy) {
-    Write-Host "Return to http://localhost:8505 and use 'Reload local configuration', or refresh the page." -ForegroundColor Green
-    exit 0
-}
 
 Write-Step "Starting Streamlit"
 Write-Host "Open http://localhost:8505" -ForegroundColor Green

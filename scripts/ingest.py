@@ -45,8 +45,12 @@ def main() -> None:
 
     report("Replacing local knowledge collection...")
     collection.delete_many({})
-    result = collection.insert_many(chunks)
-    report(f"Inserted chunks: {len(result.inserted_ids)}")
+    if chunks:
+        result = collection.insert_many(chunks)
+        inserted_count = len(result.inserted_ids)
+    else:
+        inserted_count = 0
+    report(f"Inserted chunks: {inserted_count}")
     history.create_index([("session_id", 1), ("timestamp", 1)])
     create_vector_index(collection, settings, dimensions, progress=report)
     create_text_index(collection, settings, progress=report)

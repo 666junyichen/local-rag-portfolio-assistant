@@ -190,15 +190,23 @@ class LocalRuntimeTests(unittest.TestCase):
         self.assertIn("git rev-parse --short HEAD", script)
         self.assertIn("--server.fileWatcherType none", script)
 
-    def test_start_script_validates_rag_when_streamlit_is_already_healthy(self) -> None:
+    def test_start_script_refuses_to_reuse_an_existing_streamlit_runtime(self) -> None:
         script = (
             Path(__file__).resolve().parents[1] / "scripts" / "start-local.ps1"
         ).read_text(encoding="utf-8")
 
         self.assertIn("http://localhost:8505/_stcore/health", script)
-        self.assertIn("Streamlit UI is already running", script)
-        self.assertNotRegex(script, r"if \(\$StreamlitHealthy\).*?exit 0")
-        self.assertIn("Local RAG dependencies and indexes are ready", script)
+        self.assertIn("Refusing to reuse it", script)
+        self.assertNotIn("continuing with full local RAG checks", script)
+
+    def test_start_script_accepts_ready_indexes_with_zero_documents(self) -> None:
+        script = (
+            Path(__file__).resolve().parents[1] / "scripts" / "start-local.ps1"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('"^vector=[0-9]+\\|READY$"', script)
+        self.assertIn('"^text=[0-9]+\\|READY$"', script)
+        self.assertIn("Knowledge base is empty", script)
 
 
 if __name__ == "__main__":
