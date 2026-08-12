@@ -19,23 +19,48 @@ export async function POST(request: Request) {
     if (!(await enforceRateLimit(ip))) {
       return Response.json({ error: "Too many requests. Please try again in one minute." }, { status: 429 });
     }
-    const sources = await retrieveForQuestion(body.question, body.settings);
+    const retrieval = await retrieveForQuestion(body.question, body.settings);
     const stream = new ReadableStream({
       async start(controller) {
         const send = (event: string, payload: unknown) => controller.enqueue(encoder.encode(sse(event, payload)));
         try {
-          send("retrieval", { sources, settings: body.settings });
-          if (!sources.length) {
-            const fallback = body.language === "zh" ? "当前公开知识库没有足够依据回答这个问题。" : "The public knowledge base does not contain enough evidence to answer this question.";
+          send("retrieval", { sources: retrieval.selectedContext, settings: body.settings, intent: retrieval.intent });
+          if (!retrieval.selectedContext.length) {
+            const fallback = body.language === "zh"
+              ? "当前公开知识库没有足够依据回答这个问题。"
+              : "The public knowledge base does not contain enough evidence to answer this question.";
             send("token", { text: fallback });
-            send("done", {});
+            send("done", { intent: retrieval.intent, finishReason: null, truncated: false });
             return;
           }
-          const answer = await generateText(buildPrompt(body.question, sources, body.history, body.language));
-          for (const token of answer.match(/.{1,18}/gs) || [answer]) {
+
+          const prompt = buildPrompt(
+            body.question,
+            retrieval.selectedContext,
+            body.history,
+            body.language,
+            retrieval.intent,
+          );
+          const generation = await generateText(prompt, {
+            maxOutputTokens: retrieval.intent === "exhaustive" ? 1600 : 1000,
+          });
+          for (const token of generation.text.match(/.{1,18}/gs) || [generation.text]) {
             send("token", { text: token });
           }
-          send("done", {});
+          if (generation.truncated) {
+            send("warning", {
+              message: body.language === "zh"
+                ? "回答达到模型输出上限，可能未完整列出所有有证据的项目。"
+                : "The answer reached the model output limit and may not include every supported item.",
+              finishReason: generation.finishReason,
+              truncated: true,
+            });
+          }
+          send("done", {
+            intent: retrieval.intent,
+            finishReason: generation.finishReason,
+            truncated: generation.truncated,
+          });
         } catch (error) {
           console.error("Cloud RAG generation failed", error);
           send("error", {

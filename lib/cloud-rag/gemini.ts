@@ -1,3 +1,5 @@
+import type { GenerationResult } from "./types";
+
 const embeddingModel = () => process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001";
 const chatModel = () => process.env.GEMINI_CHAT_MODEL || "gemini-3.5-flash";
 const fallbackChatModel = () => process.env.GEMINI_FALLBACK_MODEL || "gemini-3.5-flash-lite";
@@ -88,33 +90,53 @@ export async function embedDocuments(texts: string[], fetcher: Fetcher = fetch):
   return output;
 }
 
-export function buildGenerationPayload(prompt: string, thinkingEnabled: boolean) {
+export function buildGenerationPayload(prompt: string, thinkingEnabled: boolean, maxOutputTokens = 1000) {
   return {
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: {
       temperature: 0.15,
-      maxOutputTokens: 1200,
+      maxOutputTokens,
       ...(thinkingEnabled ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
     },
   };
 }
 
-export async function generateText(prompt: string): Promise<string> {
-  type GenerationResponse = { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+type GenerationResponse = {
+  candidates?: Array<{
+    content?: { parts?: Array<{ text?: string }> };
+    finishReason?: string;
+  }>;
+};
+
+export function parseGenerationResponse(result: GenerationResponse): GenerationResult {
+  const candidate = result.candidates?.[0];
+  const finishReason = candidate?.finishReason || null;
+  return {
+    text: candidate?.content?.parts?.map((part) => part.text || "").join("").trim() || "",
+    finishReason,
+    truncated: finishReason === "MAX_TOKENS" || finishReason === "LENGTH",
+  };
+}
+
+export async function generateText(
+  prompt: string,
+  options: { maxOutputTokens?: number } = {},
+): Promise<GenerationResult> {
+  const maxOutputTokens = Math.min(Math.max(options.maxOutputTokens || 1000, 1), 1600);
   let result: GenerationResponse;
   try {
     result = await callGemini<GenerationResponse>(
       `models/${chatModel()}:generateContent`,
-      buildGenerationPayload(prompt, true),
+      buildGenerationPayload(prompt, true, maxOutputTokens),
       0,
     );
   } catch (error) {
     console.warn("Primary Gemini model unavailable; using fallback", error);
     result = await callGemini<GenerationResponse>(
       `models/${fallbackChatModel()}:generateContent`,
-      buildGenerationPayload(prompt, false),
+      buildGenerationPayload(prompt, false, maxOutputTokens),
       1,
     );
   }
-  return result.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text || "").join("").trim() || "";
+  return parseGenerationResponse(result);
 }

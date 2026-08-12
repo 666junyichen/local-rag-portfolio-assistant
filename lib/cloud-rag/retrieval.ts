@@ -1,8 +1,9 @@
 import type { Collection, Document } from "mongodb";
 import { cloudDb } from "./mongodb";
 import { embedQuery } from "./gemini";
-import type { RetrievalSettings, Source } from "./types";
+import type { AnswerIntent, RetrievalResult, RetrievalSettings, Source } from "./types";
 import { planQuery, shouldRefuseWithoutRetrieval } from "./query-planning";
+import { classifyAnswerIntent } from "./prompt";
 import { DEFAULT_SPACE_ID, normalizeSpaceIds, spaceFilter } from "./spaces";
 import { spaceNameMap } from "../cloud-publish/spaces";
 
@@ -10,6 +11,10 @@ export function mapSource(doc: Document): Source | null {
   if (doc.visibility !== "public") return null;
   if (doc.validity_status && doc.validity_status !== "active") return null;
   const metadata = doc.metadata || {};
+  const parentChunkId = doc.parent_chunk_id || metadata.parent_chunk_id;
+  const semanticGroupId = doc.semantic_group_id || metadata.semantic_group_id;
+  const sectionType = doc.section_type || metadata.section_type;
+  const entityTitle = doc.entity_title || metadata.entity_title;
   return {
     docId: String(doc.doc_id || ""),
     chunkId: String(doc.chunk_id || ""),
@@ -18,9 +23,14 @@ export function mapSource(doc: Document): Source | null {
     language: metadata.language === "zh" ? "zh" : "en",
     ...(doc.url || doc.source_url ? { url: String(doc.url || doc.source_url) } : {}),
     snippet: String(doc.parent_body || doc.raw_body || doc.body || "").slice(0, 1200),
+    matchedSnippet: String(doc.child_body || doc.retrieval_text || doc.raw_body || doc.body || "").slice(0, 1200),
     score: Number(doc.score || 0),
     spaceId: String(doc.space_id || DEFAULT_SPACE_ID),
     spaceName: String(doc.space_name || doc.metadata?.space_name || "Portfolio"),
+    ...(parentChunkId ? { parentChunkId: String(parentChunkId) } : {}),
+    ...(semanticGroupId ? { semanticGroupId: String(semanticGroupId) } : {}),
+    ...(sectionType ? { sectionType: String(sectionType) } : {}),
+    ...(entityTitle ? { entityTitle: String(entityTitle) } : {}),
     ...(Array.isArray(doc.retrieval_channels) ? { retrievalChannels: doc.retrieval_channels } : {}),
     ...(doc.vector_rank ? { vectorRank: Number(doc.vector_rank) } : {}),
     ...(doc.bm25_rank ? { bm25Rank: Number(doc.bm25_rank) } : {}),
@@ -62,6 +72,37 @@ export function buildVectorPipeline(queryVector: number[], topK: number, candida
 }
 
 const sourceRank = (source: Source) => source.fusionScore || source.score;
+
+function selectedContextLimit(intent: AnswerIntent, topK: number): number {
+  if (intent === "exhaustive") return 12;
+  if (intent === "ranked") return Math.min(5, Math.max(3, topK));
+  return topK;
+}
+
+function candidateLimit(intent: AnswerIntent, topK: number): number {
+  if (intent === "exhaustive") return 50;
+  if (intent === "ranked") return 20;
+  return Math.min(Math.max(topK * 4, 10), 40);
+}
+
+export function selectParentContext(candidates: Source[], intent: AnswerIntent, topK: number): Source[] {
+  const selected: Source[] = [];
+  const seenParents = new Set<string>();
+  const seenSemanticGroups = new Set<string>();
+  const limit = selectedContextLimit(intent, topK);
+
+  for (const source of [...candidates].sort((left, right) => sourceRank(right) - sourceRank(left))) {
+    const scope = `${source.spaceId}:${source.docId}`;
+    const parentKey = `${scope}:${source.parentChunkId || source.chunkId}`;
+    const semanticKey = source.semanticGroupId ? `${scope}:${source.semanticGroupId}` : "";
+    if (seenParents.has(parentKey) || (semanticKey && seenSemanticGroups.has(semanticKey))) continue;
+    seenParents.add(parentKey);
+    if (semanticKey) seenSemanticGroups.add(semanticKey);
+    selected.push(source);
+    if (selected.length >= limit) break;
+  }
+  return selected;
+}
 
 export function mergeSpaceCandidates(
   groups: Source[][],
@@ -133,11 +174,15 @@ export async function retrieve(question: string, settings: RetrievalSettings): P
   return mergeSpaceCandidates(groups, settings.topK, settings.scoreThreshold);
 }
 
-export async function retrieveForQuestion(question: string, settings: RetrievalSettings): Promise<Source[]> {
-  if (shouldRefuseWithoutRetrieval(question)) return [];
+export async function retrieveForQuestion(question: string, settings: RetrievalSettings): Promise<RetrievalResult> {
+  const intent = classifyAnswerIntent(question);
+  if (shouldRefuseWithoutRetrieval(question)) return { candidates: [], selectedContext: [], intent };
   const plan = planQuery(question);
-  if (plan.mode === "simple") return retrieve(question, settings);
-  const expandedSettings = { ...settings, topK: Math.min(Math.max(settings.topK * 2, 5), 10) };
+  const expandedSettings = { ...settings, topK: candidateLimit(intent, settings.topK) };
+  if (plan.mode === "simple") {
+    const candidates = await retrieve(question, expandedSettings);
+    return { candidates, selectedContext: selectParentContext(candidates, intent, settings.topK), intent };
+  }
   const groups = await Promise.all(plan.subqueries.map((subquery) => retrieve(subquery, expandedSettings)));
   const merged = new Map<string, Source & { agentQueryHits: number }>();
   groups.flat().forEach((source) => {
@@ -150,7 +195,8 @@ export async function retrieveForQuestion(question: string, settings: RetrievalS
       existing.fusionScore = Math.max(existing.fusionScore || 0, source.fusionScore || 0);
     }
   });
-  return [...merged.values()]
+  const candidates = [...merged.values()]
     .sort((left, right) => right.agentQueryHits - left.agentQueryHits || (right.fusionScore || right.score) - (left.fusionScore || left.score))
-    .slice(0, settings.topK);
+    .slice(0, candidateLimit(intent, settings.topK));
+  return { candidates, selectedContext: selectParentContext(candidates, intent, settings.topK), intent };
 }
