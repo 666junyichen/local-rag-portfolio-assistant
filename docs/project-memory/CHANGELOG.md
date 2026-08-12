@@ -1,5 +1,13 @@
 # Project Memory Changelog
 
+## 2026-08-12
+
+- Disabled legacy local catalog import during ordinary startup and made an empty knowledge base a supported ready state.
+- Added a terminal reset command that uses the same backup-gated reset service as Knowledge Studio.
+- Added cloud resume-semantic publication with structured parent/child metadata and automatic upgrade for old resume revisions.
+- Deduplicated public answer context by semantic parent while retaining child-match diagnostics in Retrieval Lab.
+- Added exhaustive coverage for "all/which" questions and ranked 3-5-project answers for "strongest" questions, including explicit truncation status.
+
 ## 2026-08-11
 
 - Reduced default knowledge spaces to one empty-ready `Portfolio` space and hid cross-space controls until a second active space exists.

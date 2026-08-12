@@ -1,16 +1,18 @@
 # Current State
 
-- Active branch: `main`
-- Active phase: `Safe Knowledge Reset`
-- Last verified: `2026-08-11`
-- Updated: `2026-08-11T18:45:00+10:00`
-- Next action: Manually upload 3-5 trusted Portfolio files, inspect parsing, cleaning, PII, and chunks, rebuild the local index, then record expected-source questions in Retrieval Lab.
+- Active branch: `feat/reset-retrieval-fix`
+- Active phase: `Local Reset and Cloud Retrieval Accuracy`
+- Last verified: `2026-08-12`
+- Updated: `2026-08-12T23:20:00+10:00`
+- Next action: Run the milestone tests once, merge to main, execute the guarded local reset, deploy production, republish the Master resume as semantic v2, and verify exhaustive and ranked questions.
 
 ## Status
 
 Tasks 0-10 are completed and reviewed. Owner production acceptance now covers sign-in, email and phone PII blocking, sanitized preview, publication, Knowledge visibility, grounded Retrieve and Chat responses, unpublish, and permanent synthetic-data cleanup. A no-evidence Chat stream regression found during unpublish verification was fixed and deployed; an active empty space now returns a grounded refusal with HTTP 200 instead of a server error.
 
-Task 12 is complete on `main` and deployed. The guarded local reset backed up and cleared 7,049 catalog documents, 689 chunks, 23 chat messages, and three runtime evaluation files. The guarded production reset backed up three spaces, one draft, 27 documents, and 27 chunks, then cleared only managed knowledge collections. Both runtimes now contain one empty active `portfolio` space; legacy scans and repository JSON are disabled from automatic local ingestion.
+Task 12's reset controls were completed, but its local acceptance state did not remain true: a stale Streamlit runtime reintroduced the legacy catalog after the reset. Task 13 removes automatic legacy import from normal startup, treats an empty catalog as ready, adds a terminal reset entrypoint, and requires a fresh post-restart datastore check before claiming the local reset is complete.
+
+Task 13 also upgrades cloud publication and retrieval. Resume-like uploads and old resume revisions use semantic parent blocks, retrieval indexes children, selected context is deduplicated by parent and semantic group, and public answers distinguish exhaustive questions from ranked "strongest" questions. Focused local tests passed 29 cases and focused cloud tests passed 32 cases; the milestone suite, real local reset, production deployment, and Master v2 republish remain pending.
 
 Task 11 adds public and local Knowledge Spaces. Cloud data is migrated to the default `portfolio` space, Owner uploads can target and move between spaces, and Ask AI, Knowledge, Retrieval Lab, and Sources carry space filters and labels. Single-space isolation and cross-space evidence preservation passed production acceptance. The real local migration now also passes: both local indexes are `READY` with `space_id` filters, a single-space query retrieved three Portfolio sources, and the Ollama smoke test generated a grounded answer.
 
@@ -35,7 +37,10 @@ Phase B's adaptive path triggered the reranker for 15 of 50 benchmark questions.
 | 10 | completed | true | true | Owner production publication lifecycle and synthetic-data cleanup passed |
 | 11 | completed | true | true | Cloud and local Knowledge Spaces, index migration, single/cross-space filtering, and smoke validation |
 | 12 | completed | true | true | One default Portfolio space, verified ignored backups, and completed local/cloud knowledge resets |
+| 13 | in_progress | false | false | Harden local empty-state reset and publish/retrieve semantic resume v2 evidence |
 
 ## Known Blockers
+
+- Real local reset and Master resume v2 production republish are pending final acceptance.
 
 See [Known Issues](KNOWN_ISSUES.md) for acceptance criteria and [Testing](TESTING.md) for the evidence contract.

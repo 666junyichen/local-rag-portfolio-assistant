@@ -1,7 +1,7 @@
 {
     "schema_version":  1,
-    "active_branch":  "main",
-    "active_phase":  "Safe Knowledge Reset",
+    "active_branch":  "feat/reset-retrieval-fix",
+    "active_phase":  "Local Reset and Cloud Retrieval Accuracy",
     "tasks":  [
                   {
                       "id":  0,
@@ -275,10 +275,39 @@
                                                 "verified_at":  "2026-08-11"
                                             }
                                         ]
+                  },
+                  {
+                      "id":  13,
+                      "title":  "Local reset hardening and cloud resume v2 retrieval",
+                      "status":  "in_progress",
+                      "reviewed":  false,
+                      "final_quality_approved":  false,
+                      "test_evidence":  [
+                                            {
+                                                "command":  ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_reset_local_knowledge_script.py tests\\test_local_reset.py tests\\test_local_runtime.py tests\\test_ingestion.py tests\\test_ingest_script.py -q",
+                                                "result":  "29 focused local reset and empty-runtime tests passed",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-12"
+                                            },
+                                            {
+                                                "command":  "npm test -- tests/cloud-publish-processing.test.ts tests/cloud-publish-lifecycle.test.ts tests/cloud-parent-context.test.ts tests/cloud-chat-route.test.ts tests/cloud-retrieve-route.test.ts tests/gemini.test.ts",
+                                                "result":  "32 focused cloud semantic publication, parent-context, intent, and generation tests passed",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-12"
+                                            },
+                                            {
+                                                "command":  ".\\.venv\\Scripts\\python.exe -m pytest -q; npm test; npm run build; .\\.venv\\Scripts\\python.exe scripts\\check_streamlit_pages.py",
+                                                "result":  "274 Python tests plus 3 subtests, 82 TypeScript tests, 19-page/API Next.js build, and all three Streamlit pages passed; DOCX parser correction then passed 22 focused tests and a fresh build",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-12"
+                                            }
+                                        ]
                   }
               ],
-    "last_verified":  "2026-08-11",
-    "known_blockers":  [],
-    "next_action":  "Manually upload 3-5 trusted Portfolio files, inspect parsing, cleaning, PII, and chunks, rebuild the local index, then record expected-source questions in Retrieval Lab.",
-    "updated_at":  "2026-08-11T18:45:00+10:00"
+    "last_verified":  "2026-08-12",
+    "known_blockers":  [
+                           "Real local reset and Master resume v2 production republish are pending final acceptance."
+                       ],
+    "next_action":  "Run the milestone tests once, merge to main, execute the guarded local reset, deploy production, republish the Master resume as semantic v2, and verify exhaustive and ranked questions.",
+    "updated_at":  "2026-08-12T23:20:00+10:00"
 }

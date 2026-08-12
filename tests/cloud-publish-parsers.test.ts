@@ -1,10 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { PublishParseError, parseUpload } from "../lib/cloud-publish/parsers";
+import { PublishParseError, htmlToStructuredText, parseUpload } from "../lib/cloud-publish/parsers";
 
 const textFile = (name: string, body: string, type = "text/plain") => new File([body], name, { type });
 
 describe("owner upload parsing", () => {
+  it("converts Mammoth HTML into stable headings, list items, and table rows", () => {
+    const body = htmlToStructuredText([
+      "<h1>Candidate Resume</h1>",
+      "<h2>Projects</h2>",
+      "<p>Portfolio RAG</p>",
+      "<ul><li>MongoDB Vector Search</li><li>Ollama</li></ul>",
+      "<table><tr><td>Role</td><td>AI Engineer</td></tr></table>",
+    ].join(""));
+
+    expect(body).toContain("# Candidate Resume");
+    expect(body).toContain("## Projects");
+    expect(body).toContain("- MongoDB Vector Search");
+    expect(body).toContain("Role | AI Engineer");
+  });
+
   it("preserves Markdown structure and derives a title", async () => {
     const result = await parseUpload(textFile("guide.md", "# RAG Guide\n\n## Retrieval\nVector search", "text/markdown"));
 

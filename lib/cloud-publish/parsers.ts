@@ -42,10 +42,56 @@ async function defaultDetectFileType(data: Uint8Array) {
   return fileTypeFromBuffer(data);
 }
 
+function decodeHtmlText(value: string): string {
+  const named: Record<string, string> = {
+    amp: "&",
+    apos: "'",
+    gt: ">",
+    lt: "<",
+    nbsp: " ",
+    quot: '"',
+  };
+  return value
+    .replace(/<[^>]+>/g, "")
+    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/giu, (entity, code: string) => {
+      if (code.startsWith("#x")) return String.fromCodePoint(Number.parseInt(code.slice(2), 16));
+      if (code.startsWith("#")) return String.fromCodePoint(Number.parseInt(code.slice(1), 10));
+      return named[code.toLowerCase()] ?? entity;
+    })
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function htmlToStructuredText(html: string): string {
+  return html
+    .replace(/<tr\b[^>]*>([\s\S]*?)<\/tr>/giu, (_row, cellsHtml: string) => {
+      const cells = [...cellsHtml.matchAll(/<(?:td|th)\b[^>]*>([\s\S]*?)<\/(?:td|th)>/giu)]
+        .map((match) => decodeHtmlText(match[1]))
+        .filter(Boolean);
+      return cells.length ? `\n${cells.join(" | ")}\n` : "\n";
+    })
+    .replace(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/giu, (_heading, level: string, body: string) => (
+      `\n${"#".repeat(Number(level))} ${decodeHtmlText(body)}\n`
+    ))
+    .replace(/<li\b[^>]*>([\s\S]*?)<\/li>/giu, (_item, body: string) => `\n- ${decodeHtmlText(body)}\n`)
+    .replace(/<br\s*\/?>/giu, "\n")
+    .replace(/<\/?(?:article|div|ol|p|section|table|tbody|thead|ul)\b[^>]*>/giu, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/giu, (entity, code: string) => {
+      if (code.startsWith("#x")) return String.fromCodePoint(Number.parseInt(code.slice(2), 16));
+      if (code.startsWith("#")) return String.fromCodePoint(Number.parseInt(code.slice(1), 10));
+      return ({ amp: "&", apos: "'", gt: ">", lt: "<", nbsp: " ", quot: '"' } as Record<string, string>)[code.toLowerCase()] ?? entity;
+    })
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 async function defaultParseDocx(data: Uint8Array): Promise<string> {
   const mammoth = await import("mammoth");
-  const result = await mammoth.convertToMarkdown({ buffer: Buffer.from(data) });
-  return result.value;
+  const result = await mammoth.convertToHtml({ buffer: Buffer.from(data) });
+  return htmlToStructuredText(result.value);
 }
 
 async function defaultParsePdf(data: Uint8Array): Promise<{ text: string; pages: number }> {

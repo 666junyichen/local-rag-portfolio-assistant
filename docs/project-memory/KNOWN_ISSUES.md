@@ -1,5 +1,9 @@
 # Known Issues
 
+## Active: Task 13 Runtime And Production Acceptance
+
+The reset implementation exists, but the previous local acceptance was invalidated when a stale Streamlit process repopulated the legacy catalog. Completion now requires a terminal-driven reset from the current commit, two restart checks with zero documents and duplicate groups, and one active `portfolio` space. Cloud completion separately requires deployment, an atomic Master resume v2 revision, and real exhaustive/ranked retrieval checks. Focused automated tests are green; these runtime checks are intentionally still open.
+
 ## Resolved: Real Knowledge Reset Execution
 
 The guarded local and production resets completed on 2026-08-11. Both backups are stored under the Git-ignored private project-memory directory. Local SQLite and MongoDB now contain no knowledge documents, chunks, chat history, or runtime evaluation artifacts; production Atlas contains no drafts, documents, chunks, or publication metadata. Both runtimes retain exactly one empty active `portfolio` space, and local legacy/repository auto-import is disabled.

@@ -1,5 +1,9 @@
 # Decisions
 
+## 2026-08-12: Resume Retrieval Uses Semantic Parents And Intent-Specific Scope
+
+Index small resume child chunks for Vector/BM25 matching, but return one complete semantic parent per project, internship, school, skill group, or award. Deduplicate by parent and semantic group before generation. Questions asking "all" or "which" may use up to 12 distinct project parents for coverage; questions asking "strongest" return 3-5 projects with evidence-based ranking. Fact questions continue to respect the requested Top-K.
+
 ## 2026-08-07: Structured State Is Authoritative
 
 Use `state.json` as the machine-readable source of truth and require `CURRENT_STATE.md` to mirror handoff-critical fields. This supports automation without making contributors read raw JSON for ordinary work.
