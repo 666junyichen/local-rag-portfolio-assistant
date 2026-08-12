@@ -85,13 +85,20 @@ function candidateLimit(intent: AnswerIntent, topK: number): number {
   return Math.min(Math.max(topK * 4, 10), 40);
 }
 
-export function selectParentContext(candidates: Source[], intent: AnswerIntent, topK: number): Source[] {
+const projectQuestion = (question: string) => /项目|專案|projects?/iu.test(question);
+
+export function selectParentContext(candidates: Source[], intent: AnswerIntent, topK: number, question = ""): Source[] {
   const selected: Source[] = [];
   const seenParents = new Set<string>();
   const seenSemanticGroups = new Set<string>();
   const limit = selectedContextLimit(intent, topK);
 
-  for (const source of [...candidates].sort((left, right) => sourceRank(right) - sourceRank(left))) {
+  const rankedCandidates = [...candidates].sort((left, right) => sourceRank(right) - sourceRank(left));
+  const scopedCandidates = projectQuestion(question) && intent !== "fact"
+    ? rankedCandidates.filter((source) => source.sectionType === "project")
+    : rankedCandidates;
+
+  for (const source of scopedCandidates) {
     const scope = `${source.spaceId}:${source.docId}`;
     const parentKey = `${scope}:${source.parentChunkId || source.chunkId}`;
     const semanticKey = source.semanticGroupId ? `${scope}:${source.semanticGroupId}` : "";
@@ -181,7 +188,7 @@ export async function retrieveForQuestion(question: string, settings: RetrievalS
   const expandedSettings = { ...settings, topK: candidateLimit(intent, settings.topK) };
   if (plan.mode === "simple") {
     const candidates = await retrieve(question, expandedSettings);
-    return { candidates, selectedContext: selectParentContext(candidates, intent, settings.topK), intent };
+    return { candidates, selectedContext: selectParentContext(candidates, intent, settings.topK, question), intent };
   }
   const groups = await Promise.all(plan.subqueries.map((subquery) => retrieve(subquery, expandedSettings)));
   const merged = new Map<string, Source & { agentQueryHits: number }>();
@@ -198,5 +205,5 @@ export async function retrieveForQuestion(question: string, settings: RetrievalS
   const candidates = [...merged.values()]
     .sort((left, right) => right.agentQueryHits - left.agentQueryHits || (right.fusionScore || right.score) - (left.fusionScore || left.score))
     .slice(0, candidateLimit(intent, settings.topK));
-  return { candidates, selectedContext: selectParentContext(candidates, intent, settings.topK), intent };
+  return { candidates, selectedContext: selectParentContext(candidates, intent, settings.topK, question), intent };
 }

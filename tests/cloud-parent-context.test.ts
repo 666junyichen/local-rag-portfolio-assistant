@@ -89,6 +89,23 @@ describe("cloud parent context and answer intent", () => {
     expect(selectParentContext(candidates, "fact", 2)).toHaveLength(2);
   });
 
+  it("keeps ranked and exhaustive project questions focused on project parents", () => {
+    const candidates = [
+      { ...source("skill", "skill-parent", "skills", 0.99), sectionType: "skill", entityTitle: "AI skills" },
+      source("rag", "rag-parent", "rag", 0.95),
+      { ...source("internship", "intern-parent", "internship", 0.94), sectionType: "internship", entityTitle: "AI internship" },
+      source("qanet", "qanet-parent", "qanet", 0.93),
+      source("accessibility", "accessibility-parent", "accessibility", 0.92),
+    ];
+
+    expect(retrievalModule.selectParentContext(candidates, "ranked", 5, "最强的 AI 项目有哪些？")
+      .map((item) => item.sectionType)).toEqual(["project", "project", "project"]);
+    expect(retrievalModule.selectParentContext(candidates, "exhaustive", 5, "What are all AI projects?")
+      .map((item) => item.sectionType)).toEqual(["project", "project", "project"]);
+    expect(retrievalModule.selectParentContext(candidates, "fact", 2, "What AI skills are documented?")
+      .map((item) => item.sectionType)).toEqual(["skill", "project"]);
+  });
+
   it("classifies strongest questions before exhaustive wording and adds intent-specific prompt rules", () => {
     const classifyAnswerIntent = (promptModule as unknown as {
       classifyAnswerIntent?: (question: string) => string;
