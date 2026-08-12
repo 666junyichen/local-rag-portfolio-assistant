@@ -35,7 +35,7 @@ const RESUME_MARKER = /(?:简历|履历|curriculum\s+vitae|\bresume\b|\bcv\b)/iu
 
 export function recommendProcessingProfile(input: ProcessingRecommendationInput): ProcessingProfile {
   const descriptor = [input.fileName, input.title, input.body?.slice(0, 500)].filter(Boolean).join("\n");
-  if (String(input.fileType || "").toLowerCase() === "docx" || RESUME_MARKER.test(descriptor)) {
+  if (RESUME_MARKER.test(descriptor)) {
     return {
       ...DEFAULT_PROCESSING_PROFILE,
       chunkMode: "resume_semantic",
@@ -45,6 +45,18 @@ export function recommendProcessingProfile(input: ProcessingRecommendationInput)
     };
   }
   return { ...DEFAULT_PROCESSING_PROFILE };
+}
+
+export function processingProfileForRevision(
+  current: ProcessingProfile,
+  input: ProcessingRecommendationInput,
+): ProcessingProfile {
+  if (current.chunkMode !== "resume_semantic" && RESUME_MARKER.test(
+    [input.fileName, input.title, input.body?.slice(0, 500)].filter(Boolean).join("\n"),
+  )) {
+    return recommendProcessingProfile(input);
+  }
+  return current;
 }
 
 export type PiiFinding = {

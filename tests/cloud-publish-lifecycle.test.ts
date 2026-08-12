@@ -40,6 +40,11 @@ describe("owner publication lifecycle", () => {
     expect(first.chunks.map((chunk) => chunk.chunk_id)).toEqual(second.chunks.map((chunk) => chunk.chunk_id));
     expect(first.document.source_origin).toBe("owner_upload");
     expect(first.chunks.every((chunk) => chunk.visibility === "public" && chunk.validity_status === "active")).toBe(true);
+    expect(first.chunks.every((chunk) => chunk.entity_title && chunk.semantic_group_id)).toBe(true);
+    expect(first.chunks.every((chunk) => (
+      (chunk.metadata as Record<string, unknown>).entity_title === chunk.entity_title
+      && (chunk.metadata as Record<string, unknown>).semantic_group_id === chunk.semantic_group_id
+    ))).toBe(true);
   });
 
   it("blocks PII before the embedding provider is called", async () => {

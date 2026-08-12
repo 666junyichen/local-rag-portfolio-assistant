@@ -4,10 +4,43 @@ import {
   buildChunkPreview,
   cleanPublicText,
   detectPii,
+  processingProfileForRevision,
   recommendProcessingProfile,
 } from "../lib/cloud-publish/processing";
 
 describe("public document processing", () => {
+  it("keeps a generic DOCX on parent-child unless its title or content identifies a resume", () => {
+    expect(recommendProcessingProfile({
+      fileName: "architecture-notes.docx",
+      fileType: "docx",
+      title: "System architecture notes",
+      body: "MongoDB deployment and service boundaries.",
+    }).chunkMode).toBe("parent_child");
+
+    expect(recommendProcessingProfile({
+      fileName: "candidate.docx",
+      fileType: "docx",
+      title: "Candidate Resume",
+      body: "Education and project experience.",
+    }).chunkMode).toBe("resume_semantic");
+  });
+
+  it("upgrades an old parent-child resume revision without changing ordinary documents", () => {
+    const legacy = { ...DEFAULT_PROCESSING_PROFILE, chunkMode: "parent_child" as const };
+    expect(processingProfileForRevision(legacy, {
+      fileName: "",
+      fileType: "docx",
+      title: "Candidate Resume",
+      body: "Education and project experience.",
+    }).chunkMode).toBe("resume_semantic");
+    expect(processingProfileForRevision(legacy, {
+      fileName: "architecture.docx",
+      fileType: "docx",
+      title: "Architecture Notes",
+      body: "Service boundaries.",
+    }).chunkMode).toBe("parent_child");
+  });
+
   it("normalizes text and optionally removes URLs and email addresses", () => {
     const cleaned = cleanPublicText(
       "Project\tupdate\r\n\r\nContact me@example.com at https://example.com.\n\n\nDone",
@@ -79,7 +112,7 @@ describe("public document processing", () => {
   });
 
   it.each([
-    { fileName: "candidate.docx", fileType: "docx", title: "Candidate profile" },
+    { fileName: "candidate-resume.docx", fileType: "docx", title: "Candidate Resume" },
     { fileName: "notes.md", fileType: "md", title: "陈君奕简历" },
     { fileName: "notes.txt", fileType: "txt", title: "Junyi Resume" },
     { fileName: "notes.pdf", fileType: "pdf", title: "Junyi CV" },

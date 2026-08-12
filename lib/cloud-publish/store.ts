@@ -10,6 +10,7 @@ import {
   buildChunkPreview,
   cleanPublicText,
   detectPii,
+  processingProfileForRevision,
   recommendProcessingProfile,
   type ProcessingProfile,
 } from "./processing";
@@ -411,8 +412,16 @@ export async function reviseOwnerDocument(owner: OwnerIdentity, docId: string) {
   const document = await db.collection(documentsName()).findOne({ doc_id: docId, owner_id: owner.userId, source_origin: "owner_upload" });
   if (!document) throw new Error("Document not found");
   const now = new Date();
-  const profile = validateProfile(document.processing_profile);
   const cleanedBody = String(document.cleaned_body || "");
+  const profile = processingProfileForRevision(
+    validateProfile(document.processing_profile),
+    {
+      fileName: String(document.file_name || ""),
+      fileType: String(document.file_type || ""),
+      title: String(document.title || "Untitled"),
+      body: cleanedBody,
+    },
+  );
   const record = {
     draft_id: randomUUID(),
     doc_id: docId,
