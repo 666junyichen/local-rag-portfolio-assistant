@@ -1,7 +1,7 @@
 {
     "schema_version":  1,
     "active_branch":  "main",
-    "active_phase":  "Local Reset and Cloud Retrieval Accuracy",
+    "active_phase":  "Shared Chunking Contract",
     "tasks":  [
                   {
                       "id":  0,
@@ -308,10 +308,37 @@
                                                 "verified_at":  "2026-08-13"
                                             }
                                         ]
+                  },
+                  {
+                      "id":  14,
+                      "title":  "Shared local/cloud chunking contract and Owner Knowledge entry",
+                      "status":  "completed",
+                      "reviewed":  true,
+                      "final_quality_approved":  true,
+                      "test_evidence":  [
+                                            {
+                                                "command":  "npm test -- --run tests/cloud-knowledge-owner-entry.test.ts tests/cloud-shared-processing-profiles.test.ts tests/cloud-chunking-parity.test.ts tests/cloud-publish-processing.test.ts",
+                                                "result":  "23 focused TypeScript tests passed across 4 files",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-15"
+                                            },
+                                            {
+                                                "command":  ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_chunking_contract.py tests\\test_shared_processing_profiles.py tests\\test_processing_profiles.py tests\\test_hierarchical_chunking.py -q",
+                                                "result":  "62 focused Python tests passed",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-15"
+                                            },
+                                            {
+                                                "command":  "npm run build",
+                                                "result":  "Next.js production build passed with the Owner Knowledge entry and shared chunking contract",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-15"
+                                            }
+                                        ]
                   }
               ],
-    "last_verified":  "2026-08-13",
+    "last_verified":  "2026-08-15",
     "known_blockers":  [],
-    "next_action":  "Upload three to five trusted files manually and collect Retrieval Lab metrics before expanding the RAG architecture.",
-    "updated_at":  "2026-08-13T03:00:00+10:00"
+    "next_action":  "Upload one trusted document locally and publicly, then compare Retrieval Lab evidence without changing embedding providers.",
+    "updated_at":  "2026-08-15T17:20:00+10:00"
 }

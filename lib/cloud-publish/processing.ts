@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import sharedProfileConfig from "../../config/processing-profiles.json";
 
 export type ChunkMode = "standard" | "parent_child" | "resume_semantic";
 
@@ -13,15 +14,45 @@ export type ProcessingProfile = {
   removeEmails: boolean;
 };
 
+type CanonicalProcessingProfile = {
+  chunk_mode: "general" | "parent_child" | "resume_semantic";
+  delimiter: string;
+  overlap_tokens: number;
+  parent_max_tokens: number;
+  child_max_tokens: number;
+  preprocessing: {
+    normalize_whitespace: boolean;
+    remove_urls: boolean;
+    remove_emails: boolean;
+  };
+};
+
+function fromCanonicalProfile(profile: CanonicalProcessingProfile): ProcessingProfile {
+  return {
+    chunkMode: profile.chunk_mode === "general" ? "standard" : profile.chunk_mode,
+    delimiter: profile.delimiter,
+    childMaxTokens: profile.child_max_tokens,
+    childOverlapTokens: profile.overlap_tokens,
+    parentMaxTokens: profile.parent_max_tokens,
+    normalizeWhitespace: profile.preprocessing.normalize_whitespace,
+    removeUrls: profile.preprocessing.remove_urls,
+    removeEmails: profile.preprocessing.remove_emails,
+  };
+}
+
+const canonicalProfiles = sharedProfileConfig.profiles as Record<
+  "general" | "parent_child" | "resume_semantic",
+  CanonicalProcessingProfile
+>;
+
+export const SHARED_PROCESSING_PROFILES = {
+  general: fromCanonicalProfile(canonicalProfiles.general),
+  parent_child: fromCanonicalProfile(canonicalProfiles.parent_child),
+  resume_semantic: fromCanonicalProfile(canonicalProfiles.resume_semantic),
+} satisfies Record<"general" | "parent_child" | "resume_semantic", ProcessingProfile>;
+
 export const DEFAULT_PROCESSING_PROFILE: ProcessingProfile = {
-  chunkMode: "parent_child",
-  delimiter: "\n\n",
-  childMaxTokens: 180,
-  childOverlapTokens: 20,
-  parentMaxTokens: 700,
-  normalizeWhitespace: true,
-  removeUrls: false,
-  removeEmails: false,
+  ...SHARED_PROCESSING_PROFILES.parent_child,
 };
 
 export type ProcessingRecommendationInput = {
@@ -36,13 +67,7 @@ const RESUME_MARKER = /(?:简历|履历|curriculum\s+vitae|\bresume\b|\bcv\b)/iu
 export function recommendProcessingProfile(input: ProcessingRecommendationInput): ProcessingProfile {
   const descriptor = [input.fileName, input.title, input.body?.slice(0, 500)].filter(Boolean).join("\n");
   if (RESUME_MARKER.test(descriptor)) {
-    return {
-      ...DEFAULT_PROCESSING_PROFILE,
-      chunkMode: "resume_semantic",
-      childMaxTokens: 180,
-      childOverlapTokens: 20,
-      parentMaxTokens: 320,
-    };
+    return { ...SHARED_PROCESSING_PROFILES.resume_semantic };
   }
   return { ...DEFAULT_PROCESSING_PROFILE };
 }
@@ -78,6 +103,7 @@ export type PreviewChunk = {
   sectionPath: string;
   entityTitle: string;
   semanticGroupId: string;
+  retrievalPriority: "primary" | "secondary";
   tokenCount: number;
   charCount: number;
 };
@@ -89,12 +115,10 @@ export type ChunkPreview = {
 };
 
 const digest = (value: string, size = 16) => createHash("sha256").update(value, "utf8").digest("hex").slice(0, size);
-const CJK = /[\u3400-\u9fff\uf900-\ufaff\u3040-\u30ff\uac00-\ud7af]/g;
+const TOKEN_PATTERN = /[A-Za-z0-9][A-Za-z0-9.+#:_/-]*|[\u3400-\u9fff]|[^\s]/gu;
 
 export function estimateTokens(text: string): number {
-  const cjk = text.match(CJK)?.length || 0;
-  const latin = text.replace(CJK, "").replace(/\s/g, "").length;
-  return Math.max(text.trim() ? 1 : 0, cjk + Math.ceil(latin / 4));
+  return text.match(TOKEN_PATTERN)?.length || 0;
 }
 
 function removeUrls(text: string): string {
@@ -144,6 +168,7 @@ type Section = {
   sectionPath: string;
   entityTitle: string;
   semanticGroupId: string;
+  retrievalPriority: "primary" | "secondary";
 };
 
 function splitLongUnit(unit: string, maxTokens: number): string[] {
@@ -269,6 +294,7 @@ function resumeSections(text: string, documentTitle: string): Section[] {
       sectionPath: `${sectionLabel} > ${title}`,
       entityTitle: title,
       semanticGroupId: semanticGroupId(documentTitle, sectionType, title),
+      retrievalPriority: "primary",
     });
     current = [];
   };
@@ -297,10 +323,11 @@ function generalSections(text: string, profile: ProcessingProfile, documentTitle
   const delimiter = profile.delimiter || "\n\n";
   const units = text.split(delimiter).map((item) => item.trim()).filter(Boolean);
   const base = {
-    sectionType: "general",
-    sectionPath: "Document",
-    entityTitle: "Document",
-    semanticGroupId: semanticGroupId(documentTitle, "general", "Document"),
+    sectionType: "document",
+    sectionPath: profile.chunkMode === "standard" ? "" : documentTitle,
+    entityTitle: documentTitle,
+    semanticGroupId: semanticGroupId(documentTitle, "document", documentTitle),
+    retrievalPriority: "primary" as const,
   };
   if (profile.chunkMode === "standard") {
     return packUnitsWithOverlap(units, profile.childMaxTokens, profile.childOverlapTokens)
@@ -339,6 +366,7 @@ function previewChunk(body: string, parentBody: string, title: string, section: 
     sectionPath: section.sectionPath,
     entityTitle: section.entityTitle,
     semanticGroupId: section.semanticGroupId,
+    retrievalPriority: section.retrievalPriority,
     tokenCount: estimateTokens(body),
     charCount: body.length,
   };

@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "cases": {
+    "resume-docx": {
+      "parents": [
+        {
+          "raw_body": "Junyi Chen\n\nTarget role: AI Application Engineer",
+          "section_type": "profile",
+          "section_path": "Personal Information > Personal Information",
+          "entity_title": "Personal Information",
+          "token_count": 7,
+          "retrieval_priority": "primary",
+          "semantic_group_index": 0
+        },
+        {
+          "raw_body": "University of Sydney | Master of Data Science | 2025-2026\n\nRelevant courses: machine learning, data mining, and data privacy.",
+          "section_type": "education",
+          "section_path": "Education > University of Sydney | Master of Data Science | 2025-2026",
+          "entity_title": "University of Sydney | Master of Data Science | 2025-2026",
+          "token_count": 21,
+          "retrieval_priority": "primary",
+          "semantic_group_index": 1
+        },
+        {
+          "raw_body": "Local RAG Portfolio Assistant | 2026\n\nTech stack: Python, MongoDB Vector Search, SentenceTransformers, and Ollama.\n\nBuilt private local retrieval, grounded answers, source citations, and retrieval evaluation.",
+          "section_type": "project",
+          "section_path": "Project Experience > Local RAG Portfolio Assistant | 2026",
+          "entity_title": "Local RAG Portfolio Assistant | 2026",
+          "token_count": 32,
+          "retrieval_priority": "primary",
+          "semantic_group_index": 2
+        },
+        {
+          "raw_body": "QANet Debugging and Controlled Experiments | 2026\n\nTech stack: Python, PyTorch, QANet, and SQuAD.\n\nRepaired training defects and compared controlled model configurations.",
+          "section_type": "project",
+          "section_path": "Project Experience > QANet Debugging and Controlled Experiments | 2026",
+          "entity_title": "QANet Debugging and Controlled Experiments | 2026",
+          "token_count": 25,
+          "retrieval_priority": "primary",
+          "semantic_group_index": 3
+        },
+        {
+          "raw_body": "AI Intern | 2024\n\nBuilt a repeatable evaluation workflow and documented model-quality evidence.",
+          "section_type": "internship",
+          "section_path": "Work Experience > AI Intern | 2024",
+          "entity_title": "AI Intern | 2024",
+          "token_count": 13,
+          "retrieval_priority": "primary",
+          "semantic_group_index": 4
+        }
+      ],
+      "children": [
+        {
+          "raw_body": "Junyi Chen\n\nTarget role: AI Application Engineer",
+          "section_type": "profile",
+          "section_path": "Personal Information > Personal Information",
+          "entity_title": "Personal Information",
+          "token_count": 7,
+          "retrieval_priority": "primary",
+          "semantic_group_index": 0,
+          "parent_index": 0
+        },
+        {
+          "raw_body": "University of Sydney | Master of Data Science | 2025-2026\n\nRelevant courses: machine learning, data mining, and data privacy.",
+          "section_type": "education",
+          "section_path": "Education > University of Sydney | Master of Data Science | 2025-2026",
+          "entity_title": "University of Sydney | Master of Data Science | 2025-2026",
+          "token_count": 21,
+          "retrieval_priority": "primary",
+          "semantic_group_index": 1,
+          "parent_index": 1
+        },
+        {
+          "raw_body": "Local RAG Portfolio Assistant | 2026\n\nTech stack: Python, MongoDB Vector Search, SentenceTransformers, and Ollama.\n\nBuilt private local retrieval, grounded answers, source citations, and retrieval evaluation.",
+          "section_type": "project",
+          "section_path": "Project Experience > Local RAG Portfolio Assistant | 2026",
+          "entity_title": "Local RAG Portfolio Assistant | 2026",
+          "token_count": 32,
+          "retrieval_priority": "primary",
+          "semantic_group_index": 2,
+          "parent_index": 2
+        },
+        {
+          "raw_body": "QANet Debugging and Controlled Experiments | 2026\n\nTech stack: Python, PyTorch, QANet, and SQuAD.\n\nRepaired training defects and compared controlled model configurations.",
+          "section_type": "project",
+          "section_path": "Project Experience > QANet Debugging and Controlled Experiments | 2026",
+          "entity_title": "QANet Debugging and Controlled Experiments | 2026",
+          "token_count": 25,
+          "retrieval_priority": "primary",
+          "semantic_group_index": 3,
+          "parent_index": 3
+        },
+        {
+          "raw_body": "AI Intern | 2024\n\nBuilt a repeatable evaluation workflow and documented model-quality evidence.",
+          "section_type": "internship",
+          "section_path": "Work Experience > AI Intern | 2024",
+          "entity_title": "AI Intern | 2024",
+          "token_count": 13,
+          "retrieval_priority": "primary",
+          "semantic_group_index": 4,
+          "parent_index": 4
+        }
+      ]
+    },
+    "markdown-guide": {
+      "parents": [
+        {
+          "raw_body": "# Retrieval Guide\n\n## Preparation\n\nClean each source and preserve its title before indexing.\n\n## Retrieval\n\nUse child chunks for matching and parent chunks for grounded answer context.\n\n## Evaluation\n\nMeasure source hits, ranking quality, refusal accuracy, and latency.",
+          "section_type": "document",
+          "section_path": "Retrieval Guide",
+          "entity_title": "Retrieval Guide",
+          "token_count": 45,
+          "retrieval_priority": "primary",
+          "semantic_group_index": 0
+        }
+      ],
+      "children": [
+        {
+          "raw_body": "# Retrieval Guide\n\n## Preparation\n\nClean each source and preserve its title before indexing.\n\n## Retrieval\n\nUse child chunks for matching and parent chunks for grounded answer context.\n\n## Evaluation\n\nMeasure source hits, ranking quality, refusal accuracy, and latency.",
+          "section_type": "document",
+          "section_path": "Retrieval Guide",
+          "entity_title": "Retrieval Guide",
+          "token_count": 45,
+          "retrieval_priority": "primary",
+          "semantic_group_index": 0,
+          "parent_index": 0
+        }
+      ]
+    },
+    "csv-projects": {
+      "parents": [
+        {
+          "raw_body": "project,technology,outcome\nPortfolio RAG,MongoDB and Ollama,Grounded local answers\nQANet,PyTorch and SQuAD,Controlled model evaluation\nPulseScape,Flask and MongoDB,Explainable music recommendations",
+          "section_type": "document",
+          "section_path": "",
+          "entity_title": "Project Rows",
+          "token_count": 33,
+          "retrieval_priority": "primary",
+          "semantic_group_index": 0
+        }
+      ],
+      "children": [
+        {
+          "raw_body": "project,technology,outcome\nPortfolio RAG,MongoDB and Ollama,Grounded local answers\nQANet,PyTorch and SQuAD,Controlled model evaluation\nPulseScape,Flask and MongoDB,Explainable music recommendations",
+          "section_type": "document",
+          "section_path": "",
+          "entity_title": "Project Rows",
+          "token_count": 33,
+          "retrieval_priority": "primary",
+          "semantic_group_index": 0,
+          "parent_index": 0
+        }
+      ]
+    }
+  }
+}

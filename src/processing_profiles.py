@@ -23,6 +23,11 @@ SCRIPT_RUN_PATTERN = re.compile(
     r"[\u0e00-\u0e7f\u1100-\u11ff\u3040-\u30ff\u3130-\u318f"
     r"\u31f0-\u31ff\uac00-\ud7af]+"
 )
+_PROFILE_CONFIG_PATH = (
+    Path(__file__).resolve().parents[1] / "config" / "processing-profiles.json"
+)
+_SHARED_PROFILE_CONFIG = json.loads(_PROFILE_CONFIG_PATH.read_text(encoding="utf-8"))
+_SHARED_PROFILES: dict[str, dict[str, Any]] = _SHARED_PROFILE_CONFIG["profiles"]
 
 
 def _validate_integer(name: str, value: int, minimum: int, maximum: int) -> None:
@@ -55,18 +60,28 @@ class PreprocessingProfile:
         return cls(**dict(data))
 
 
+def _shared_profile_values(name: str) -> dict[str, Any]:
+    values = dict(_SHARED_PROFILES[name])
+    values["preprocessing"] = PreprocessingProfile.from_dict(
+        values["preprocessing"]
+    )
+    return values
+
+
 @dataclass(frozen=True)
 class ProcessingProfile:
-    profile_version: int = 1
-    chunk_mode: str = "general"
-    delimiter: str = "\n\n"
-    max_tokens: int = 800
-    overlap_tokens: int = 80
-    parent_mode: str = "paragraph"
-    parent_max_tokens: int = 700
-    child_max_tokens: int = 180
-    preprocessing: PreprocessingProfile = PreprocessingProfile()
-    index_mode: str = "high_quality"
+    profile_version: int = _SHARED_PROFILES["general"]["profile_version"]
+    chunk_mode: str = _SHARED_PROFILES["general"]["chunk_mode"]
+    delimiter: str = _SHARED_PROFILES["general"]["delimiter"]
+    max_tokens: int = _SHARED_PROFILES["general"]["max_tokens"]
+    overlap_tokens: int = _SHARED_PROFILES["general"]["overlap_tokens"]
+    parent_mode: str = _SHARED_PROFILES["general"]["parent_mode"]
+    parent_max_tokens: int = _SHARED_PROFILES["general"]["parent_max_tokens"]
+    child_max_tokens: int = _SHARED_PROFILES["general"]["child_max_tokens"]
+    preprocessing: PreprocessingProfile = PreprocessingProfile(
+        **_SHARED_PROFILES["general"]["preprocessing"]
+    )
+    index_mode: str = _SHARED_PROFILES["general"]["index_mode"]
 
     def __post_init__(self) -> None:
         if type(self.profile_version) is not int or self.profile_version != 1:
@@ -136,14 +151,7 @@ class ProcessingProfile:
     def parent_child(cls, **overrides: Any) -> ProcessingProfile:
         if "chunk_mode" in overrides:
             raise ValueError("chunk_mode cannot be overridden by parent_child()")
-        values: dict[str, Any] = {
-            "chunk_mode": "parent_child",
-            "max_tokens": 180,
-            "child_max_tokens": 180,
-            "parent_max_tokens": 700,
-            "overlap_tokens": 20,
-            "parent_mode": "paragraph",
-        }
+        values = _shared_profile_values("parent_child")
         values.update(overrides)
         return cls(**values)
 
@@ -151,12 +159,7 @@ class ProcessingProfile:
     def resume_semantic(cls, **overrides: Any) -> ProcessingProfile:
         if "chunk_mode" in overrides:
             raise ValueError("chunk_mode cannot be overridden by resume_semantic()")
-        values: dict[str, Any] = {
-            "chunk_mode": "resume_semantic",
-            "max_tokens": 320,
-            "overlap_tokens": 0,
-            "parent_mode": "semantic_section",
-        }
+        values = _shared_profile_values("resume_semantic")
         values.update(overrides)
         return cls(**values)
 

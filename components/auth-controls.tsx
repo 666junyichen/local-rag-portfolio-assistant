@@ -1,21 +1,8 @@
 "use client";
 
 import { SignInButton, UserButton, useAuth } from "@clerk/nextjs";
-import { LogIn, Settings2 } from "lucide-react";
-import Link from "next/link";
-import { useEffect, useState } from "react";
-
-function OwnerStudioLink() {
-  const [owner, setOwner] = useState(false);
-  useEffect(() => {
-    let active = true;
-    fetch("/api/admin/session", { cache: "no-store" })
-      .then((response) => { if (active) setOwner(response.ok); })
-      .catch(() => undefined);
-    return () => { active = false; };
-  }, []);
-  return owner ? <Link className="ownerNavLink" href="/studio"><Settings2 size={16}/><span>Publish Studio</span></Link> : null;
-}
+import { LogIn } from "lucide-react";
+import { OwnerStudioLink } from "./owner-studio-link";
 
 export function AuthControls() {
   const { isLoaded, isSignedIn } = useAuth();

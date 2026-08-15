@@ -1,0 +1,31 @@
+Personal Information
+
+Junyi Chen
+
+Target role: AI Application Engineer
+
+Education
+
+University of Sydney | Master of Data Science | 2025-2026
+
+Relevant courses: machine learning, data mining, and data privacy.
+
+Project Experience
+
+Local RAG Portfolio Assistant | 2026
+
+Tech stack: Python, MongoDB Vector Search, SentenceTransformers, and Ollama.
+
+Built private local retrieval, grounded answers, source citations, and retrieval evaluation.
+
+QANet Debugging and Controlled Experiments | 2026
+
+Tech stack: Python, PyTorch, QANet, and SQuAD.
+
+Repaired training defects and compared controlled model configurations.
+
+Work Experience
+
+AI Intern | 2024
+
+Built a repeatable evaluation workflow and documented model-quality evidence.

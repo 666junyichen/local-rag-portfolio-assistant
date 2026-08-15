@@ -1,14 +1,16 @@
 # Current State
 
 - Active branch: `main`
-- Active phase: `Local Reset and Cloud Retrieval Accuracy`
-- Last verified: `2026-08-13`
-- Updated: `2026-08-13T03:00:00+10:00`
-- Next action: Upload three to five trusted files manually and collect Retrieval Lab metrics before expanding the RAG architecture.
+- Active phase: `Shared Chunking Contract`
+- Last verified: `2026-08-15`
+- Updated: `2026-08-15T17:20:00+10:00`
+- Next action: Upload one trusted document locally and publicly, then compare Retrieval Lab evidence without changing embedding providers.
 
 ## Status
 
-Tasks 0-10 are completed and reviewed. Owner production acceptance now covers sign-in, email and phone PII blocking, sanitized preview, publication, Knowledge visibility, grounded Retrieve and Chat responses, unpublish, and permanent synthetic-data cleanup. A no-evidence Chat stream regression found during unpublish verification was fixed and deployed; an active empty space now returns a grounded refusal with HTTP 200 instead of a server error.
+Tasks 0-14 are completed and reviewed. Owner production acceptance now covers sign-in, email and phone PII blocking, sanitized preview, publication, Knowledge visibility, grounded Retrieve and Chat responses, unpublish, and permanent synthetic-data cleanup. A no-evidence Chat stream regression found during unpublish verification was fixed and deployed; an active empty space now returns a grounded refusal with HTTP 200 instead of a server error.
+
+Task 14 makes the local Python chunker the checked-in contract for cloud TypeScript processing. General, parent-child, and resume-semantic profiles now come from one versioned JSON source; fixed resume, Markdown, and CSV fixtures verify matching parent boundaries, child boundaries, and retrieval metadata. Embedding remains intentionally runtime-specific. The public Knowledge page also exposes an Owner-only upload-and-management entry that fails closed for visitors.
 
 Task 13 is complete. The local catalog was reset from the current runtime and remained empty across two fresh Streamlit starts: zero documents, zero duplicate groups, zero knowledge chunks, and one active `portfolio` space. Normal startup no longer imports the legacy catalog or repository documents.
 
@@ -38,6 +40,7 @@ Phase B's adaptive path triggered the reranker for 15 of 50 benchmark questions.
 | 11 | completed | true | true | Cloud and local Knowledge Spaces, index migration, single/cross-space filtering, and smoke validation |
 | 12 | completed | true | true | One default Portfolio space, verified ignored backups, and completed local/cloud knowledge resets |
 | 13 | completed | true | true | Local empty-state reset and cloud semantic resume v2 retrieval accepted in production |
+| 14 | completed | true | true | Shared Python/TypeScript chunking contract and Owner-only Knowledge management entry |
 
 ## Known Blockers
 

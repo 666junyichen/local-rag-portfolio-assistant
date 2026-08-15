@@ -1,5 +1,11 @@
 # Project Memory Changelog
 
+## 2026-08-15
+
+- Added an Owner-only upload-and-management entry to the public Knowledge page while keeping `/studio` and admin APIs protected.
+- Centralized General, Parent-child, and Resume semantic defaults in one shared processing-profile file.
+- Added Python-to-TypeScript chunking contract fixtures for resume, Markdown, and CSV content, covering parent/child boundaries and retrieval metadata.
+
 ## 2026-08-12
 
 - Disabled legacy local catalog import during ordinary startup and made an empty knowledge base a supported ready state.

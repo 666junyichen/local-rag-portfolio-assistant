@@ -3,6 +3,7 @@
 import { BookOpenText, ExternalLink, Search } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { KnowledgeSpaceSelector, usePublicKnowledgeSpaces } from "./knowledge-space-selector";
+import { OwnerStudioLink } from "./owner-studio-link";
 
 type PublicDocument = {
   docId: string;
@@ -49,7 +50,10 @@ export function KnowledgeCatalog() {
   const categories = [...new Set(documents.map((document) => document.category).filter(Boolean))].sort();
 
   return <div className="pageFrame knowledgePage">
-    <div className="pageHeading"><span className="eyebrow">PUBLIC KNOWLEDGE</span><h1>Published evidence catalog</h1><p>Browse the curated public documents available to Ask AI. Full text, chunks, embeddings, and owner metadata are never exposed here.</p></div>
+    <div className="pageHeading catalogHeading">
+      <div><span className="eyebrow">PUBLIC KNOWLEDGE</span><h1>Published evidence catalog</h1><p>Browse the curated public documents available to Ask AI. Full text, chunks, embeddings, and owner metadata are never exposed here.</p></div>
+      <OwnerStudioLink className="secondaryButton compactButton knowledgeManageLink" href="/studio" label={"\u4e0a\u4f20\u4e0e\u7ba1\u7406"}/>
+    </div>
     <div className="catalogSpaceFilter"><KnowledgeSpaceSelector spaces={spaces} value={spaceIds} onChange={setSpaceIds}/></div>
     <form className="catalogToolbar" onSubmit={load}>
       <label className="searchField"><Search size={17}/><span className="srOnly">Search documents</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search titles and summaries" maxLength={100}/></label>

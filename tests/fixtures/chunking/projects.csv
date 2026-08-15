@@ -1,0 +1,4 @@
+project,technology,outcome
+Portfolio RAG,MongoDB and Ollama,Grounded local answers
+QANet,PyTorch and SQuAD,Controlled model evaluation
+PulseScape,Flask and MongoDB,Explainable music recommendations

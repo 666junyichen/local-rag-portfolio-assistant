@@ -28,6 +28,9 @@ The tests cover valid temporary Git repositories, missing required files and key
 
 ## Phase Evidence
 
+- Task 14 on 2026-08-15: 23 focused TypeScript tests passed across the Owner entry, shared profiles, cloud processing, and cross-runtime parity suites; 62 focused Python profile, hierarchy, and contract tests passed; the Next.js production build completed successfully.
+- The parity fixtures compare canonical post-parser resume, Markdown, and CSV text. They verify parent and child boundaries plus retrieval metadata while allowing local SentenceTransformer and cloud Gemini embeddings to remain independent.
+
 - Task 13 production acceptance on 2026-08-13: the guarded local reset left zero documents, duplicate groups, chunks, chat records, and runtime evaluations; two fresh Streamlit starts retained the empty state and one `portfolio` space.
 - The Master resume v2 publication produced 35 semantic answer parents and 47 retrieval children. Production checks returned five distinct `project` parents for the ranked question and eleven `project` parents for the exhaustive question. The final focused parent-context regression passed 5 tests and Vercel reported the production deployment Ready.
 - Task 13 milestone on 2026-08-12: Python passed 274 tests and 3 Streamlit subtests in 84 seconds; TypeScript passed 82 tests across 15 files; Next.js compiled 19 pages and API routes; the standalone Streamlit checker passed Chat, Knowledge Studio, Retrieval Lab, and all retrieval modes.

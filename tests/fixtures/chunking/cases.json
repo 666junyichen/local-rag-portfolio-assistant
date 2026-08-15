@@ -1,0 +1,23 @@
+[
+  {
+    "case_id": "resume-docx",
+    "file": "resume.docx.txt",
+    "source_format": "docx",
+    "title": "Candidate Resume",
+    "profile": "resume_semantic"
+  },
+  {
+    "case_id": "markdown-guide",
+    "file": "guide.md",
+    "source_format": "markdown",
+    "title": "Retrieval Guide",
+    "profile": "parent_child"
+  },
+  {
+    "case_id": "csv-projects",
+    "file": "projects.csv",
+    "source_format": "csv",
+    "title": "Project Rows",
+    "profile": "general"
+  }
+]

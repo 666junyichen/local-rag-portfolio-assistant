@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "profiles": {
+    "general": {
+      "profile_version": 1,
+      "chunk_mode": "general",
+      "delimiter": "\n\n",
+      "max_tokens": 800,
+      "overlap_tokens": 80,
+      "parent_mode": "paragraph",
+      "parent_max_tokens": 700,
+      "child_max_tokens": 180,
+      "preprocessing": {
+        "normalize_whitespace": true,
+        "remove_urls": false,
+        "remove_emails": false
+      },
+      "index_mode": "high_quality"
+    },
+    "parent_child": {
+      "profile_version": 1,
+      "chunk_mode": "parent_child",
+      "delimiter": "\n\n",
+      "max_tokens": 180,
+      "overlap_tokens": 20,
+      "parent_mode": "paragraph",
+      "parent_max_tokens": 700,
+      "child_max_tokens": 180,
+      "preprocessing": {
+        "normalize_whitespace": true,
+        "remove_urls": false,
+        "remove_emails": false
+      },
+      "index_mode": "high_quality"
+    },
+    "resume_semantic": {
+      "profile_version": 1,
+      "chunk_mode": "resume_semantic",
+      "delimiter": "\n\n",
+      "max_tokens": 320,
+      "overlap_tokens": 0,
+      "parent_mode": "semantic_section",
+      "parent_max_tokens": 320,
+      "child_max_tokens": 180,
+      "preprocessing": {
+        "normalize_whitespace": true,
+        "remove_urls": false,
+        "remove_emails": false
+      },
+      "index_mode": "high_quality"
+    }
+  }
+}

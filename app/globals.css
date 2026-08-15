@@ -86,6 +86,8 @@ h2 { letter-spacing:0; }
 .geminiDot { width:10px; height:10px; border:3px solid var(--green); transform:rotate(45deg); }
 .pageFrame { max-width:1180px; margin:0 auto; padding:42px 28px 72px; }
 .pageHeading { border-bottom:1px solid var(--line); padding-bottom:24px; margin-bottom:26px; }
+.catalogHeading { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; }
+.knowledgeManageLink { flex:0 0 auto; display:inline-flex; align-items:center; gap:7px; }
 .labPanel { display:grid; grid-template-columns:minmax(0,1fr) 300px; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; }
 .labQuery { padding:18px; }
 .labQuery label { display:block; font-weight:720; margin-bottom:9px; }
@@ -252,3 +254,4 @@ h2 { letter-spacing:0; }
 @keyframes spin { to { transform:rotate(360deg); } }
 @media (max-width:850px) { .topbar { padding:0 14px; gap:12px; } .brand > span:last-child { display:none; } .navLink { padding:0 9px; } .navLink span { display:none; } .workspace { grid-template-columns:1fr; } .chatWorkspace { padding:24px 18px 18px; } .evidenceRail { border-left:0; border-top:1px solid var(--line); } .workspaceHeader { display:grid; } .headerActions { justify-content:space-between; } .labPanel,.modeGrid,.evidenceShots { grid-template-columns:1fr; } .labControls { border-left:0; border-top:1px solid var(--line); } .message.user { margin-left:0; } .settingsBar,.spaceToolbar { flex-wrap:wrap; } .spaceSelectLabel { width:100%; } }
 @media (max-width:850px) { .authControls span { display:none; } .ownerSignIn,.ownerNavLink { width:36px; padding:0; justify-content:center; } .catalogToolbar { grid-template-columns:1fr; } .documentGrid { grid-template-columns:1fr; } .studioFrame { padding:18px 12px 36px; } .studioHeader { display:grid; } .studioLayout { grid-template-columns:1fr; } .studioSidebar { border-right:0; border-bottom:1px solid var(--line); } .studioList { max-height:230px; overflow:auto; } .stepper button { font-size:0; gap:0; } .stepper button > span { font-size:.78rem; } .studioPane { padding:19px 15px 24px; } .fileFacts { grid-template-columns:1fr 1fr; } .fieldGrid,.profileGrid { grid-template-columns:1fr; } .fieldGrid .wide { grid-column:auto; } .chunkPreview summary { grid-template-columns:30px minmax(0,1fr); } .chunkPreview summary small { grid-column:2; } .paneActions { flex-wrap:wrap; } .paneActions button { flex:1 1 180px; } .resetSnapshot { grid-template-columns:1fr 1fr; } }
+@media (max-width:850px) { .catalogHeading { display:grid; } .knowledgeManageLink { width:max-content; } }

@@ -1,5 +1,9 @@
 # Known Issues
 
+## Remaining Parser Boundary
+
+The shared chunking contract starts from normalized text after parsing. DOCX, PDF, Markdown, and CSV parser implementations remain runtime-specific and retain their own parser tests. Add binary parser parity only if real uploads reveal different normalized text; do not add Python or model runtimes to Vercel solely for parser symmetry.
+
 ## Resolved: Task 13 Runtime And Production Acceptance
 
 Task 13 passed on 2026-08-13. The terminal-driven reset remained empty across two fresh Streamlit starts with one `portfolio` space. The Master resume v2 was published atomically, production parent evidence was deduplicated, and ranked and exhaustive project questions returned only distinct project sections.

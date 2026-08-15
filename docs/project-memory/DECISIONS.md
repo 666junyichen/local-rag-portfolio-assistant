@@ -1,5 +1,9 @@
 # Decisions
 
+## 2026-08-15: Chunking Is Shared, Embeddings Stay Runtime-Specific
+
+Treat local Python hierarchy output as the behavioral contract and reproduce that contract in cloud TypeScript using one shared processing-profile JSON file and fixed post-parser fixtures. Keep local SentenceTransformer and cloud Gemini embedding providers separate: matching chunk boundaries and metadata does not require shipping Python models to Vercel or sharing vector dimensions.
+
 ## 2026-08-12: Resume Retrieval Uses Semantic Parents And Intent-Specific Scope
 
 Index small resume child chunks for Vector/BM25 matching, but return one complete semantic parent per project, internship, school, skill group, or award. Deduplicate by parent and semantic group before generation. Questions asking "all" or "which" may use up to 12 distinct project parents for coverage; questions asking "strongest" return 3-5 projects with evidence-based ranking. Fact questions continue to respect the requested Top-K.
