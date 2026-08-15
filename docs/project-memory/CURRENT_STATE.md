@@ -1,14 +1,16 @@
 # Current State
 
 - Active branch: `main`
-- Active phase: `Shared Chunking Contract`
+- Active phase: `Public Chunk Preview Completeness`
 - Last verified: `2026-08-15`
-- Updated: `2026-08-15T17:20:00+10:00`
-- Next action: Upload one trusted document locally and publicly, then compare Retrieval Lab evidence without changing embedding providers.
+- Updated: `2026-08-15T19:35:00+10:00`
+- Next action: Review every answer parent in Publish Studio and publish only after confirming that each expected project group is present.
 
 ## Status
 
-Tasks 0-14 are completed and reviewed. Owner production acceptance now covers sign-in, email and phone PII blocking, sanitized preview, publication, Knowledge visibility, grounded Retrieve and Chat responses, unpublish, and permanent synthetic-data cleanup. A no-evidence Chat stream regression found during unpublish verification was fixed and deployed; an active empty space now returns a grounded refusal with HTTP 200 instead of a server error.
+Tasks 0-15 are completed and reviewed. Owner production acceptance now covers sign-in, email and phone PII blocking, sanitized preview, publication, Knowledge visibility, grounded Retrieve and Chat responses, unpublish, and permanent synthetic-data cleanup. A no-evidence Chat stream regression found during unpublish verification was fixed and deployed; an active empty space now returns a grounded refusal with HTTP 200 instead of a server error.
+
+Task 15 fixes a Publish Studio presentation defect that made complete resume-semantic output look incomplete. The server generated 35 answer parents and 48 retrieval children, but the page rendered only the first 20 children. The Studio now exposes all generated chunks, switches between child matches and parent answer contexts, and reports distinct project semantic groups.
 
 Task 14 makes the local Python chunker the checked-in contract for cloud TypeScript processing. General, parent-child, and resume-semantic profiles now come from one versioned JSON source; fixed resume, Markdown, and CSV fixtures verify matching parent boundaries, child boundaries, and retrieval metadata. Embedding remains intentionally runtime-specific. The public Knowledge page also exposes an Owner-only upload-and-management entry that fails closed for visitors.
 
@@ -41,6 +43,7 @@ Phase B's adaptive path triggered the reranker for 15 of 50 benchmark questions.
 | 12 | completed | true | true | One default Portfolio space, verified ignored backups, and completed local/cloud knowledge resets |
 | 13 | completed | true | true | Local empty-state reset and cloud semantic resume v2 retrieval accepted in production |
 | 14 | completed | true | true | Shared Python/TypeScript chunking contract and Owner-only Knowledge management entry |
+| 15 | completed | true | true | Complete public parent/child preview with distinct project-group evidence |
 
 ## Known Blockers
 

@@ -2,6 +2,8 @@
 
 ## 2026-08-15
 
+- Removed the 20-chunk Publish Studio preview cap and added complete child/parent preview switching.
+- Added distinct project-group counts and child-to-parent evidence inspection before publication.
 - Added an Owner-only upload-and-management entry to the public Knowledge page while keeping `/studio` and admin APIs protected.
 - Centralized General, Parent-child, and Resume semantic defaults in one shared processing-profile file.
 - Added Python-to-TypeScript chunking contract fixtures for resume, Markdown, and CSV content, covering parent/child boundaries and retrieval metadata.

@@ -1,5 +1,9 @@
 # Known Issues
 
+## Resolved: Public Preview Appeared Incomplete
+
+Publish Studio previously rendered only the first 20 retrieval children even when the server generated a larger complete preview. This was a display cap, not evidence that resume content had been discarded. The page now renders every generated child or parent on demand and reports distinct project semantic groups so coverage can be checked before publication.
+
 ## Remaining Parser Boundary
 
 The shared chunking contract starts from normalized text after parsing. DOCX, PDF, Markdown, and CSV parser implementations remain runtime-specific and retain their own parser tests. Add binary parser parity only if real uploads reveal different normalized text; do not add Python or model runtimes to Vercel solely for parser symmetry.

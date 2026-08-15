@@ -28,6 +28,8 @@ The tests cover valid temporary Git repositories, missing required files and key
 
 ## Phase Evidence
 
+- Task 15 on 2026-08-15: 16 focused Publish Studio preview and cloud processing tests passed. The regression test proves a 48-child preview is returned without truncation and that all 35 parents remain selectable; the Next.js production build compiled all 19 routes successfully.
+
 - Task 14 on 2026-08-15: 23 focused TypeScript tests passed across the Owner entry, shared profiles, cloud processing, and cross-runtime parity suites; 62 focused Python profile, hierarchy, and contract tests passed; the Next.js production build completed successfully.
 - The parity fixtures compare canonical post-parser resume, Markdown, and CSV text. They verify parent and child boundaries plus retrieval metadata while allowing local SentenceTransformer and cloud Gemini embeddings to remain independent.
 

@@ -1,7 +1,7 @@
 {
     "schema_version":  1,
     "active_branch":  "main",
-    "active_phase":  "Shared Chunking Contract",
+    "active_phase":  "Public Chunk Preview Completeness",
     "tasks":  [
                   {
                       "id":  0,
@@ -335,10 +335,31 @@
                                                 "verified_at":  "2026-08-15"
                                             }
                                         ]
+                  },
+                  {
+                      "id":  15,
+                      "title":  "Complete public parent and child chunk preview",
+                      "status":  "completed",
+                      "reviewed":  true,
+                      "final_quality_approved":  true,
+                      "test_evidence":  [
+                                            {
+                                                "command":  "npm test -- tests/cloud-publish-preview-view.test.ts tests/cloud-publish-processing.test.ts",
+                                                "result":  "16 focused preview and cloud processing tests passed",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-15"
+                                            },
+                                            {
+                                                "command":  "npm run build",
+                                                "result":  "Next.js production build passed with all 19 static and dynamic routes",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-15"
+                                            }
+                                        ]
                   }
               ],
     "last_verified":  "2026-08-15",
     "known_blockers":  [],
-    "next_action":  "Upload one trusted document locally and publicly, then compare Retrieval Lab evidence without changing embedding providers.",
-    "updated_at":  "2026-08-15T17:20:00+10:00"
+    "next_action":  "Review every answer parent in Publish Studio and publish only after confirming that each expected project group is present.",
+    "updated_at":  "2026-08-15T19:35:00+10:00"
 }
