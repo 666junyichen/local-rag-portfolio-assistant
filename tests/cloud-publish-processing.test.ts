@@ -9,20 +9,64 @@ import {
 } from "../lib/cloud-publish/processing";
 
 describe("public document processing", () => {
-  it("keeps a generic DOCX on parent-child unless its title or content identifies a resume", () => {
+  it("chooses standard or parent-child for generic DOCX by content length", () => {
     expect(recommendProcessingProfile({
       fileName: "architecture-notes.docx",
       fileType: "docx",
       title: "System architecture notes",
       body: "MongoDB deployment and service boundaries.",
-    }).chunkMode).toBe("parent_child");
+    }).chunkMode).toBe("standard");
 
+    expect(recommendProcessingProfile({
+      fileName: "architecture-handbook.docx",
+      fileType: "docx",
+      title: "System architecture handbook",
+      body: "MongoDB deployment and service boundaries. ".repeat(2200),
+    }).chunkMode).toBe("parent_child");
+  });
+
+  it("uses resume structure in the title or body before trusting generic file names", () => {
     expect(recommendProcessingProfile({
       fileName: "candidate.docx",
       fileType: "docx",
       title: "Candidate Resume",
       body: "Education and project experience.",
     }).chunkMode).toBe("resume_semantic");
+
+    expect(recommendProcessingProfile({
+      fileName: "upload.docx",
+      fileType: "docx",
+      title: "Untitled upload",
+      body: [
+        "Education",
+        "University of Sydney | Master of Data Science",
+        "Projects",
+        "Local RAG Portfolio Assistant",
+        "Skills",
+        "Python, TypeScript, MongoDB",
+      ].join("\n\n"),
+    }).chunkMode).toBe("resume_semantic");
+
+    expect(recommendProcessingProfile({
+      fileName: "upload.docx",
+      fileType: "docx",
+      title: "未命名上传",
+      body: [
+        "教育背景",
+        "悉尼大学 | 数据科学硕士",
+        "项目经历",
+        "Local RAG Portfolio Assistant",
+        "专业技能",
+        "Python、TypeScript、MongoDB",
+      ].join("\n\n"),
+    }).chunkMode).toBe("resume_semantic");
+
+    expect(recommendProcessingProfile({
+      fileName: "resume-parser-notes.docx",
+      fileType: "docx",
+      title: "Parser notes",
+      body: "This document explains how a resume parser handles text.",
+    }).chunkMode).toBe("standard");
   });
 
   it("upgrades an old parent-child resume revision without changing ordinary documents", () => {

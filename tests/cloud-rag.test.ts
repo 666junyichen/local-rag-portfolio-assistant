@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildVectorPipeline, mapSource, reciprocalRankFusion } from "../lib/cloud-rag/retrieval";
+import fs from "node:fs";
+import path from "node:path";
+import { buildVectorPipeline, chooseCloudRetrievalPath, mapSource, reciprocalRankFusion } from "../lib/cloud-rag/retrieval";
 import { sse } from "../lib/cloud-rag/sse";
 import { chatRequestSchema } from "../lib/cloud-rag/validation";
 
@@ -8,10 +10,15 @@ describe("cloud RAG contracts", () => {
     const parsed = chatRequestSchema.parse({
       question: "What projects?",
       history: Array.from({ length: 20 }, (_, index) => ({ role: index % 2 ? "assistant" : "user", content: String(index) })),
-      settings: { topK: 5, scoreThreshold: null },
+      settings: { topK: 5, scoreThreshold: null, retrievalMode: "adaptive" },
     });
     expect(parsed.history).toHaveLength(12);
+    expect(parsed.settings.retrievalMode).toBe("adaptive");
     expect(() => chatRequestSchema.parse({ question: "x".repeat(501) })).toThrow();
+    expect(() => chatRequestSchema.parse({
+      question: "What projects?",
+      settings: { topK: 5, scoreThreshold: null, retrievalMode: "semantic" },
+    })).toThrow();
   });
 
   it("never exposes private search results", () => {
@@ -50,5 +57,43 @@ describe("cloud RAG contracts", () => {
     expect(rows[0].retrieval_channels).toEqual(["vector", "bm25"]);
     expect(rows[0].vector_rank).toBe(2);
     expect(rows[0].bm25_rank).toBe(2);
+  });
+
+  it("reports vector fallback when requested cloud modes need a missing text index", () => {
+    expect(chooseCloudRetrievalPath({
+      requestedMode: "hybrid",
+      question: "MongoDB project",
+      vectorRows: [{ score: 0.88 }],
+      textSearchAvailable: false,
+    })).toMatchObject({
+      requestedMode: "hybrid",
+      appliedMode: "vector",
+      fallbackReason: "Atlas Search text index is unavailable; using Vector Search.",
+      capabilities: { vector: true, bm25: false, hybrid: false, rerank: false, adaptive: true },
+    });
+
+    expect(chooseCloudRetrievalPath({
+      requestedMode: "adaptive",
+      question: "Compare the project and skill evidence",
+      vectorRows: [{ score: 0.22 }],
+      textSearchAvailable: false,
+    })).toMatchObject({
+      requestedMode: "adaptive",
+      appliedMode: "vector",
+      fallbackReason: "Atlas Search text index is unavailable; adaptive used Vector Search.",
+      rerankerTriggered: false,
+      rerankerReasons: ["complex-query", "low-confidence"],
+    });
+  });
+
+  it("provides a public-safe cloud retrieval benchmark script", () => {
+    const script = fs.readFileSync(path.resolve(process.cwd(), "scripts/evaluate-cloud-retrieval.mjs"), "utf8");
+    expect(script).toContain("evals/rag_benchmark.json");
+    expect(script).toContain("retrievalMode");
+    expect(script).toContain("latest-cloud-retrieval");
+    expect(script).toContain("/api/retrieve");
+    expect(script).toContain("isCapabilityFallback");
+    expect(script).toContain("outside the public retrieval boundary");
+    expect(script).not.toContain("/api/chat");
   });
 });

@@ -26,7 +26,18 @@ describe("cloud chat route", () => {
   });
 
   it("streams a grounded refusal when the selected spaces have no evidence", async () => {
-    retrieveForQuestion.mockResolvedValue({ candidates: [], selectedContext: [], intent: "fact" });
+    retrieveForQuestion.mockResolvedValue({
+      candidates: [],
+      selectedContext: [],
+      intent: "fact",
+      retrieval: {
+        requestedMode: "hybrid",
+        appliedMode: "vector",
+        retrievalPath: "vector",
+        capabilities: { vector: true, bm25: false, hybrid: false, rerank: false, adaptive: true },
+        fallbackReason: "Atlas Search text index is unavailable; using Vector Search.",
+      },
+    });
     const { POST } = await import("../app/api/chat/route");
     const response = await POST(new Request("https://example.test/api/chat", {
       method: "POST",
@@ -43,6 +54,9 @@ describe("cloud chat route", () => {
     expect(response.headers.get("content-type")).toContain("text/event-stream");
     const body = await response.text();
     expect(body).toContain("event: retrieval");
+    expect(body).toContain('"requestedMode":"hybrid"');
+    expect(body).toContain('"appliedMode":"vector"');
+    expect(body).toContain("Atlas Search text index is unavailable");
     expect(body).toContain("does not contain enough evidence");
     expect(body).toContain("event: done");
     expect(generateText).not.toHaveBeenCalled();

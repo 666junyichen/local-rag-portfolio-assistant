@@ -25,6 +25,7 @@ data/local_uploads/
 data/uploads/
 data/local_eval_questions.json
 evals/latest-report*.json
+evals/latest-cloud-retrieval*.json
 
 # Local-only project memory. Never commit private notes or document bodies.
 .project-memory/private/

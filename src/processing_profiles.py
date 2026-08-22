@@ -18,6 +18,49 @@ MAX_CHUNK_TOKENS = 2000
 MIN_CHILD_TOKENS = 1
 LONG_DOCUMENT_TOKENS = 2000
 RESUME_FILE_TYPES = {"docx", "pdf", "md", "markdown", "txt"}
+RESUME_FILENAME_EXCLUSION_PATTERN = re.compile(
+    r"(?<![a-z0-9])(?:parser|template|builder|generator|notes?)(?![a-z0-9])"
+)
+RESUME_HEADING_BOUNDARY = r"(?=$|[\s:：|/／（(【\[\-–—])"
+
+
+def _resume_section_pattern(*labels: str) -> re.Pattern[str]:
+    return re.compile(
+        rf"^(?:#{{1,6}}\s*)?(?:{'|'.join(labels)}){RESUME_HEADING_BOUNDARY}",
+        re.I,
+    )
+
+
+RESUME_SECTION_PATTERNS = (
+    (
+        "education",
+        _resume_section_pattern("education", "教育背景", "教育经历", "学历", "学术背景"),
+    ),
+    (
+        "experience",
+        _resume_section_pattern(
+            "experience",
+            "work experience",
+            "professional experience",
+            "internships?",
+            "实习经历",
+            "工作经历",
+            "职业经历",
+        ),
+    ),
+    (
+        "project",
+        _resume_section_pattern("projects?", "project experience", "项目经验", "项目经历", "项目"),
+    ),
+    (
+        "skill",
+        _resume_section_pattern("skills?", "technical skills?", "专业技能", "技能", "技术栈"),
+    ),
+    (
+        "award",
+        _resume_section_pattern("awards?", "honou?rs?", "activities", "获奖", "荣誉", "校园经历", "获奖与校园经历"),
+    ),
+)
 BASE_TOKEN_PATTERN = re.compile(r"[\u3400-\u9fff]|[^\W_]+|[^\w\s]")
 SCRIPT_RUN_PATTERN = re.compile(
     r"[\u0e00-\u0e7f\u1100-\u11ff\u3040-\u30ff\u3130-\u318f"
@@ -220,6 +263,25 @@ def _has_resume_marker(value: object) -> bool:
     )
 
 
+def _has_resume_filename_marker(value: object) -> bool:
+    stem = re.sub(r"\.[a-z0-9]+$", "", _normalize_identity(_basename(value)))
+    return _has_resume_marker(stem) and not RESUME_FILENAME_EXCLUSION_PATTERN.search(
+        stem
+    )
+
+
+def _has_resume_body_structure(value: object) -> bool:
+    sections: set[str] = set()
+    for line in str(value or "").splitlines()[:80]:
+        heading = re.sub(r"^[-*•]\s*", "", line.strip())
+        if not heading or len(heading) > 80:
+            continue
+        for section, pattern in RESUME_SECTION_PATTERNS:
+            if pattern.search(heading):
+                sections.add(section)
+    return len(sections) >= 2
+
+
 def _is_resume_root(value: object) -> bool:
     return _normalize_identity(value).strip() == "resume_root"
 
@@ -317,12 +379,13 @@ def recommend_processing_profile(document: Mapping[str, Any]) -> ProcessingProfi
     source_values = _candidate_values(document, metadata, "source")
     resume_filename = any(
         Path(_basename(value)).suffix.lstrip(".").lower() in RESUME_FILE_TYPES
-        and _has_resume_marker(_basename(value))
+        and _has_resume_filename_marker(_basename(value))
         for value in path_candidates
     )
     if file_type in RESUME_FILE_TYPES and (
         any(_is_resume_root(value) for value in source_values + source_roots)
         or _has_resume_marker(title)
+        or _has_resume_body_structure(body)
         or resume_filename
     ):
         return ProcessingProfile.resume_semantic()

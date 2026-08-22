@@ -276,6 +276,46 @@ def test_resume_recommendation_uses_title_and_source_identity_markers() -> None:
     assert recommend_processing_profile(chinese_resume) == ProcessingProfile.resume_semantic()
 
 
+def test_resume_recommendation_uses_body_structure_before_generic_file_name() -> None:
+    structured_resume = {
+        "title": "Untitled upload",
+        "body": "\n\n".join(
+            [
+                "Education",
+                "University of Sydney | Master of Data Science",
+                "Projects",
+                "Local RAG Portfolio Assistant",
+                "Skills",
+                "Python, TypeScript, MongoDB",
+            ]
+        ),
+        "metadata": {"file_type": "docx", "source": "upload.docx"},
+    }
+    chinese_structured_resume = {
+        "title": "未命名上传",
+        "body": "\n\n".join(
+            [
+                "教育背景",
+                "悉尼大学 | 数据科学硕士",
+                "项目经历",
+                "Local RAG Portfolio Assistant",
+                "专业技能",
+                "Python、TypeScript、MongoDB",
+            ]
+        ),
+        "metadata": {"file_type": "docx", "source": "upload.docx"},
+    }
+    parser_notes = {
+        "title": "Parser notes",
+        "body": "This document explains how a resume parser handles text.",
+        "metadata": {"file_type": "docx", "source": "resume-parser-notes.docx"},
+    }
+
+    assert recommend_processing_profile(structured_resume) == ProcessingProfile.resume_semantic()
+    assert recommend_processing_profile(chinese_structured_resume) == ProcessingProfile.resume_semantic()
+    assert recommend_processing_profile(parser_notes) == ProcessingProfile()
+
+
 def test_structured_files_never_auto_select_resume_semantic() -> None:
     csv_resume = {
         "title": "Candidate Resume",

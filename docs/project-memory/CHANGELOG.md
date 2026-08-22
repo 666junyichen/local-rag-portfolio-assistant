@@ -1,5 +1,13 @@
 # Project Memory Changelog
 
+## 2026-08-22
+
+- Updated upload processing profile recommendations to use document structure and body evidence before weak file-name hints.
+- Added a cloud retrieval mode contract for `vector`, `bm25`, `hybrid`, `hybrid-rerank`, and `adaptive`.
+- Added cloud retrieval diagnostics for requested mode, applied mode, capabilities, fallback reason, and actual source path.
+- Made Atlas `text_index_public` reconciliation return structured status without deleting unrelated search indexes.
+- Added a public-safe `/api/retrieve` benchmark script for comparing Vector, Adaptive, and Hybrid before changing the cloud default.
+
 ## 2026-08-15
 
 - Removed the 20-chunk Publish Studio preview cap and added complete child/parent preview switching.

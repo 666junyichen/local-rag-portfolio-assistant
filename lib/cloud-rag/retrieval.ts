@@ -1,7 +1,7 @@
 import type { Collection, Document } from "mongodb";
 import { cloudDb } from "./mongodb";
 import { embedQuery } from "./gemini";
-import type { AnswerIntent, RetrievalResult, RetrievalSettings, Source } from "./types";
+import type { AnswerIntent, RetrievalDiagnostics, RetrievalMode, RetrievalResult, RetrievalSettings, Source } from "./types";
 import { planQuery, shouldRefuseWithoutRetrieval } from "./query-planning";
 import { classifyAnswerIntent } from "./prompt";
 import { DEFAULT_SPACE_ID, normalizeSpaceIds, spaceFilter } from "./spaces";
@@ -35,6 +35,8 @@ export function mapSource(doc: Document): Source | null {
     ...(doc.vector_rank ? { vectorRank: Number(doc.vector_rank) } : {}),
     ...(doc.bm25_rank ? { bm25Rank: Number(doc.bm25_rank) } : {}),
     ...(doc.fusion_score ? { fusionScore: Number(doc.fusion_score) } : {}),
+    ...(doc.retrieval_path ? { retrievalPath: doc.retrieval_path } : {}),
+    ...(doc.fallback_reason ? { fallbackReason: String(doc.fallback_reason) } : {}),
   };
 }
 
@@ -86,6 +88,117 @@ function candidateLimit(intent: AnswerIntent, topK: number): number {
 }
 
 const projectQuestion = (question: string) => /项目|專案|projects?/iu.test(question);
+const TEXT_INDEX_UNAVAILABLE = "Atlas Search text index is unavailable; using Vector Search.";
+const ADAPTIVE_TEXT_INDEX_UNAVAILABLE = "Atlas Search text index is unavailable; adaptive used Vector Search.";
+const CLOUD_RERANK_UNAVAILABLE = "Cloud reranker is unavailable; applied Hybrid without reranking.";
+
+type SparseResult = {
+  rows: Document[];
+  available: boolean;
+};
+
+type RetrievalPathInput = {
+  requestedMode?: RetrievalMode;
+  question: string;
+  vectorRows: Document[];
+  textSearchAvailable: boolean;
+};
+
+function precisionReasons(question: string, vectorRows: Document[]): string[] {
+  const reasons: string[] = [];
+  if (planQuery(question).mode === "complex") reasons.push("complex-query");
+  const scores = vectorRows
+    .map((row) => Number(row.score || row.rank_score || 0))
+    .sort((left, right) => right - left);
+  if (!scores.length || scores[0] < 0.45 || (scores.length > 1 && scores[0] - scores[1] < 0.02)) {
+    reasons.push("low-confidence");
+  }
+  return [...new Set(reasons)];
+}
+
+export function chooseCloudRetrievalPath(input: RetrievalPathInput): RetrievalDiagnostics {
+  const requestedMode = input.requestedMode || "vector";
+  const capabilities = {
+    vector: true,
+    bm25: input.textSearchAvailable,
+    hybrid: input.textSearchAvailable,
+    rerank: false,
+    adaptive: true,
+  };
+  const rerankerReasons = requestedMode === "adaptive"
+    ? precisionReasons(input.question, input.vectorRows)
+    : [];
+  let appliedMode: RetrievalMode = requestedMode;
+  let fallbackReason: string | undefined;
+
+  if (requestedMode === "vector") {
+    appliedMode = "vector";
+  } else if (requestedMode === "bm25") {
+    appliedMode = input.textSearchAvailable ? "bm25" : "vector";
+    if (!input.textSearchAvailable) fallbackReason = TEXT_INDEX_UNAVAILABLE;
+  } else if (requestedMode === "hybrid") {
+    appliedMode = input.textSearchAvailable ? "hybrid" : "vector";
+    if (!input.textSearchAvailable) fallbackReason = TEXT_INDEX_UNAVAILABLE;
+  } else if (requestedMode === "hybrid-rerank") {
+    appliedMode = input.textSearchAvailable ? "hybrid" : "vector";
+    fallbackReason = input.textSearchAvailable
+      ? CLOUD_RERANK_UNAVAILABLE
+      : "Atlas Search text index is unavailable and cloud reranker is unavailable; using Vector Search.";
+  } else if (requestedMode === "adaptive") {
+    if (!rerankerReasons.length) {
+      appliedMode = "vector";
+    } else if (input.textSearchAvailable) {
+      appliedMode = "hybrid";
+      fallbackReason = CLOUD_RERANK_UNAVAILABLE;
+    } else {
+      appliedMode = "vector";
+      fallbackReason = ADAPTIVE_TEXT_INDEX_UNAVAILABLE;
+    }
+  }
+
+  return {
+    requestedMode,
+    appliedMode,
+    retrievalPath: appliedMode,
+    capabilities,
+    ...(fallbackReason ? { fallbackReason } : {}),
+    rerankerTriggered: false,
+    rerankerReasons,
+    vectorCandidates: input.vectorRows.length,
+  };
+}
+
+function annotateVectorRows(rows: Document[], diagnostics: RetrievalDiagnostics): Document[] {
+  return rows.map((row, index) => ({
+    ...row,
+    retrieval_channels: ["vector"],
+    vector_rank: index + 1,
+    retrieval_path: diagnostics.retrievalPath,
+    ...(diagnostics.fallbackReason ? { fallback_reason: diagnostics.fallbackReason } : {}),
+  }));
+}
+
+function annotateSparseRows(rows: Document[], diagnostics: RetrievalDiagnostics): Document[] {
+  const maxBm25 = Math.max(0, ...rows.map((row) => Number(row.bm25_score || 0)));
+  return rows.map((row, index) => ({
+    ...row,
+    bm25_rank: index + 1,
+    retrieval_channels: ["bm25"],
+    score: maxBm25 ? Number(row.bm25_score || 0) / maxBm25 : 0,
+    retrieval_path: diagnostics.retrievalPath,
+    ...(diagnostics.fallbackReason ? { fallback_reason: diagnostics.fallbackReason } : {}),
+  }));
+}
+
+function annotateHybridRows(rows: Document[], diagnostics: RetrievalDiagnostics): Document[] {
+  const maxBm25 = Math.max(0, ...rows.map((row) => Number(row.bm25_score || 0)));
+  return rows.map((row) => ({
+    ...row,
+    retrieval_path: diagnostics.retrievalPath,
+    ...(row.score === undefined ? { score: maxBm25 ? Number(row.bm25_score || 0) / maxBm25 : 0 } : {}),
+    ...(diagnostics.fallbackReason ? { fallback_reason: diagnostics.fallbackReason } : {}),
+  }));
+}
 
 export function selectParentContext(candidates: Source[], intent: AnswerIntent, topK: number, question = ""): Source[] {
   const selected: Source[] = [];
@@ -140,59 +253,141 @@ async function retrieveSpaceCandidates(
   queryVector: number[],
   spaceId: string,
   settings: RetrievalSettings,
-): Promise<Source[]> {
+): Promise<{ sources: Source[]; diagnostics: RetrievalDiagnostics }> {
   const candidateLimit = Math.min(Math.max(settings.topK * 10, 30), 50);
-  const [vectorDocs, sparseDocs] = await Promise.all([
+  const searchSparse = async (): Promise<SparseResult> => {
+    try {
+      const rows = await collection.aggregate([
+        { $search: {
+          index: process.env.CLOUD_TEXT_INDEX_NAME || "text_index_public",
+          compound: {
+            must: [{ text: { query: question, path: ["title", "retrieval_text", "body", "metadata.category"] } }],
+            filter: [
+              { equals: { path: "visibility", value: "public" } },
+              { equals: { path: "space_id", value: spaceId } },
+            ],
+          },
+        } },
+        { $limit: candidateLimit },
+        { $project: { _id: 0, embedding: 0, bm25_score: { $meta: "searchScore" } } },
+      ]).toArray();
+      return { rows, available: true };
+    } catch {
+      return { rows: [], available: false };
+    }
+  };
+  const [vectorDocs, sparse] = await Promise.all([
     collection.aggregate(buildVectorPipeline(queryVector, settings.topK, candidateLimit, [spaceId])).toArray(),
-    collection.aggregate([
-      { $search: {
-        index: process.env.CLOUD_TEXT_INDEX_NAME || "text_index_public",
-        compound: {
-          must: [{ text: { query: question, path: ["title", "retrieval_text", "body", "metadata.category"] } }],
-          filter: [
-            { equals: { path: "visibility", value: "public" } },
-            { equals: { path: "space_id", value: spaceId } },
-          ],
-        },
-      } },
-      { $limit: candidateLimit },
-      { $project: { _id: 0, embedding: 0, bm25_score: { $meta: "searchScore" } } },
-    ]).toArray().catch(() => []),
+    searchSparse(),
   ]);
-  const docs = reciprocalRankFusion(vectorDocs, sparseDocs);
-  const maxBm25 = Math.max(0, ...docs.map((doc) => Number(doc.bm25_score || 0)));
-  docs.forEach((doc) => {
-    doc.space_id = doc.space_id || spaceId;
-    if (doc.score === undefined) doc.score = maxBm25 ? Number(doc.bm25_score || 0) / maxBm25 : 0;
-  });
-  return docs.map(mapSource).filter((source): source is Source => Boolean(source));
+  const diagnostics = {
+    ...chooseCloudRetrievalPath({
+      requestedMode: settings.retrievalMode,
+      question,
+      vectorRows: vectorDocs,
+      textSearchAvailable: sparse.available,
+    }),
+    bm25Candidates: sparse.rows.length,
+  };
+  let docs: Document[];
+  if (diagnostics.appliedMode === "bm25") {
+    docs = annotateSparseRows(sparse.rows, diagnostics);
+  } else if (diagnostics.appliedMode === "hybrid" || diagnostics.appliedMode === "hybrid-rerank") {
+    docs = annotateHybridRows(reciprocalRankFusion(vectorDocs, sparse.rows), diagnostics);
+  } else {
+    docs = annotateVectorRows(vectorDocs, diagnostics);
+  }
+  docs.forEach((doc) => { doc.space_id = doc.space_id || spaceId; });
+  return {
+    sources: docs.map(mapSource).filter((source): source is Source => Boolean(source)),
+    diagnostics,
+  };
 }
 
-export async function retrieve(question: string, settings: RetrievalSettings): Promise<Source[]> {
+type RetrievalRun = {
+  sources: Source[];
+  diagnostics: RetrievalDiagnostics;
+};
+
+function mergeDiagnostics(runs: RetrievalRun[], requestedMode: RetrievalMode): RetrievalDiagnostics {
+  const fallbackReason = runs.map((run) => run.diagnostics.fallbackReason).find(Boolean);
+  const rerankerReasons = [...new Set(runs.flatMap((run) => run.diagnostics.rerankerReasons || []))];
+  const appliedMode = (runs.some((run) => run.diagnostics.appliedMode === "hybrid") ? "hybrid" : runs[0]?.diagnostics.appliedMode || "vector") as RetrievalMode;
+  return {
+    requestedMode,
+    appliedMode,
+    retrievalPath: appliedMode,
+    capabilities: {
+      vector: true,
+      bm25: runs.every((run) => run.diagnostics.capabilities.bm25),
+      hybrid: runs.every((run) => run.diagnostics.capabilities.hybrid),
+      rerank: false,
+      adaptive: true,
+    },
+    ...(fallbackReason ? { fallbackReason } : {}),
+    rerankerTriggered: false,
+    rerankerReasons,
+    vectorCandidates: runs.reduce((total, run) => total + (run.diagnostics.vectorCandidates || 0), 0),
+    bm25Candidates: runs.reduce((total, run) => total + (run.diagnostics.bm25Candidates || 0), 0),
+  };
+}
+
+async function retrieveWithDiagnostics(question: string, settings: RetrievalSettings): Promise<RetrievalRun> {
   const db = await cloudDb();
   const collection = db.collection(process.env.CLOUD_COLLECTION_NAME || "portfolio_knowledge_public");
   const queryVector = await embedQuery(question);
   const spaceIds = normalizeSpaceIds(settings.spaceIds);
-  const [groups, names] = await Promise.all([
+  const [runs, names] = await Promise.all([
     Promise.all(spaceIds.map((spaceId) => retrieveSpaceCandidates(collection, question, queryVector, spaceId, settings))),
     spaceNameMap(spaceIds),
   ]);
+  const groups = runs.map((run) => run.sources);
   groups.flat().forEach((source) => { source.spaceName = names.get(source.spaceId) || source.spaceName || source.spaceId; });
-  return mergeSpaceCandidates(groups, settings.topK, settings.scoreThreshold);
+  return {
+    sources: mergeSpaceCandidates(groups, settings.topK, settings.scoreThreshold),
+    diagnostics: mergeDiagnostics(runs, settings.retrievalMode || "vector"),
+  };
+}
+
+export async function retrieve(question: string, settings: RetrievalSettings): Promise<Source[]> {
+  return (await retrieveWithDiagnostics(question, settings)).sources;
 }
 
 export async function retrieveForQuestion(question: string, settings: RetrievalSettings): Promise<RetrievalResult> {
   const intent = classifyAnswerIntent(question);
-  if (shouldRefuseWithoutRetrieval(question)) return { candidates: [], selectedContext: [], intent };
+  if (shouldRefuseWithoutRetrieval(question)) {
+    const requestedMode = settings.retrievalMode || "vector";
+    return {
+      candidates: [],
+      selectedContext: [],
+      intent,
+      retrieval: {
+        requestedMode,
+        appliedMode: "vector",
+        retrievalPath: "vector",
+        capabilities: { vector: true, bm25: false, hybrid: false, rerank: false, adaptive: true },
+        fallbackReason: "Question is outside the public retrieval boundary.",
+        rerankerTriggered: false,
+        rerankerReasons: [],
+        vectorCandidates: 0,
+        bm25Candidates: 0,
+      },
+    };
+  }
   const plan = planQuery(question);
   const expandedSettings = { ...settings, topK: candidateLimit(intent, settings.topK) };
   if (plan.mode === "simple") {
-    const candidates = await retrieve(question, expandedSettings);
-    return { candidates, selectedContext: selectParentContext(candidates, intent, settings.topK, question), intent };
+    const run = await retrieveWithDiagnostics(question, expandedSettings);
+    return {
+      candidates: run.sources,
+      selectedContext: selectParentContext(run.sources, intent, settings.topK, question),
+      intent,
+      retrieval: run.diagnostics,
+    };
   }
-  const groups = await Promise.all(plan.subqueries.map((subquery) => retrieve(subquery, expandedSettings)));
+  const runs = await Promise.all(plan.subqueries.map((subquery) => retrieveWithDiagnostics(subquery, expandedSettings)));
   const merged = new Map<string, Source & { agentQueryHits: number }>();
-  groups.flat().forEach((source) => {
+  runs.flatMap((run) => run.sources).forEach((source) => {
     const key = source.chunkId || source.docId;
     const existing = merged.get(key);
     if (!existing) merged.set(key, { ...source, agentQueryHits: 1 });
@@ -205,5 +400,10 @@ export async function retrieveForQuestion(question: string, settings: RetrievalS
   const candidates = [...merged.values()]
     .sort((left, right) => right.agentQueryHits - left.agentQueryHits || (right.fusionScore || right.score) - (left.fusionScore || left.score))
     .slice(0, candidateLimit(intent, settings.topK));
-  return { candidates, selectedContext: selectParentContext(candidates, intent, settings.topK, question), intent };
+  return {
+    candidates,
+    selectedContext: selectParentContext(candidates, intent, settings.topK, question),
+    intent,
+    retrieval: mergeDiagnostics(runs, settings.retrievalMode || "vector"),
+  };
 }

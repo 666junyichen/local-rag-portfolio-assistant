@@ -39,6 +39,7 @@ describe("cloud seed safety", () => {
   });
 
   it("assigns repository seed documents to the default Portfolio space", async () => {
+    // @ts-expect-error The executable seed script intentionally has no declaration file.
     const { chunkDocuments, normalizePublicDocuments } = await import("../scripts/seed-atlas.mjs");
     const [document] = normalizePublicDocuments([{ title: "Public note", body: "Unique public evidence." }]);
     const [chunk] = chunkDocuments([document]);
@@ -82,5 +83,69 @@ describe("cloud seed safety", () => {
   it("supports a spaces-only migration that never calls Gemini embeddings", () => {
     expect(script).toContain("--spaces-only");
     expect(script).toContain("Space migration complete without generating embeddings");
+  });
+
+  it("reconciles the public text index without deleting unrelated Atlas indexes", async () => {
+    // @ts-expect-error The executable seed script intentionally has no declaration file.
+    const { reconcilePublicTextIndex } = await import("../scripts/seed-atlas.mjs");
+    const calls: Array<{ method: string; value: unknown }> = [];
+    const collection = {
+      createSearchIndex: async (value: unknown) => calls.push({ method: "createSearchIndex", value }),
+      updateSearchIndex: async (name: string, definition: unknown) => calls.push({ method: "updateSearchIndex", value: { name, definition } }),
+      dropSearchIndex: async (name: string) => calls.push({ method: "dropSearchIndex", value: name }),
+    };
+
+    await expect(reconcilePublicTextIndex(collection, [], "text_index_public")).resolves.toEqual({
+      name: "text_index_public",
+      status: "created",
+      available: true,
+    });
+
+    expect(calls).toEqual([
+      expect.objectContaining({
+        method: "createSearchIndex",
+        value: expect.objectContaining({ name: "text_index_public", type: "search" }),
+      }),
+    ]);
+    expect(calls.some((call) => call.method === "dropSearchIndex")).toBe(false);
+  });
+
+  it("adds missing public text index fields without overwriting existing analyzers", async () => {
+    // @ts-expect-error The executable seed script intentionally has no declaration file.
+    const { reconcilePublicTextIndex } = await import("../scripts/seed-atlas.mjs");
+    const calls: Array<{ method: string; value: unknown }> = [];
+    const collection = {
+      createSearchIndex: async (value: unknown) => calls.push({ method: "createSearchIndex", value }),
+      updateSearchIndex: async (name: string, definition: unknown) => calls.push({ method: "updateSearchIndex", value: { name, definition } }),
+    };
+    const existing = {
+      name: "text_index_public",
+      latestDefinition: {
+        analyzer: "lucene.english",
+        mappings: {
+          dynamic: true,
+          fields: {
+            title: { type: "string", analyzer: "lucene.english" },
+            body: { type: "string" },
+          },
+        },
+      },
+    };
+
+    await expect(reconcilePublicTextIndex(collection, [existing], "text_index_public")).resolves.toMatchObject({
+      name: "text_index_public",
+      status: "updated",
+      available: true,
+      addedFields: expect.arrayContaining(["space_id", "retrieval_text"]),
+    });
+
+    expect(calls).toHaveLength(1);
+    const update = calls[0]?.value as { name: string; definition: { analyzer: string; mappings: { dynamic: boolean; fields: Record<string, unknown> } } };
+    expect(update.name).toBe("text_index_public");
+    expect(update.definition.analyzer).toBe("lucene.english");
+    expect(update.definition.mappings.dynamic).toBe(true);
+    expect(update.definition.mappings.fields.title).toEqual({ type: "string", analyzer: "lucene.english" });
+    expect(update.definition.mappings.fields.space_id).toEqual({ type: "token" });
+    expect(calls.some((call) => call.method === "createSearchIndex")).toBe(false);
   });
 });

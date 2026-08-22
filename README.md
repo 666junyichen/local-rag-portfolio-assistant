@@ -14,7 +14,7 @@ The project began with the Google for Developers and MongoDB **Building with RAG
 ## What It Demonstrates
 
 1. **Ingestion:** parse JSON, Markdown, TXT, CSV, DOCX, and PDF; clean, deduplicate, chunk, embed, and index.
-2. **Retrieval:** local mode uses independent Vector Search and BM25 candidate pools, RRF fusion, and an optional Cross-Encoder reranker; the deployed cloud mode uses stable public-only Vector Search.
+2. **Retrieval:** local mode uses independent Vector Search and BM25 candidate pools, RRF fusion, adaptive routing, and an optional Cross-Encoder reranker; cloud mode accepts the same retrieval-mode contract and reports the actual public-only path plus any fallback.
 3. **Context engineering:** token-aware chunks store raw evidence separately from title, project, source, and update-date retrieval prefixes.
 4. **Grounded generation:** combine traceable profile fact cards with selected raw evidence and return a clear fallback when evidence is insufficient.
 5. **Evaluation:** compare baseline, hybrid, and reranked retrieval on a fixed 50-question bilingual benchmark using hit/recall@k, MRR, nDCG, privacy, no-answer, and latency metrics.
@@ -52,7 +52,7 @@ The two modes use separate collections and indexes because their embedding model
 | Local | `portfolio_knowledge_local` | multilingual MiniLM (default) or `voyageai/voyage-4-nano` | Ollama (`qwen2.5:3b` or Gemma) |
 | Cloud | `portfolio_knowledge_public` | `gemini-embedding-001` | Gemini Flash |
 
-Local mode keeps Vector Search and text-search indexes separate, fuses their rankings with RRF, and may add a multilingual Cross-Encoder. The current Vercel deployment stays lightweight and uses public-only Vector Search because the Atlas free tier has no spare full-text search index slot. Cloud BM25 code remains an optional capability and must not be described as active until a text index is provisioned and verified.
+Local mode keeps Vector Search and text-search indexes separate, fuses their rankings with RRF, and may add a multilingual Cross-Encoder. Cloud requests now use the same mode names (`vector`, `bm25`, `hybrid`, `hybrid-rerank`, and `adaptive`) but resolve them through public Atlas capabilities on each request. If `text_index_public` is unavailable, cloud `bm25`, `hybrid`, and `adaptive` precision paths explicitly report a Vector Search fallback instead of silently pretending Hybrid is active. Do not make adaptive the public default until a current cloud benchmark beats the Vector baseline without no-answer or privacy regression.
 
 ### Measured retrieval baseline
 
@@ -230,6 +230,8 @@ npm run dev
 
 `npm run seed:atlas` is validation-only. Writing repository documents to Atlas requires the explicit `seed:atlas:apply` command and its built-in confirmation token. This prevents a retained or locally edited `data/portfolio_docs.json` from silently repopulating a deliberately empty public knowledge base.
 
+`seed:atlas:apply` reconciles `text_index_public` without deleting unrelated Atlas indexes. If Atlas refuses the Search index because the tier has no remaining index capacity, the app continues with Vector Search and `/api/retrieve` reports the fallback in its retrieval diagnostics.
+
 When the retrieval chunks already exist and only the new public Knowledge catalog needs to be populated, use the quota-free catalog backfill. It does not call Gemini or regenerate embeddings:
 
 ```powershell
@@ -241,6 +243,14 @@ After upgrading an existing Atlas deployment to Knowledge Spaces, run the quota-
 ```powershell
 node scripts/seed-atlas.mjs --spaces-only
 ```
+
+Compare public cloud retrieval modes without calling the chat/generation endpoint:
+
+```powershell
+npm run evaluate:cloud -- --base-url=https://your-deployment.example --modes=vector,adaptive,hybrid
+```
+
+The report is written to `evals/latest-cloud-retrieval.json`, which is Git ignored. Keep the cloud default on Vector unless the report shows an adaptive or hybrid candidate meeting or beating Vector on Hit@5 and MRR with `no_answer_accuracy=1.000` and `privacy_violations=0`.
 
 The Vercel application provides:
 
@@ -310,6 +320,7 @@ $env:HF_HUB_OFFLINE='1'; $env:TRANSFORMERS_OFFLINE='1'; .\.venv\Scripts\python.e
 npm test
 npm run build
 node scripts/seed-atlas.mjs --validate
+npm run evaluate:cloud -- --base-url=https://your-deployment.example --limit=5
 ```
 
 ## Resume Description
@@ -335,6 +346,7 @@ components/                    Chat, evidence, navigation, retrieval UI
 lib/cloud-rag/                 Atlas, Gemini, validation, prompt, rate limit, SSE
 scripts/ingest.py              Local index build
 scripts/evaluate_resume_chunks.py  In-memory semantic-resume evaluation
+scripts/evaluate-cloud-retrieval.mjs  Public `/api/retrieve` benchmark
 scripts/seed-atlas.mjs         Validated public Atlas seed
 tests/                         Python and TypeScript unit tests
 ```

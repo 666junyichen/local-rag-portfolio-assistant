@@ -38,7 +38,11 @@ The real local catalog was migrated, the Vector/BM25 indexes were rebuilt, the m
 
 ## Remaining Cloud Limitation
 
-The public Atlas deployment currently reports `textIndex=false`, so the public Demo remains on stable Vector Search. Local Retrieval Lab provides BM25, Hybrid RRF, and Hybrid + Rerank. Do not describe cloud BM25 as enabled until Atlas index capacity is available and the public collection is reseeded.
+The public Atlas deployment previously reported `textIndex=false`, so the public Demo remained on stable Vector Search. Cloud retrieval now accepts the same mode names as local retrieval and reports capability-aware fallback diagnostics, but cloud BM25 and Hybrid are active only when `text_index_public` exists and is queryable. Do not describe cloud BM25 as enabled until the deployed `/api/health` reports the text index ready and `/api/retrieve` returns `capabilities.bm25=true`.
+
+## Remaining Cloud Benchmark Gate
+
+Run `npm run evaluate:cloud -- --base-url=<deployed-url> --modes=vector,adaptive,hybrid` against the current deployment, and rerun after `text_index_public` becomes READY if `/api/health` still reports `textIndex=false`. Keep Vector as the cloud default unless adaptive or hybrid meets or beats Vector on Hit@5 and MRR with no-answer accuracy `1.000` and privacy violations `0`. A report where adaptive or hybrid degrades to Vector is useful operational evidence, but it does not justify changing the default.
 
 ## Retrieval Calibration Evidence
 

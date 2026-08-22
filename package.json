@@ -8,7 +8,8 @@
     "start": "next start",
     "test": "vitest run",
     "seed:atlas": "node scripts/seed-atlas.mjs --validate",
-    "seed:atlas:apply": "node scripts/seed-atlas.mjs --apply --confirm=SEED_PUBLIC_PORTFOLIO"
+    "seed:atlas:apply": "node scripts/seed-atlas.mjs --apply --confirm=SEED_PUBLIC_PORTFOLIO",
+    "evaluate:cloud": "node scripts/evaluate-cloud-retrieval.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.7.1",

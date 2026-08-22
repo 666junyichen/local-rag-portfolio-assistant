@@ -137,6 +137,69 @@ export async function syncRepoSeedCatalog({ documentsCollection, documents, sess
   );
 }
 
+export const publicTextIndexDefinition = { mappings: {
+  dynamic: false,
+  fields: {
+    title: { type: "string" },
+    body: { type: "string" },
+    retrieval_text: { type: "string" },
+    visibility: { type: "token" },
+    space_id: { type: "token" },
+    metadata: { type: "document", dynamic: true },
+  },
+} };
+
+export function mergePublicTextIndexDefinition(existingDefinition = {}) {
+  const existingMappings = existingDefinition.mappings && typeof existingDefinition.mappings === "object"
+    ? existingDefinition.mappings
+    : {};
+  const existingFields = existingMappings.fields && typeof existingMappings.fields === "object"
+    ? existingMappings.fields
+    : {};
+  return {
+    ...publicTextIndexDefinition,
+    ...existingDefinition,
+    mappings: {
+      ...publicTextIndexDefinition.mappings,
+      ...existingMappings,
+      fields: {
+        ...publicTextIndexDefinition.mappings.fields,
+        ...existingFields,
+        ...Object.fromEntries(
+          Object.entries(publicTextIndexDefinition.mappings.fields)
+            .filter(([field]) => !existingFields[field]),
+        ),
+      },
+    },
+  };
+}
+
+export async function reconcilePublicTextIndex(collection, existingSearchIndexes, textIndexName) {
+  const existingTextIndex = existingSearchIndexes.find((index) => index.name === textIndexName);
+  const textDefinition = existingTextIndex?.latestDefinition || existingTextIndex?.definition;
+  const requiredFields = Object.keys(publicTextIndexDefinition.mappings.fields);
+  const existingFields = textDefinition?.mappings?.fields || {};
+  const missingFields = requiredFields.filter((field) => !existingFields[field]);
+  try {
+    if (!existingTextIndex) {
+      await collection.createSearchIndex({ name: textIndexName, type: "search", definition: publicTextIndexDefinition });
+      return { name: textIndexName, status: "created", available: true };
+    }
+    if (!textDefinition || missingFields.length) {
+      await collection.updateSearchIndex(textIndexName, mergePublicTextIndexDefinition(textDefinition || {}));
+      return { name: textIndexName, status: "updated", available: true, addedFields: missingFields };
+    }
+    return { name: textIndexName, status: "ready", available: true };
+  } catch (error) {
+    return {
+      name: textIndexName,
+      status: "unavailable",
+      available: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 async function embedDocument(text) {
   const model = process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001";
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent`, {
@@ -214,17 +277,8 @@ async function main() {
         fields: [...(vectorDefinition.fields || []), { type: "filter", path: "space_id" }],
       });
     }
-    const textIndex = indexes.find((index) => index.name === textIndexName);
-    const textDefinition = textIndex?.latestDefinition || textIndex?.definition;
-    if (textDefinition && !textDefinition.mappings?.fields?.space_id) {
-      await collection.updateSearchIndex(textIndexName, {
-        ...textDefinition,
-        mappings: {
-          ...textDefinition.mappings,
-          fields: { ...(textDefinition.mappings?.fields || {}), space_id: { type: "token" } },
-        },
-      }).catch(() => console.warn("Atlas text index could not be updated; vector retrieval remains available."));
-    }
+    const textIndexResult = await reconcilePublicTextIndex(collection, indexes, textIndexName);
+    if (!textIndexResult.available) console.warn(`Atlas text index unavailable: ${textIndexResult.error}. Vector retrieval remains available.`);
     await collection.createIndex({ visibility: 1, space_id: 1, doc_id: 1 });
     await documentsCollection.createIndex({ doc_id: 1 }, { unique: true });
     await client.close();
@@ -304,27 +358,9 @@ async function main() {
   if (!existingSearchIndexes.some((index) => index.name === indexName)) await collection.createSearchIndex({ name: indexName, type: "vectorSearch", definition: vectorIndexDefinition });
   else if (!vectorDefinition?.fields?.some((field) => field.path === "space_id")) await collection.updateSearchIndex(indexName, vectorIndexDefinition);
 
-  const textIndexDefinition = { mappings: {
-    dynamic: false,
-    fields: {
-      title: { type: "string" },
-      body: { type: "string" },
-      retrieval_text: { type: "string" },
-      visibility: { type: "token" },
-      space_id: { type: "token" },
-      metadata: { type: "document", dynamic: true },
-    },
-  } };
-  const existingTextIndex = existingSearchIndexes.find((index) => index.name === textIndexName);
-  if (!existingTextIndex) {
-    try {
-      await collection.createSearchIndex({ name: textIndexName, type: "search", definition: textIndexDefinition });
-    } catch {
-      console.warn("Atlas text index was not created; vector retrieval remains available.");
-    }
-  } else if (!existingTextIndex.latestDefinition?.mappings?.fields?.space_id && !existingTextIndex.definition?.mappings?.fields?.space_id) {
-    await collection.updateSearchIndex(textIndexName, textIndexDefinition).catch(() => console.warn("Atlas text index could not be updated; vector retrieval remains available."));
-  }
+  const textIndexResult = await reconcilePublicTextIndex(collection, existingSearchIndexes, textIndexName);
+  console.log(`Text index ${textIndexName}: ${textIndexResult.status}`);
+  if (!textIndexResult.available) console.warn(`Atlas text index unavailable: ${textIndexResult.error}. Vector retrieval remains available.`);
   await collection.createIndex({ visibility: 1, space_id: 1, doc_id: 1 });
   await collection.createIndex({ chunk_id: 1 }, { unique: true, sparse: true });
   await documentsCollection.createIndex({ doc_id: 1 }, { unique: true });

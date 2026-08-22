@@ -24,13 +24,18 @@ export async function POST(request: Request) {
       async start(controller) {
         const send = (event: string, payload: unknown) => controller.enqueue(encoder.encode(sse(event, payload)));
         try {
-          send("retrieval", { sources: retrieval.selectedContext, settings: body.settings, intent: retrieval.intent });
+          send("retrieval", {
+            sources: retrieval.selectedContext,
+            settings: body.settings,
+            intent: retrieval.intent,
+            retrieval: retrieval.retrieval,
+          });
           if (!retrieval.selectedContext.length) {
             const fallback = body.language === "zh"
               ? "当前公开知识库没有足够依据回答这个问题。"
               : "The public knowledge base does not contain enough evidence to answer this question.";
             send("token", { text: fallback });
-            send("done", { intent: retrieval.intent, finishReason: null, truncated: false });
+            send("done", { intent: retrieval.intent, retrieval: retrieval.retrieval, finishReason: null, truncated: false });
             return;
           }
 
@@ -58,6 +63,7 @@ export async function POST(request: Request) {
           }
           send("done", {
             intent: retrieval.intent,
+            retrieval: retrieval.retrieval,
             finishReason: generation.finishReason,
             truncated: generation.truncated,
           });

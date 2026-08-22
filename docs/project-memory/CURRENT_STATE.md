@@ -1,14 +1,18 @@
 # Current State
 
-- Active branch: `main`
-- Active phase: `Public Chunk Preview Completeness`
-- Last verified: `2026-08-15`
-- Updated: `2026-08-15T19:35:00+10:00`
-- Next action: Review every answer parent in Publish Studio and publish only after confirming that each expected project group is present.
+- Active branch: `feat/adaptive-retrieval-parity`
+- Active phase: `Adaptive Retrieval Parity`
+- Last verified: `2026-08-22`
+- Updated: `2026-08-22T19:12:03+10:00`
+- Next action: Push and deploy Task 16, run the public cloud retrieval benchmark against the deployed URL, and rerun after `text_index_public` is READY if the first run reports Vector fallback. Keep Vector as the cloud default unless adaptive or hybrid beats the baseline without no-answer or privacy regression. Owner must still review Publish Studio answer parents before publishing new resume drafts.
 
 ## Status
 
-Tasks 0-15 are completed and reviewed. Owner production acceptance now covers sign-in, email and phone PII blocking, sanitized preview, publication, Knowledge visibility, grounded Retrieve and Chat responses, unpublish, and permanent synthetic-data cleanup. A no-evidence Chat stream regression found during unpublish verification was fixed and deployed; an active empty space now returns a grounded refusal with HTTP 200 instead of a server error.
+Tasks 0-16 are completed and reviewed. Owner production acceptance covers sign-in, email and phone PII blocking, sanitized preview, publication, Knowledge visibility, grounded Retrieve and Chat responses, unpublish, and permanent synthetic-data cleanup. A no-evidence Chat stream regression found during unpublish verification was fixed and deployed; an active empty space now returns a grounded refusal with HTTP 200 instead of a server error.
+
+Task 16 aligns local and cloud retrieval decisions without merging their data boundaries. Upload processing profile recommendations now prefer document structure and body evidence before weak file-name hints: short generic documents stay Standard, long generic documents use Parent-child, and resumes can be detected from title or multi-section resume body structure. Cloud `/api/retrieve` and Chat now accept `vector`, `bm25`, `hybrid`, `hybrid-rerank`, and `adaptive`, and return requested mode, applied mode, capabilities, fallback reason, and source path. If Atlas Search is unavailable, cloud BM25/Hybrid/Adaptive precision paths report a Vector fallback instead of silently pretending Hybrid is active.
+
+Task 16 also makes `text_index_public` reconciliation explicit in the Atlas seed script and adds a public-safe `/api/retrieve` benchmark script. The benchmark writes ignored reports under `evals/latest-cloud-retrieval*.json` and must be run against the deployed URL before making adaptive or hybrid the public default.
 
 Task 15 fixes a Publish Studio presentation defect that made complete resume-semantic output look incomplete. The server generated 35 answer parents and 48 retrieval children, but the page rendered only the first 20 children. The Studio now exposes all generated chunks, switches between child matches and parent answer contexts, and reports distinct project semantic groups.
 
@@ -44,6 +48,7 @@ Phase B's adaptive path triggered the reranker for 15 of 50 benchmark questions.
 | 13 | completed | true | true | Local empty-state reset and cloud semantic resume v2 retrieval accepted in production |
 | 14 | completed | true | true | Shared Python/TypeScript chunking contract and Owner-only Knowledge management entry |
 | 15 | completed | true | true | Complete public parent/child preview with distinct project-group evidence |
+| 16 | completed | true | true | Adaptive retrieval contract, cloud fallback diagnostics, text-index reconciliation, and public benchmark script |
 
 ## Known Blockers
 

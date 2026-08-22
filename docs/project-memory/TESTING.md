@@ -28,6 +28,8 @@ The tests cover valid temporary Git repositories, missing required files and key
 
 ## Phase Evidence
 
+- Task 16 on 2026-08-22: 41 focused TypeScript tests passed across cloud processing, shared profiles, cloud retrieval, health, chat/retrieve routes, and seed safety. 147 focused Python tests passed for processing-profile, retrieval planning, and project-memory validation. The cloud benchmark script smoke completed against an intentionally unreachable URL and wrote an ignored report instead of crashing. The Next.js production build compiled 19 pages and API routes. `npx tsc --noEmit` still fails only in pre-existing test typing issues in `tests/cloud-publish-auth.test.ts` and `tests/cloud-publish-lifecycle.test.ts`.
+
 - Task 15 on 2026-08-15: 16 focused Publish Studio preview and cloud processing tests passed. The regression test proves a 48-child preview is returned without truncation and that all 35 parents remain selectable; the Next.js production build compiled all 19 routes successfully.
 
 - Task 14 on 2026-08-15: 23 focused TypeScript tests passed across the Owner entry, shared profiles, cloud processing, and cross-runtime parity suites; 62 focused Python profile, hierarchy, and contract tests passed; the Next.js production build completed successfully.

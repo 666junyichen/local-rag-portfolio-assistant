@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-08-22: Cloud And Local Share Retrieval Decisions, Not Data
+
+Use the same upload profile categories and retrieval mode names in local and cloud: `vector`, `bm25`, `hybrid`, `hybrid-rerank`, and `adaptive`. Keep the execution adapters separate because local uses private collections, local embeddings, BM25, and an optional cached Cross-Encoder, while cloud uses public-only Atlas indexes and Gemini. Cloud must report the requested mode, applied mode, capability flags, and fallback reason whenever Atlas Search or reranking is unavailable.
+
+Do not make cloud adaptive or hybrid the public default from design preference alone. First run the public `/api/retrieve` benchmark against the deployed URL and keep Vector unless the candidate mode meets or beats Vector on relevance without no-answer or privacy regression.
+
 ## 2026-08-15: Chunking Is Shared, Embeddings Stay Runtime-Specific
 
 Treat local Python hierarchy output as the behavioral contract and reproduce that contract in cloud TypeScript using one shared processing-profile JSON file and fixed post-parser fixtures. Keep local SentenceTransformer and cloud Gemini embedding providers separate: matching chunk boundaries and metadata does not require shipping Python models to Vercel or sharing vector dimensions.

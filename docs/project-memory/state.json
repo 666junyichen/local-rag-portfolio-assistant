@@ -1,7 +1,7 @@
 {
     "schema_version":  1,
-    "active_branch":  "main",
-    "active_phase":  "Public Chunk Preview Completeness",
+    "active_branch":  "feat/adaptive-retrieval-parity",
+    "active_phase":  "Adaptive Retrieval Parity",
     "tasks":  [
                   {
                       "id":  0,
@@ -356,10 +356,43 @@
                                                 "verified_at":  "2026-08-15"
                                             }
                                         ]
+                  },
+                  {
+                      "id":  16,
+                      "title":  "Adaptive retrieval parity and cloud fallback",
+                      "status":  "completed",
+                      "reviewed":  true,
+                      "final_quality_approved":  true,
+                      "test_evidence":  [
+                                            {
+                                                "command":  "npm.cmd test -- tests/cloud-rag.test.ts tests/cloud-chat-route.test.ts tests/cloud-retrieve-route.test.ts tests/cloud-seed-safety.test.ts tests/cloud-publish-processing.test.ts tests/cloud-shared-processing-profiles.test.ts tests/cloud-health-route.test.ts",
+                                                "result":  "41 focused cloud retrieval, health, route, seed, and processing tests passed",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-22"
+                                            },
+                                            {
+                                                "command":  ".\\.venv\\Scripts\\python.exe -m pytest tests/test_processing_profiles.py tests/test_query_planning.py tests/test_portfolio_retrieval.py tests/test_project_memory.py -q",
+                                                "result":  "147 focused Python processing-profile, retrieval, and project-memory tests passed",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-22"
+                                            },
+                                            {
+                                                "command":  "node scripts/evaluate-cloud-retrieval.mjs --limit=1 --modes=vector --base-url=http://127.0.0.1:9 --out=evals/latest-cloud-retrieval-smoke.json",
+                                                "result":  "Cloud benchmark script handled an unreachable URL and wrote an ignored report",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-22"
+                                            },
+                                            {
+                                                "command":  "npm.cmd run build",
+                                                "result":  "Next.js production build passed with 19 pages and API routes",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-22"
+                                            }
+                                        ]
                   }
               ],
-    "last_verified":  "2026-08-15",
+    "last_verified":  "2026-08-22",
     "known_blockers":  [],
-    "next_action":  "Review every answer parent in Publish Studio and publish only after confirming that each expected project group is present.",
-    "updated_at":  "2026-08-15T19:35:00+10:00"
+    "next_action":  "Push and deploy Task 16, run the public cloud retrieval benchmark against the deployed URL, and rerun after `text_index_public` is READY if the first run reports Vector fallback. Keep Vector as the cloud default unless adaptive or hybrid beats the baseline without no-answer or privacy regression. Owner must still review Publish Studio answer parents before publishing new resume drafts.",
+    "updated_at":  "2026-08-22T19:12:03+10:00"
 }

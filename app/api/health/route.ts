@@ -16,5 +16,16 @@ export async function GET() {
   } catch {
     // Health output deliberately contains no configuration values.
   }
-  return Response.json(status, { status: status.atlas && status.gemini && status.vectorIndex && status.textIndex ? 200 : 503 });
+  const ready = status.atlas && status.gemini && status.vectorIndex;
+  return Response.json({
+    ...status,
+    ready,
+    retrievalCapabilities: {
+      vector: status.vectorIndex,
+      bm25: status.textIndex,
+      hybrid: status.textIndex,
+      adaptive: true,
+      rerank: false,
+    },
+  }, { status: ready ? 200 : 503 });
 }

@@ -1,10 +1,20 @@
 export type Language = "zh" | "en";
 export type AnswerIntent = "exhaustive" | "ranked" | "fact";
+export type RetrievalMode = "vector" | "bm25" | "hybrid" | "hybrid-rerank" | "adaptive";
+
+export type RetrievalCapabilities = {
+  vector: boolean;
+  bm25: boolean;
+  hybrid: boolean;
+  rerank: boolean;
+  adaptive: boolean;
+};
 
 export type RetrievalSettings = {
   topK: number;
   scoreThreshold: number | null;
   spaceIds: string[];
+  retrievalMode?: RetrievalMode;
 };
 
 export type Source = {
@@ -27,12 +37,27 @@ export type Source = {
   vectorRank?: number;
   bm25Rank?: number;
   fusionScore?: number;
+  retrievalPath?: RetrievalMode;
+  fallbackReason?: string;
+};
+
+export type RetrievalDiagnostics = {
+  requestedMode: RetrievalMode;
+  appliedMode: RetrievalMode;
+  retrievalPath: RetrievalMode;
+  capabilities: RetrievalCapabilities;
+  fallbackReason?: string;
+  rerankerTriggered?: boolean;
+  rerankerReasons?: string[];
+  vectorCandidates?: number;
+  bm25Candidates?: number;
 };
 
 export type RetrievalResult = {
   candidates: Source[];
   selectedContext: Source[];
   intent: AnswerIntent;
+  retrieval: RetrievalDiagnostics;
 };
 
 export type GenerationResult = {

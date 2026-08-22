@@ -62,13 +62,80 @@ export type ProcessingRecommendationInput = {
   body?: string;
 };
 
-const RESUME_MARKER = /(?:简历|履历|curriculum\s+vitae|\bresume\b|\bcv\b)/iu;
+const LONG_DOCUMENT_TOKENS = 2000;
+const STRUCTURED_FILE_TYPES = new Set(["csv", "json"]);
+const TEXT_FILE_TYPES = new Set(["pdf", "md", "markdown", "txt", "doc", "docx", "odt", "rtf"]);
+const RESUME_FILENAME_EXCLUSIONS = /\b(?:parser|template|builder|generator|notes?)\b/iu;
+const RESUME_HEADING_BOUNDARY = String.raw`(?=$|[\s:：|/／（(【\[\-–—])`;
+const resumeSectionPattern = (...labels: string[]) => new RegExp(
+  String.raw`^(?:#{1,6}\s*)?(?:${labels.join("|")})${RESUME_HEADING_BOUNDARY}`,
+  "iu",
+);
+const RESUME_SECTION_PATTERNS: Array<[string, RegExp]> = [
+  ["education", resumeSectionPattern("education", "教育背景", "教育经历", "学历", "学术背景")],
+  ["experience", resumeSectionPattern("experience", "work experience", "professional experience", "internships?", "实习经历", "工作经历", "职业经历")],
+  ["project", resumeSectionPattern("projects?", "project experience", "项目经验", "项目经历", "项目")],
+  ["skill", resumeSectionPattern("skills?", "technical skills?", "专业技能", "技能", "技术栈")],
+  ["award", resumeSectionPattern("awards?", "honou?rs?", "activities", "获奖", "荣誉", "校园经历", "获奖与校园经历")],
+];
+
+function normalizeIdentity(value: unknown): string {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/\p{Mark}/gu, "")
+    .toLowerCase();
+}
+
+function baseName(value: unknown): string {
+  return String(value || "").split(/[\\/]/u).pop() || "";
+}
+
+function fileExtension(input: ProcessingRecommendationInput): string {
+  const explicit = String(input.fileType || "").toLowerCase().replace(/^\./u, "");
+  if (explicit) return explicit === "markdown" ? "md" : explicit;
+  const match = baseName(input.fileName).match(/\.([a-z0-9]+)$/iu);
+  return match ? match[1].toLowerCase() : "";
+}
+
+function hasResumeMarker(value: unknown): boolean {
+  const normalized = normalizeIdentity(value);
+  if (normalized.includes("简历") || normalized.includes("履历")) return true;
+  return /(?<![a-z0-9])(?:resume|cv|curriculum[\s_-]+vitae)(?![a-z0-9])/iu.test(normalized);
+}
+
+function hasResumeFilenameMarker(value: unknown): boolean {
+  const stem = normalizeIdentity(baseName(value)).replace(/\.[a-z0-9]+$/iu, "");
+  return hasResumeMarker(stem) && !RESUME_FILENAME_EXCLUSIONS.test(stem);
+}
+
+function hasResumeBodyStructure(body: string): boolean {
+  const sections = new Set<string>();
+  for (const line of body.split(/\r?\n/u).slice(0, 80)) {
+    const heading = line.trim().replace(/^[-*•]\s*/u, "");
+    if (!heading || heading.length > 80) continue;
+    for (const [section, pattern] of RESUME_SECTION_PATTERNS) {
+      if (pattern.test(heading)) sections.add(section);
+    }
+  }
+  return sections.size >= 2;
+}
+
+function isResumeCandidate(input: ProcessingRecommendationInput): boolean {
+  const body = input.body || "";
+  if (hasResumeMarker(input.title) || hasResumeBodyStructure(body)) return true;
+  return !body.trim() && hasResumeFilenameMarker(input.fileName);
+}
 
 export function recommendProcessingProfile(input: ProcessingRecommendationInput): ProcessingProfile {
-  const descriptor = [input.fileName, input.title, input.body?.slice(0, 500)].filter(Boolean).join("\n");
-  if (RESUME_MARKER.test(descriptor)) {
+  const fileType = fileExtension(input);
+  if (!STRUCTURED_FILE_TYPES.has(fileType) && isResumeCandidate(input)) {
     return { ...SHARED_PROCESSING_PROFILES.resume_semantic };
   }
+  if (STRUCTURED_FILE_TYPES.has(fileType)) return { ...SHARED_PROCESSING_PROFILES.general };
+  if (TEXT_FILE_TYPES.has(fileType) && estimateTokens(input.body || "") > LONG_DOCUMENT_TOKENS) {
+    return { ...SHARED_PROCESSING_PROFILES.parent_child };
+  }
+  if (input.body && estimateTokens(input.body) <= LONG_DOCUMENT_TOKENS) return { ...SHARED_PROCESSING_PROFILES.general };
   return { ...DEFAULT_PROCESSING_PROFILE };
 }
 
@@ -76,9 +143,7 @@ export function processingProfileForRevision(
   current: ProcessingProfile,
   input: ProcessingRecommendationInput,
 ): ProcessingProfile {
-  if (current.chunkMode !== "resume_semantic" && RESUME_MARKER.test(
-    [input.fileName, input.title, input.body?.slice(0, 500)].filter(Boolean).join("\n"),
-  )) {
+  if (current.chunkMode !== "resume_semantic" && isResumeCandidate(input)) {
     return recommendProcessingProfile(input);
   }
   return current;
