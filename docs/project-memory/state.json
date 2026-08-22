@@ -390,13 +390,19 @@
                                             },
                                             {
                                                 "command":  "npx.cmd --yes vercel@latest deploy --prod --yes",
-                                                "result":  "Production deployment dpl_HC25hFeSYj8ibiXPsiKF5oQCXnSF reached Ready and was aliased to the public URL",
+                                                "result":  "Production deployment dpl_HdNcfBgMNY8izuH5jwKRUSpo6kGb reached Ready and was aliased to the public URL",
                                                 "outcome":  "passed",
                                                 "verified_at":  "2026-08-22"
                                             },
                                             {
-                                                "command":  "npm.cmd run evaluate:cloud -- --base-url=https://local-rag-portfolio-assistant-1.vercel.app --modes=vector,adaptive,hybrid --out=evals/latest-cloud-retrieval-production.json",
-                                                "result":  "Live legacy benchmark completed with Hit@5 0.000 for Vector, Adaptive, and Hybrid because current production has one Owner-published Master resume document rather than the older repo-seed doc IDs; no-answer accuracy was 1.000 with zero privacy violations",
+                                                "command":  "npx.cmd --yes vercel@latest curl https://local-rag-portfolio-assistant-1.vercel.app/api/health",
+                                                "result":  "Production health reported Atlas, Gemini, Vector, and text search ready",
+                                                "outcome":  "passed",
+                                                "verified_at":  "2026-08-22"
+                                            },
+                                            {
+                                                "command":  "npm.cmd run evaluate:cloud -- --base-url=https://local-rag-portfolio-assistant-1.vercel.app --modes=vector,adaptive,hybrid --out=evals/latest-cloud-retrieval-production-final.json",
+                                                "result":  "Live legacy benchmark completed with Hit@5 0.000 for Vector, Adaptive, and Hybrid because current production has one Owner-published Master resume document rather than the older repo-seed doc IDs; no-answer accuracy was 1.000 with zero privacy violations and the corrected gate kept Vector as default",
                                                 "outcome":  "passed",
                                                 "verified_at":  "2026-08-22"
                                             }
@@ -404,9 +410,7 @@
                   }
               ],
     "last_verified":  "2026-08-22",
-    "known_blockers":  [
-                           "Atlas SRV DNS lookups for the public cluster time out from this environment, so the `text_index_public` migration cannot be rerun locally even though production retrieval can reach Atlas."
-                       ],
+    "known_blockers":  [],
     "next_action":  "Rerun the Atlas `--spaces-only` migration when SRV DNS connectivity is healthy, then rerun a current-corpus cloud benchmark keyed to the published Master resume semantic parents before changing the public default. Keep Vector as the cloud default unless adaptive or hybrid strictly beats the baseline without no-answer or privacy regression. Owner must still review Publish Studio answer parents before publishing new resume drafts.",
-    "updated_at":  "2026-08-22T20:06:59+10:00"
+    "updated_at":  "2026-08-22T20:17:49+10:00"
 }

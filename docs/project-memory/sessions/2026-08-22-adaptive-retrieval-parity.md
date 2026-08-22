@@ -25,8 +25,9 @@ Unify local and cloud retrieval decision contracts while preserving the existing
 | `node scripts/evaluate-cloud-retrieval.mjs --limit=1 --modes=vector --base-url=http://127.0.0.1:9 --out=evals/latest-cloud-retrieval-smoke.json` | Script handled an unreachable URL and wrote an ignored report |
 | `node scripts/evaluate-cloud-retrieval.mjs --benchmark=evals/rag_benchmark.json --limit=1 --modes=vector,hybrid --base-url=http://127.0.0.1:9 --out=evals/latest-cloud-retrieval-gate-smoke.json` | Script kept Vector when candidate quality tied at zero |
 | `npm.cmd run build` | Next.js production build passed with 19 pages and API routes |
-| `npx.cmd --yes vercel@latest deploy --prod --yes` | Production deployment `dpl_HC25hFeSYj8ibiXPsiKF5oQCXnSF` reached Ready and was aliased to the public URL |
-| `npm.cmd run evaluate:cloud -- --base-url=https://local-rag-portfolio-assistant-1.vercel.app --modes=vector,adaptive,hybrid --out=evals/latest-cloud-retrieval-production.json` | Live legacy benchmark completed; Hit@5 was `0.000` for all modes because current production has one Owner-published Master resume document, not the older repo-seed doc IDs |
+| `npx.cmd --yes vercel@latest deploy --prod --yes` | Production deployment `dpl_HdNcfBgMNY8izuH5jwKRUSpo6kGb` reached Ready and was aliased to the public URL |
+| `npx.cmd --yes vercel@latest curl https://local-rag-portfolio-assistant-1.vercel.app/api/health` | Production health reported Atlas, Gemini, Vector, and text search ready |
+| `npm.cmd run evaluate:cloud -- --base-url=https://local-rag-portfolio-assistant-1.vercel.app --modes=vector,adaptive,hybrid --out=evals/latest-cloud-retrieval-production-final.json` | Live legacy benchmark completed; Hit@5 was `0.000` for all modes because current production has one Owner-published Master resume document, not the older repo-seed doc IDs; corrected gate kept Vector as default |
 | `npx.cmd tsc --noEmit` | Still fails only in pre-existing test typing issues outside the changed retrieval implementation |
 
 ## Decisions And Concerns
@@ -38,6 +39,6 @@ Unify local and cloud retrieval decision contracts while preserving the existing
 ## Handoff
 
 - Branch `feat/adaptive-retrieval-parity` is pushed and deployed to production. Public URL: `https://local-rag-portfolio-assistant-1.vercel.app/`.
-- Atlas `--spaces-only` migration validated 27 public documents and 27 chunks, then failed with `querySrv ETIMEOUT` on the cluster SRV lookup from this local environment. Rerun it when DNS/network connectivity is healthy.
+- Atlas `--spaces-only` migration validated 27 public documents and 27 chunks, then failed with `querySrv ETIMEOUT` on the cluster SRV lookup from this local environment. Production itself can query Atlas and reports text search ready.
 - The next benchmark should target the current production corpus: one Owner-published Master resume document with semantic parent chunks. The older `evals/rag_benchmark.json` targets 27 repo-seed `doc_id` values and is not valid for choosing the public default while production contains the single Master resume document.
 - Owner must still review every Publish Studio answer parent before publishing any new resume draft.

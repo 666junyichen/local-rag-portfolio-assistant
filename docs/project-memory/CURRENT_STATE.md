@@ -3,7 +3,7 @@
 - Active branch: `feat/adaptive-retrieval-parity`
 - Active phase: `Adaptive Retrieval Parity`
 - Last verified: `2026-08-22`
-- Updated: `2026-08-22T20:06:59+10:00`
+- Updated: `2026-08-22T20:17:49+10:00`
 - Next action: Rerun the Atlas `--spaces-only` migration when SRV DNS connectivity is healthy, then rerun a current-corpus cloud benchmark keyed to the published Master resume semantic parents before changing the public default. Keep Vector as the cloud default unless adaptive or hybrid strictly beats the baseline without no-answer or privacy regression. Owner must still review Publish Studio answer parents before publishing new resume drafts.
 
 ## Status
@@ -12,7 +12,7 @@ Tasks 0-16 are completed and reviewed. Owner production acceptance covers sign-i
 
 Task 16 aligns local and cloud retrieval decisions without merging their data boundaries. Upload processing profile recommendations now prefer document structure and body evidence before weak file-name hints: short generic documents stay Standard, long generic documents use Parent-child, and resumes can be detected from title or multi-section resume body structure. Cloud `/api/retrieve` and Chat now accept `vector`, `bm25`, `hybrid`, `hybrid-rerank`, and `adaptive`, and return requested mode, applied mode, capabilities, fallback reason, and source path. If Atlas Search is unavailable, cloud BM25/Hybrid/Adaptive precision paths report a Vector fallback instead of silently pretending Hybrid is active.
 
-Task 16 also makes `text_index_public` reconciliation explicit in the Atlas seed script and adds a public-safe `/api/retrieve` benchmark script. The benchmark writes ignored reports under `evals/latest-cloud-retrieval*.json` and now requires a candidate to produce positive retrieval quality and strictly beat Vector before recommending a default switch. Production deployment `dpl_HC25hFeSYj8ibiXPsiKF5oQCXnSF` is Ready and aliased to the public URL. A live production probe returned one published Owner document, `陈君奕简历 - Master`, with 47 vector candidates; the old 50-question repo-document benchmark is therefore not aligned with the current single-document semantic-resume corpus and must not be used to promote Hybrid.
+Task 16 also makes `text_index_public` reconciliation explicit in the Atlas seed script and adds a public-safe `/api/retrieve` benchmark script. The benchmark writes ignored reports under `evals/latest-cloud-retrieval*.json` and now requires a candidate to produce positive retrieval quality and strictly beat Vector before recommending a default switch. Production deployment `dpl_HdNcfBgMNY8izuH5jwKRUSpo6kGb` is Ready and aliased to the public URL. `/api/health` reports Atlas, Gemini, Vector, and text search ready. A live production probe returned one published Owner document, `陈君奕简历 - Master`, with 47 vector candidates; the old 50-question repo-document benchmark is therefore not aligned with the current single-document semantic-resume corpus and must not be used to promote Hybrid.
 
 Task 15 fixes a Publish Studio presentation defect that made complete resume-semantic output look incomplete. The server generated 35 answer parents and 48 retrieval children, but the page rendered only the first 20 children. The Studio now exposes all generated chunks, switches between child matches and parent answer contexts, and reports distinct project semantic groups.
 
@@ -52,6 +52,6 @@ Phase B's adaptive path triggered the reranker for 15 of 50 benchmark questions.
 
 ## Known Blockers
 
-- Atlas SRV DNS lookups for the public cluster time out from this environment, so the `text_index_public` migration cannot be rerun locally even though production retrieval can reach Atlas.
+No active blockers.
 
 See [Known Issues](KNOWN_ISSUES.md) for acceptance criteria and [Testing](TESTING.md) for the evidence contract.
