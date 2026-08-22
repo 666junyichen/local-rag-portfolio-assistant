@@ -35,4 +35,23 @@ describe("cloud health route", () => {
       adaptive: true,
     });
   });
+
+  it("accepts Atlas queryable status names as ready search indexes", async () => {
+    listSearchIndexes.mockImplementation((name: string) => ({
+      toArray: async () => (name === "vector_index_public"
+        ? [{ status: "READY" }]
+        : [{ status: "QUERYABLE" }]),
+    }));
+
+    const { GET } = await import("../app/api/health/route");
+    const response = await GET();
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.textIndex).toBe(true);
+    expect(payload.retrievalCapabilities).toMatchObject({
+      bm25: true,
+      hybrid: true,
+    });
+  });
 });

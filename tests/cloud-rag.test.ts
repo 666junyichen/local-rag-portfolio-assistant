@@ -93,7 +93,32 @@ describe("cloud RAG contracts", () => {
     expect(script).toContain("latest-cloud-retrieval");
     expect(script).toContain("/api/retrieve");
     expect(script).toContain("isCapabilityFallback");
+    expect(script).toContain("strictlyImprovesBaseline");
     expect(script).toContain("outside the public retrieval boundary");
     expect(script).not.toContain("/api/chat");
+  });
+
+  it("keeps vector when benchmark candidates only tie a zero-quality baseline", async () => {
+    // @ts-expect-error The executable benchmark script intentionally has no declaration file.
+    const { promotionGate } = await import("../scripts/evaluate-cloud-retrieval.mjs");
+    const zeroMetrics = {
+      answerable: 40,
+      hit_at_5: 0,
+      recall_at_5: 0,
+      mrr: 0,
+      no_answer_accuracy: 1,
+      privacy_violations: 0,
+      avg_latency_ms: 1000,
+    };
+
+    expect(promotionGate({
+      vector: { degraded: false, metrics: zeroMetrics },
+      hybrid: { degraded: false, metrics: zeroMetrics },
+    })).toBe("Keep cloud default on vector; no candidate beat the baseline without regression.");
+
+    expect(promotionGate({
+      vector: { degraded: false, metrics: { ...zeroMetrics, hit_at_5: 0.5, recall_at_5: 0.4, mrr: 0.3 } },
+      adaptive: { degraded: false, metrics: { ...zeroMetrics, hit_at_5: 0.55, recall_at_5: 0.45, mrr: 0.31 } },
+    })).toBe("Candidate default: adaptive met the benchmark gate.");
   });
 });

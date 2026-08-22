@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 
 const ROOT = process.cwd();
 
@@ -17,7 +18,7 @@ function parseModes() {
     .filter(Boolean);
 }
 
-function rankMetrics(cases, rankings, latenciesMs) {
+export function rankMetrics(cases, rankings, latenciesMs) {
   let answerable = 0;
   let hit5 = 0;
   let recall5 = 0;
@@ -102,7 +103,18 @@ async function retrieve(baseUrl, testCase, mode, topK) {
   };
 }
 
-function promotionGate(reports) {
+function strictlyImprovesBaseline(report, vector) {
+  return report.metrics.hit_at_5 > 0
+    && report.metrics.hit_at_5 >= vector.metrics.hit_at_5
+    && report.metrics.mrr >= vector.metrics.mrr
+    && (
+      report.metrics.hit_at_5 > vector.metrics.hit_at_5
+      || report.metrics.mrr > vector.metrics.mrr
+      || report.metrics.recall_at_5 > vector.metrics.recall_at_5
+    );
+}
+
+export function promotionGate(reports) {
   const vector = reports.vector;
   if (!vector) return "Run vector first; it is the promotion baseline.";
   const candidates = Object.entries(reports).filter(([mode]) => mode !== "vector");
@@ -110,18 +122,17 @@ function promotionGate(reports) {
     !report.degraded
     && report.metrics.privacy_violations === 0
     && report.metrics.no_answer_accuracy >= vector.metrics.no_answer_accuracy
-    && report.metrics.hit_at_5 >= vector.metrics.hit_at_5
-    && report.metrics.mrr >= vector.metrics.mrr
+    && strictlyImprovesBaseline(report, vector)
   ));
   if (!winners.length) return "Keep cloud default on vector; no candidate beat the baseline without regression.";
   return `Candidate default: ${winners[0][0]} met the benchmark gate.`;
 }
 
-function isBoundaryRefusalFallback(item) {
+export function isBoundaryRefusalFallback(item) {
   return /outside the public retrieval boundary/i.test(String(item.reason || ""));
 }
 
-function isCapabilityFallback(item) {
+export function isCapabilityFallback(item) {
   return item.requestedMode !== item.appliedMode && !isBoundaryRefusalFallback(item);
 }
 
@@ -179,7 +190,10 @@ async function main() {
   console.log(report.defaultDecision);
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
-});
+const entrypoint = process.argv[1] ? pathToFileURL(process.argv[1]).href : "";
+if (import.meta.url === entrypoint) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });
+}

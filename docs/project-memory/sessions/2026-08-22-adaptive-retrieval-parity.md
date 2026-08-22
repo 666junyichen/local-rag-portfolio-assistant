@@ -13,26 +13,31 @@ Unify local and cloud retrieval decision contracts while preserving the existing
 - Changed cloud Atlas Search failure from a silent empty BM25 set into an explicit Vector fallback.
 - Added structured `text_index_public` reconciliation in `scripts/seed-atlas.mjs` without deleting unrelated search indexes or overwriting existing analyzer fields.
 - Added `scripts/evaluate-cloud-retrieval.mjs` and `npm run evaluate:cloud` for public `/api/retrieve` benchmark runs.
-- Kept `/api/health` green when Atlas, Gemini, and Vector Search are ready, while exposing text search as an optional capability flag.
+- Kept `/api/health` green when Atlas, Gemini, and Vector Search are ready, while exposing text search as an optional capability flag and accepting Atlas `QUERYABLE`/`ACTIVE` status names.
+- Tightened the benchmark promotion gate so a non-vector mode must have positive retrieval quality and strictly beat Vector before it can be recommended as the cloud default.
 
 ## Verification
 
 | Command | Result |
 |---|---|
-| `npm.cmd test -- tests/cloud-rag.test.ts tests/cloud-chat-route.test.ts tests/cloud-retrieve-route.test.ts tests/cloud-seed-safety.test.ts tests/cloud-publish-processing.test.ts tests/cloud-shared-processing-profiles.test.ts tests/cloud-health-route.test.ts` | 41 tests passed across 7 files |
+| `npm.cmd test -- tests/cloud-rag.test.ts tests/cloud-chat-route.test.ts tests/cloud-retrieve-route.test.ts tests/cloud-seed-safety.test.ts tests/cloud-publish-processing.test.ts tests/cloud-shared-processing-profiles.test.ts tests/cloud-health-route.test.ts` | 43 tests passed across 7 files |
 | `.\.venv\Scripts\python.exe -m pytest tests/test_processing_profiles.py tests/test_query_planning.py tests/test_portfolio_retrieval.py tests/test_project_memory.py -q` | 147 passed |
 | `node scripts/evaluate-cloud-retrieval.mjs --limit=1 --modes=vector --base-url=http://127.0.0.1:9 --out=evals/latest-cloud-retrieval-smoke.json` | Script handled an unreachable URL and wrote an ignored report |
+| `node scripts/evaluate-cloud-retrieval.mjs --benchmark=evals/rag_benchmark.json --limit=1 --modes=vector,hybrid --base-url=http://127.0.0.1:9 --out=evals/latest-cloud-retrieval-gate-smoke.json` | Script kept Vector when candidate quality tied at zero |
 | `npm.cmd run build` | Next.js production build passed with 19 pages and API routes |
+| `npx.cmd --yes vercel@latest deploy --prod --yes` | Production deployment `dpl_HC25hFeSYj8ibiXPsiKF5oQCXnSF` reached Ready and was aliased to the public URL |
+| `npm.cmd run evaluate:cloud -- --base-url=https://local-rag-portfolio-assistant-1.vercel.app --modes=vector,adaptive,hybrid --out=evals/latest-cloud-retrieval-production.json` | Live legacy benchmark completed; Hit@5 was `0.000` for all modes because current production has one Owner-published Master resume document, not the older repo-seed doc IDs |
 | `npx.cmd tsc --noEmit` | Still fails only in pre-existing test typing issues outside the changed retrieval implementation |
 
 ## Decisions And Concerns
 
 - Cloud and local share mode names and decision semantics, but not private data, collections, embeddings, or model runtimes.
 - Cloud BM25/Hybrid is a capability, not a promise. If `text_index_public` is unavailable, cloud retrieval reports Vector fallback.
-- Keep Vector as the public default until the cloud benchmark proves adaptive or hybrid improves retrieval without no-answer or privacy regression.
+- Keep Vector as the public default until a benchmark aligned to the current published corpus proves adaptive or hybrid improves retrieval without no-answer or privacy regression.
 
 ## Handoff
 
-- Branch `feat/adaptive-retrieval-parity` is pushed at commit `4e669bc`. Vercel CLI/API deployment from this environment returned `Not authorized`, so use an authorized Vercel account or Git integration to deploy that commit.
-- Atlas `--spaces-only` migration validated 27 public documents and 27 chunks, then failed twice with `querySrv ETIMEOUT` on the cluster SRV lookup. Rerun it when DNS/network connectivity is healthy, then run `npm run evaluate:cloud -- --base-url=<deployed-url> --modes=vector,adaptive,hybrid`. If `/api/health` still reports `textIndex=false`, treat adaptive/hybrid results as capability-degraded and rerun after `text_index_public` becomes READY.
+- Branch `feat/adaptive-retrieval-parity` is pushed and deployed to production. Public URL: `https://local-rag-portfolio-assistant-1.vercel.app/`.
+- Atlas `--spaces-only` migration validated 27 public documents and 27 chunks, then failed with `querySrv ETIMEOUT` on the cluster SRV lookup from this local environment. Rerun it when DNS/network connectivity is healthy.
+- The next benchmark should target the current production corpus: one Owner-published Master resume document with semantic parent chunks. The older `evals/rag_benchmark.json` targets 27 repo-seed `doc_id` values and is not valid for choosing the public default while production contains the single Master resume document.
 - Owner must still review every Publish Studio answer parent before publishing any new resume draft.
