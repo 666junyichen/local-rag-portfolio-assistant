@@ -20,7 +20,7 @@ Unify local and cloud retrieval decision contracts while preserving the existing
 
 | Command | Result |
 |---|---|
-| `npm.cmd test -- tests/cloud-rag.test.ts tests/cloud-chat-route.test.ts tests/cloud-retrieve-route.test.ts tests/cloud-seed-safety.test.ts tests/cloud-publish-processing.test.ts tests/cloud-shared-processing-profiles.test.ts tests/cloud-health-route.test.ts` | 43 tests passed across 7 files |
+| `npm.cmd test -- tests/cloud-rag.test.ts tests/cloud-chat-route.test.ts tests/cloud-retrieve-route.test.ts tests/cloud-seed-safety.test.ts tests/cloud-publish-processing.test.ts tests/cloud-shared-processing-profiles.test.ts tests/cloud-health-route.test.ts` | 44 tests passed across 7 files |
 | `.\.venv\Scripts\python.exe -m pytest tests/test_processing_profiles.py tests/test_query_planning.py tests/test_portfolio_retrieval.py tests/test_project_memory.py -q` | 147 passed |
 | `node scripts/evaluate-cloud-retrieval.mjs --limit=1 --modes=vector --base-url=http://127.0.0.1:9 --out=evals/latest-cloud-retrieval-smoke.json` | Script handled an unreachable URL and wrote an ignored report |
 | `node scripts/evaluate-cloud-retrieval.mjs --benchmark=evals/rag_benchmark.json --limit=1 --modes=vector,hybrid --base-url=http://127.0.0.1:9 --out=evals/latest-cloud-retrieval-gate-smoke.json` | Script kept Vector when candidate quality tied at zero |

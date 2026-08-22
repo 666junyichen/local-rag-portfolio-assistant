@@ -366,7 +366,7 @@
                       "test_evidence":  [
                                             {
                                                 "command":  "npm.cmd test -- tests/cloud-rag.test.ts tests/cloud-chat-route.test.ts tests/cloud-retrieve-route.test.ts tests/cloud-seed-safety.test.ts tests/cloud-publish-processing.test.ts tests/cloud-shared-processing-profiles.test.ts tests/cloud-health-route.test.ts",
-                                                "result":  "43 focused cloud retrieval, health, route, seed, and processing tests passed",
+                                                "result":  "44 focused cloud retrieval, health, route, seed, and processing tests passed",
                                                 "outcome":  "passed",
                                                 "verified_at":  "2026-08-22"
                                             },

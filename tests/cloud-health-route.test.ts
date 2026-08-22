@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const listSearchIndexes = vi.fn();
+const aggregate = vi.fn();
 const cloudDb = vi.fn();
 
 vi.mock("@/lib/cloud-rag/mongodb", () => ({ cloudDb }));
@@ -9,10 +10,11 @@ describe("cloud health route", () => {
   beforeEach(() => {
     process.env.GEMINI_API_KEY = "test-gemini";
     listSearchIndexes.mockReset();
+    aggregate.mockReset();
     cloudDb.mockReset();
     cloudDb.mockResolvedValue({
       command: vi.fn().mockResolvedValue({ ok: 1 }),
-      collection: vi.fn().mockReturnValue({ listSearchIndexes }),
+      collection: vi.fn().mockReturnValue({ aggregate, listSearchIndexes }),
     });
   });
 
@@ -53,5 +55,24 @@ describe("cloud health route", () => {
       bm25: true,
       hybrid: true,
     });
+  });
+
+  it("uses a read-only text search probe when Atlas index status is not exposed", async () => {
+    listSearchIndexes.mockImplementation((name: string) => ({
+      toArray: async () => (name === "vector_index_public" ? [{ status: "READY" }] : []),
+    }));
+    aggregate.mockReturnValue({ toArray: async () => [] });
+
+    const { GET } = await import("../app/api/health/route");
+    const response = await GET();
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.textIndex).toBe(true);
+    expect(aggregate).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({
+        $search: expect.objectContaining({ index: "text_index_public" }),
+      }),
+    ]));
   });
 });
