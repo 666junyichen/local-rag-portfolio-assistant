@@ -1,12 +1,25 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 from urllib.error import URLError
 from urllib.request import Request, urlopen
+
+
+def cloud_seed_apply_command(npm_executable: str | None = None) -> list[str]:
+    """Return the cross-platform command that writes public JSON into Atlas."""
+    if npm_executable is None:
+        candidates = ("npm.cmd", "npm") if os.name == "nt" else ("npm", "npm.cmd")
+        npm_executable = next(
+            (candidate_path for candidate in candidates if (candidate_path := shutil.which(candidate))),
+            candidates[0],
+        )
+    return [npm_executable, "run", "seed:atlas:apply"]
 
 
 @dataclass(frozen=True)

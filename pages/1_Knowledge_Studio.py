@@ -40,7 +40,7 @@ from src.local_reset import (  # noqa: E402
     build_local_reset_preview,
     perform_local_reset,
 )
-from src.local_runtime import run_command_streaming  # noqa: E402
+from src.local_runtime import cloud_seed_apply_command, run_command_streaming  # noqa: E402
 from src.portfolio_rag import (  # noqa: E402
     get_collections,
     load_embedding_model,
@@ -134,6 +134,27 @@ def sync_index_space_metadata(
         return int(result.modified_count), None
     except Exception as error:
         return 0, str(error)
+
+
+def sync_public_json_to_cloud() -> int:
+    with st.status("正在同步公开 JSON 到 Vercel 云端 Atlas…", expanded=True) as status:
+        output = st.empty()
+        lines: list[str] = []
+
+        def show_line(line: str) -> None:
+            lines.append(line)
+            output.code("\n".join(lines[-60:]), language="text")
+
+        return_code = run_command_streaming(cloud_seed_apply_command(), ROOT, show_line)
+        status.update(
+            label="云端同步完成" if return_code == 0 else "云端同步失败",
+            state="complete" if return_code == 0 else "error",
+        )
+    if return_code == 0:
+        st.success("已同步到 Vercel 云端 Atlas；生产 Demo 会从云端公开知识库读取这些资料。")
+    else:
+        st.error("云端同步失败。请检查上面的输出，通常是 MONGODB_URI / GEMINI_API_KEY / 网络权限问题。")
+    return return_code
 
 
 def upload_tab(local_catalog: LocalCatalog) -> None:
@@ -398,8 +419,13 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
 
     publish_confirm = st.checkbox("我已检查正文并完成脱敏，允许发布到公开知识库")
     pii_override = not findings or st.checkbox("正文仍含 PII；我确认这些内容可以公开")
+    sync_to_cloud = st.checkbox(
+        "发布后立即同步到 Vercel 云端（会写入 Atlas，并生成云端 embeddings）",
+        help="开启后，本地 Streamlit 会运行 npm run seed:atlas:apply；Vercel 不会读取你的本地文件，而是读取同步后的 Atlas 公开知识库。",
+    )
+    publish_label = "发布并同步到 Vercel 云端" if sync_to_cloud else "发布当前文档为公开资料"
     if save_columns[1].button(
-        "发布当前文档为公开资料",
+        publish_label,
         disabled=edited_document is None or not publish_confirm or not pii_override,
         use_container_width=True,
     ):
@@ -415,7 +441,10 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
         }
         result = publish_document(PUBLIC_PATH, public_document)
         st.success("已发布到公开 JSON。" if result["created"] else "相同正文已存在，没有重复添加。")
-        st.warning("云端 Demo 尚未同步；确认后手动运行 npm run seed:atlas。")
+        if sync_to_cloud:
+            sync_public_json_to_cloud()
+        else:
+            st.info("如需让 Vercel 立刻看到这份资料，请到“索引维护”点击“同步公开 JSON 到 Vercel 云端”。")
 
 
 def private_library(local_catalog: LocalCatalog, indexed: dict[str, set[str]]) -> None:
@@ -784,8 +813,24 @@ def maintenance_tab(local_catalog: LocalCatalog) -> None:
             )
     st.divider()
     st.subheader("云端公开 Demo 同步")
-    st.write("公开 JSON 修改后，本地索引与云端 Atlas 需要分别更新。云端 seed 只读取 `data/portfolio_docs.json`。")
-    st.code("npm run seed:atlas", language="powershell")
+    st.write(
+        "公开 JSON 修改后，可以直接在这里同步到 Vercel 云端 Atlas。"
+        "这个按钮等价于运行 `npm run seed:atlas:apply`，会保留 Owner 上传资料，只更新 repo seed 来源的公开资料。"
+    )
+    st.code("npm run seed:atlas:apply", language="powershell")
+    if not public_documents:
+        st.warning("当前公开 JSON 为空；同步会清空云端 repo seed 来源的公开资料，但会保留 Owner 上传资料。")
+    confirm_cloud_sync = st.checkbox(
+        "我确认将当前公开 JSON 同步到 Vercel 云端",
+        key="confirm-cloud-sync",
+    )
+    if st.button(
+        "同步公开 JSON 到 Vercel 云端",
+        type="primary",
+        disabled=not confirm_cloud_sync,
+        use_container_width=True,
+    ):
+        sync_public_json_to_cloud()
 
     st.divider()
     st.subheader("Danger Zone")

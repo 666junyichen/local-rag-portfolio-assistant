@@ -136,6 +136,23 @@ class StreamlitContractTests(unittest.TestCase):
         self.assertIn("RESET PORTFOLIO", source)
         self.assertIn("Download or copy this backup path before continuing", source)
 
+    def test_cloud_seed_apply_command_uses_apply_script(self) -> None:
+        from src import local_runtime
+
+        self.assertTrue(hasattr(local_runtime, "cloud_seed_apply_command"))
+        self.assertEqual(
+            local_runtime.cloud_seed_apply_command("npm"),
+            ["npm", "run", "seed:atlas:apply"],
+        )
+
+    def test_knowledge_studio_exposes_click_to_cloud_sync(self) -> None:
+        source = (ROOT / "pages" / "1_Knowledge_Studio.py").read_text(encoding="utf-8")
+
+        self.assertIn("同步公开 JSON 到 Vercel 云端", source)
+        self.assertIn("发布并同步到 Vercel 云端", source)
+        self.assertIn("seed:atlas:apply", source)
+        self.assertNotIn("手动运行 npm run seed:atlas", source)
+
 
 if __name__ == "__main__":
     unittest.main()
