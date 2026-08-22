@@ -4,7 +4,7 @@
 - Active phase: `Adaptive Retrieval Parity`
 - Last verified: `2026-08-22`
 - Updated: `2026-08-22T19:12:03+10:00`
-- Next action: Push and deploy Task 16, run the public cloud retrieval benchmark against the deployed URL, and rerun after `text_index_public` is READY if the first run reports Vector fallback. Keep Vector as the cloud default unless adaptive or hybrid beats the baseline without no-answer or privacy regression. Owner must still review Publish Studio answer parents before publishing new resume drafts.
+- Next action: Use an authorized Vercel account or Git integration to deploy commit `4e669bc`, rerun the Atlas `--spaces-only` migration when SRV DNS connectivity is healthy, then run the public cloud retrieval benchmark against the deployed URL. Keep Vector as the cloud default unless adaptive or hybrid beats the baseline without no-answer or privacy regression. Owner must still review Publish Studio answer parents before publishing new resume drafts.
 
 ## Status
 
@@ -52,6 +52,7 @@ Phase B's adaptive path triggered the reranker for 15 of 50 benchmark questions.
 
 ## Known Blockers
 
-No active blockers.
+- Vercel CLI/API deployment is not authorized in this environment, so commit `4e669bc` is pushed but not deployed to a new preview or production URL.
+- Atlas SRV DNS lookups for the public cluster time out from this environment, so the `text_index_public` migration and live cloud benchmark could not complete here.
 
 See [Known Issues](KNOWN_ISSUES.md) for acceptance criteria and [Testing](TESTING.md) for the evidence contract.

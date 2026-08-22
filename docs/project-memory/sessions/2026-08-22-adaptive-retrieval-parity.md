@@ -33,5 +33,6 @@ Unify local and cloud retrieval decision contracts while preserving the existing
 
 ## Handoff
 
-- Push and deploy this branch, then run `npm run evaluate:cloud -- --base-url=<deployed-url> --modes=vector,adaptive,hybrid`. If `/api/health` still reports `textIndex=false`, treat adaptive/hybrid results as capability-degraded and rerun after `text_index_public` becomes READY.
+- Branch `feat/adaptive-retrieval-parity` is pushed at commit `4e669bc`. Vercel CLI/API deployment from this environment returned `Not authorized`, so use an authorized Vercel account or Git integration to deploy that commit.
+- Atlas `--spaces-only` migration validated 27 public documents and 27 chunks, then failed twice with `querySrv ETIMEOUT` on the cluster SRV lookup. Rerun it when DNS/network connectivity is healthy, then run `npm run evaluate:cloud -- --base-url=<deployed-url> --modes=vector,adaptive,hybrid`. If `/api/health` still reports `textIndex=false`, treat adaptive/hybrid results as capability-degraded and rerun after `text_index_public` becomes READY.
 - Owner must still review every Publish Studio answer parent before publishing any new resume draft.
