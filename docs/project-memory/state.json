@@ -390,7 +390,7 @@
                                             },
                                             {
                                                 "command":  "npx.cmd --yes vercel@latest deploy --prod --yes",
-                                                "result":  "Production deployment dpl_HdNcfBgMNY8izuH5jwKRUSpo6kGb reached Ready and was aliased to the public URL",
+                                                "result":  "Latest production deployment reached Ready and was aliased to the public URL",
                                                 "outcome":  "passed",
                                                 "verified_at":  "2026-08-22"
                                             },
