@@ -21,6 +21,7 @@ data/local_private_docs.summary.json
 data/local_catalog.json
 data/local_catalog.sqlite3*
 data/archive/
+data/local_backups/
 data/local_uploads/
 data/uploads/
 data/local_eval_questions.json

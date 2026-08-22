@@ -21,7 +21,6 @@ const mojibake = /\uFFFD|(?:涓|鍏|绠|鏁|鎶|鐨|绯|闄|鍖|锛){3,}/;
 
 export function normalizePublicDocuments(rows) {
   if (!Array.isArray(rows)) throw new Error("portfolio_docs.json must contain a JSON array");
-  if (!rows.length) throw new Error("portfolio_docs.json must contain at least one public document");
   const hashes = new Set();
   const docIds = new Set();
   return rows.map((raw, index) => {
@@ -104,33 +103,35 @@ export function chunkDocuments(documents, size = 800, overlap = 80) {
 
 export async function syncRepoSeedCatalog({ documentsCollection, documents, session, now }) {
   const documentIds = documents.map((document) => document.doc_id);
-  await documentsCollection.bulkWrite(documents.map((document) => ({
-    updateOne: {
-      filter: { source_origin: "repo_seed", doc_id: document.doc_id },
-      update: {
-        $set: {
-          doc_id: document.doc_id,
-          source_origin: "repo_seed",
-          space_id: document.space_id,
-          space_name: document.space_name,
-          title: document.title,
-          summary: document.summary,
-          category: document.category,
-          language: document.language,
-          cleaned_body: document.body,
-          content_hash: document.content_hash,
-          status: "published",
-          visibility: "public",
-          publication_version: 1,
-          source_url: document.source_url,
-          updated_at: now,
-          published_at: now,
+  if (documents.length) {
+    await documentsCollection.bulkWrite(documents.map((document) => ({
+      updateOne: {
+        filter: { source_origin: "repo_seed", doc_id: document.doc_id },
+        update: {
+          $set: {
+            doc_id: document.doc_id,
+            source_origin: "repo_seed",
+            space_id: document.space_id,
+            space_name: document.space_name,
+            title: document.title,
+            summary: document.summary,
+            category: document.category,
+            language: document.language,
+            cleaned_body: document.body,
+            content_hash: document.content_hash,
+            status: "published",
+            visibility: "public",
+            publication_version: 1,
+            source_url: document.source_url,
+            updated_at: now,
+            published_at: now,
+          },
+          $setOnInsert: { created_at: now },
         },
-        $setOnInsert: { created_at: now },
+        upsert: true,
       },
-      upsert: true,
-    },
-  })), { session });
+    })), { session });
+  }
   await documentsCollection.deleteMany(
     { source_origin: "repo_seed", doc_id: { $nin: documentIds } },
     { session },
@@ -231,7 +232,7 @@ async function main() {
   const catalogOnly = process.argv.includes("--catalog-only");
   const spacesOnly = process.argv.includes("--spaces-only");
   if (!process.env.MONGODB_URI) throw new Error("MONGODB_URI is required");
-  if (!catalogOnly && !spacesOnly && !process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is required");
+  if (!catalogOnly && !spacesOnly && chunks.length && !process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is required");
   if (!catalogOnly && !spacesOnly) {
     for (let index = 0; index < chunks.length; index += 1) {
       chunks[index].embedding = await embedDocument(chunks[index].retrieval_text);
@@ -303,6 +304,29 @@ async function main() {
   }
   const indexName = process.env.CLOUD_VECTOR_INDEX_NAME || "vector_index_public";
   const textIndexName = process.env.CLOUD_TEXT_INDEX_NAME || "text_index_public";
+  if (!chunks.length) {
+    const existingSearchIndexes = await collection.listSearchIndexes().toArray().catch(() => []);
+    const session = client.startSession();
+    try {
+      await session.withTransaction(async () => {
+        await collection.deleteMany({ source_origin: "repo_seed" }, { session });
+        await syncRepoSeedCatalog({ documentsCollection, documents, session, now });
+        await metadataCollection.deleteOne({ _id: "repo_seed_embedding" }, { session });
+      });
+    } finally {
+      await session.endSession();
+    }
+    const textIndexResult = await reconcilePublicTextIndex(collection, existingSearchIndexes, textIndexName);
+    console.log(`Text index ${textIndexName}: ${textIndexResult.status}`);
+    if (!textIndexResult.available) console.warn(`Atlas text index unavailable: ${textIndexResult.error}. Vector retrieval remains available.`);
+    await collection.createIndex({ visibility: 1, space_id: 1, doc_id: 1 });
+    await collection.createIndex({ chunk_id: 1 }, { unique: true, sparse: true });
+    await documentsCollection.createIndex({ doc_id: 1 }, { unique: true });
+    const ownerUploadCount = await collection.countDocuments({ source_origin: "owner_upload" });
+    await client.close();
+    console.log(`No repository public seed documents found. Cleared repository seed chunks/catalog records and preserved ${ownerUploadCount} owner-upload chunks.`);
+    return;
+  }
   const embeddingModel = process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001";
   const embeddingDimensions = chunks[0]?.embedding?.length || 0;
   if (!embeddingDimensions) throw new Error("The seed produced no embedding dimensions");

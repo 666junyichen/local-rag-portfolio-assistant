@@ -38,6 +38,24 @@ describe("cloud seed safety", () => {
     expect(() => normalizePublicDocuments(rows)).toThrow(/Duplicate doc_id/);
   });
 
+  it("allows an empty repository seed and still cleans only repo_seed catalog records", async () => {
+    // @ts-expect-error The executable seed script intentionally has no declaration file.
+    const { normalizePublicDocuments, syncRepoSeedCatalog } = await import("../scripts/seed-atlas.mjs");
+    const documents = normalizePublicDocuments([]);
+    const calls: Array<{ method: string; value: unknown }> = [];
+    const documentsCollection = {
+      bulkWrite: async (value: unknown) => calls.push({ method: "bulkWrite", value }),
+      deleteMany: async (value: unknown) => calls.push({ method: "deleteMany", value }),
+    };
+
+    await syncRepoSeedCatalog({ documentsCollection, documents, session: {}, now: new Date("2026-08-22T00:00:00Z") });
+
+    expect(documents).toEqual([]);
+    expect(calls).toEqual([
+      { method: "deleteMany", value: { source_origin: "repo_seed", doc_id: { $nin: [] } } },
+    ]);
+  });
+
   it("assigns repository seed documents to the default Portfolio space", async () => {
     // @ts-expect-error The executable seed script intentionally has no declaration file.
     const { chunkDocuments, normalizePublicDocuments } = await import("../scripts/seed-atlas.mjs");
