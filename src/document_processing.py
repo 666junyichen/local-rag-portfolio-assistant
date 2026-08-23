@@ -60,6 +60,20 @@ URL_PATTERN = re.compile(
     """,
     re.IGNORECASE | re.VERBOSE,
 )
+WECHAT_PATTERN = re.compile(
+    r"""
+    (?<![A-Z0-9_-])
+    (?:
+        微信\s*(?:号|ID)\s*[:：=]?\s*
+        | 微信\s*[:：=]\s*
+        | WECHAT\s*ID\s*[:：=]?\s*
+        | (?:WECHAT|WX)\s*[:：=]\s*
+    )
+    [A-Z][A-Z0-9_-]{5,19}
+    (?![A-Z0-9_-])
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
 TRAILING_URL_DELIMITERS = ".,;:!?)]}'\"\u2019\u201d"
 
 RESUME_SECTION_HEADINGS = {
@@ -153,6 +167,8 @@ def clean_text(value: str, profile: PreprocessingProfile | None = None) -> str:
     value = _sanitize_markup(value)
     if profile.remove_emails:
         value = EMAIL_PATTERN.sub("", value)
+    if profile.remove_wechat:
+        value = WECHAT_PATTERN.sub("", value)
     if profile.remove_urls:
         value = URL_PATTERN.sub(_remove_url, value)
     if profile.normalize_whitespace:
@@ -225,12 +241,13 @@ def chunk_metrics(chunks: list[dict[str, Any]]) -> dict[str, Any]:
 
 def detect_pii(text: str) -> list[dict[str, str]]:
     patterns = {
-        "email": r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
-        "phone": r"(?<!\d)(?:\+?86[- ]?)?1[3-9]\d{9}(?!\d)",
+        "email": re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE),
+        "phone": re.compile(r"(?<!\d)(?:\+?86[- ]?)?1[3-9]\d{9}(?!\d)"),
+        "wechat": WECHAT_PATTERN,
     }
     findings = []
     for finding_type, pattern in patterns.items():
-        for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+        for match in pattern.finditer(text):
             findings.append({"type": finding_type, "value": match.group(0)})
     return findings
 

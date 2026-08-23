@@ -208,14 +208,16 @@ def upload_tab(local_catalog: LocalCatalog) -> None:
     mode = st.segmented_control(
         "处理配置", ["Auto recommended", "Manual"], default="Auto recommended"
     )
-    preprocessing_columns = st.columns(3)
+    preprocessing_columns = st.columns(4)
     normalize_whitespace = preprocessing_columns[0].toggle("规范化空白", value=True)
     remove_urls = preprocessing_columns[1].toggle("删除 URL", value=False)
     remove_emails = preprocessing_columns[2].toggle("删除邮箱地址", value=False)
+    remove_wechat = preprocessing_columns[3].toggle("删除微信号", value=False)
     preprocessing = PreprocessingProfile(
         normalize_whitespace=normalize_whitespace,
         remove_urls=remove_urls,
         remove_emails=remove_emails,
+        remove_wechat=remove_wechat,
     )
 
     if mode == "Manual":

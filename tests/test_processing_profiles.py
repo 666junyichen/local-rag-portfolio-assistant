@@ -19,6 +19,7 @@ def test_preprocessing_profile_is_immutable_and_has_safe_defaults() -> None:
     assert profile.normalize_whitespace is True
     assert profile.remove_urls is False
     assert profile.remove_emails is False
+    assert profile.remove_wechat is False
     with pytest.raises(FrozenInstanceError):
         profile.remove_urls = True  # type: ignore[misc]
 
@@ -148,6 +149,13 @@ def test_profile_roundtrip_and_digest_are_stable() -> None:
     assert ProcessingProfile.from_dict(payload) == profile
     assert ProcessingProfile.from_dict(profile.to_dict()).digest() == profile.digest()
     assert profile.digest() == "f34f0284370e0b9c44ce9f847401e0e794fd158aa8de49e05cf7dd479c5e1b2f"
+
+
+def test_preprocessing_profile_roundtrips_wechat_removal_when_enabled() -> None:
+    profile = PreprocessingProfile(remove_wechat=True)
+
+    assert profile.to_dict()["remove_wechat"] is True
+    assert PreprocessingProfile.from_dict(profile.to_dict()) == profile
 
 
 def test_old_resume_profile_migrates_to_resume_semantic() -> None:

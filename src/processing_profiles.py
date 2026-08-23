@@ -85,18 +85,22 @@ class PreprocessingProfile:
     normalize_whitespace: bool = True
     remove_urls: bool = False
     remove_emails: bool = False
+    remove_wechat: bool = False
 
     def __post_init__(self) -> None:
-        for name in ("normalize_whitespace", "remove_urls", "remove_emails"):
+        for name in ("normalize_whitespace", "remove_urls", "remove_emails", "remove_wechat"):
             if not isinstance(getattr(self, name), bool):
                 raise ValueError(f"{name} must be a boolean")
 
     def to_dict(self) -> dict[str, bool]:
-        return {
+        result = {
             "normalize_whitespace": self.normalize_whitespace,
             "remove_urls": self.remove_urls,
             "remove_emails": self.remove_emails,
         }
+        if self.remove_wechat:
+            result["remove_wechat"] = True
+        return result
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> PreprocessingProfile:

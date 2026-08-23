@@ -137,6 +137,14 @@ class DocumentProcessingTests(unittest.TestCase):
 
         self.assertEqual(result, "Contact ; visit https://example.com/contact.")
 
+    def test_clean_text_removes_wechat_ids_when_enabled(self) -> None:
+        profile = PreprocessingProfile(remove_wechat=True)
+        value = "联系方式：微信号 Junyi_2026，WeChat ID: junyi-demo；保留 WeChat mini program 项目。"
+
+        result = clean_text(value, profile)
+
+        self.assertEqual(result, "联系方式：，；保留 WeChat mini program 项目。")
+
     def test_clean_text_removes_email_adjacent_to_unicode_text(self) -> None:
         profile = PreprocessingProfile(remove_emails=True)
         value = "\u8054\u7cfb\u5f20test@example.com\uff0c\u7ee7\u7eed"
@@ -363,6 +371,11 @@ Tools: Git, Docker, Vercel""",
     def test_detect_pii_finds_email_and_phone(self) -> None:
         findings = detect_pii("Email me at person@example.com or call 13776680803.")
         self.assertEqual({item["type"] for item in findings}, {"email", "phone"})
+
+    def test_detect_pii_finds_wechat_without_echoing_regular_wechat_text(self) -> None:
+        findings = detect_pii("微信号：Junyi_2026；WeChat mini program 是项目描述。")
+
+        self.assertEqual([item["type"] for item in findings], ["wechat"])
 
     def test_preview_retrieval_ranks_the_most_similar_chunk_first(self) -> None:
         class FakeModel:
