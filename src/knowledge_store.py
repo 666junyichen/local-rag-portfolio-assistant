@@ -38,6 +38,11 @@ def publish_document(path: Path, raw: dict[str, Any]) -> dict[str, Any]:
     )
     if duplicate:
         return {"created": False, "document": duplicate}
+    for index, item in enumerate(documents):
+        if item["doc_id"] == document["doc_id"]:
+            documents[index] = document
+            _write(path, documents)
+            return {"created": False, "document": document}
     documents.append(document)
     _write(path, documents)
     return {"created": True, "document": document}

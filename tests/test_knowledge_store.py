@@ -30,6 +30,37 @@ class KnowledgeStoreTests(unittest.TestCase):
         self.assertEqual(saved[0]["visibility"], "public")
         self.assertEqual(len(saved), 1)
 
+    def test_publish_document_replaces_existing_document_with_same_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "portfolio_docs.json"
+            path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "doc_id": "resume",
+                            "title": "Resume",
+                            "body": "Old public resume.",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = publish_document(
+                path,
+                {
+                    "doc_id": "resume",
+                    "title": "Resume",
+                    "body": "Updated public resume with new evidence.",
+                },
+            )
+            saved = json.loads(path.read_text(encoding="utf-8"))
+
+        self.assertFalse(result["created"])
+        self.assertEqual(len(saved), 1)
+        self.assertEqual(saved[0]["doc_id"], "resume")
+        self.assertEqual(saved[0]["body"], "Updated public resume with new evidence.")
+
     def test_private_save_forces_private_visibility(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "local_private_docs.json"

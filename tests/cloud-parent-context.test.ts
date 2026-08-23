@@ -106,6 +106,16 @@ describe("cloud parent context and answer intent", () => {
       .map((item) => item.sectionType)).toEqual(["skill", "project"]);
   });
 
+  it("falls back to ranked evidence for project questions when seed chunks have no section metadata", () => {
+    const candidates = [
+      { ...source("seed-1", "seed-parent-1", "seed-1", 0.95), sectionType: undefined, category: "portfolio" },
+      { ...source("seed-2", "seed-parent-2", "seed-2", 0.93), sectionType: undefined, category: "portfolio" },
+    ];
+
+    expect(retrievalModule.selectParentContext(candidates, "exhaustive", 5, "Junyi 有哪些 AI 项目？")
+      .map((item) => item.chunkId)).toEqual(["seed-1", "seed-2"]);
+  });
+
   it("classifies strongest questions before exhaustive wording and adds intent-specific prompt rules", () => {
     const classifyAnswerIntent = (promptModule as unknown as {
       classifyAnswerIntent?: (question: string) => string;

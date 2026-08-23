@@ -207,8 +207,9 @@ export function selectParentContext(candidates: Source[], intent: AnswerIntent, 
   const limit = selectedContextLimit(intent, topK);
 
   const rankedCandidates = [...candidates].sort((left, right) => sourceRank(right) - sourceRank(left));
-  const scopedCandidates = projectQuestion(question) && intent !== "fact"
-    ? rankedCandidates.filter((source) => source.sectionType === "project")
+  const projectCandidates = rankedCandidates.filter((source) => source.sectionType === "project");
+  const scopedCandidates = projectQuestion(question) && intent !== "fact" && projectCandidates.length
+    ? projectCandidates
     : rankedCandidates;
 
   for (const source of scopedCandidates) {
