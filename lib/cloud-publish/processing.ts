@@ -438,8 +438,9 @@ function previewChunk(body: string, parentBody: string, title: string, section: 
 }
 
 export function buildChunkPreview(text: string, profile: ProcessingProfile, metadata: { title: string }): ChunkPreview {
+  const sourceText = cleanPublicText(text, profile);
   const isResume = profile.chunkMode === "resume_semantic";
-  const sections = isResume ? resumeSections(text, metadata.title) : generalSections(text, profile, metadata.title);
+  const sections = isResume ? resumeSections(sourceText, metadata.title) : generalSections(sourceText, profile, metadata.title);
   const parents: PreviewChunk[] = [];
   const children: PreviewChunk[] = [];
   for (const section of sections) {

@@ -86,6 +86,22 @@ describe("cloud RAG contracts", () => {
     });
   });
 
+  it("reports BM25 fallback when Gemini embedding makes vector retrieval unavailable", () => {
+    expect(chooseCloudRetrievalPath({
+      requestedMode: "adaptive",
+      question: "Junyi 最强的 AI 项目有哪些?",
+      vectorRows: [],
+      vectorAvailable: false,
+      textSearchAvailable: true,
+    })).toMatchObject({
+      requestedMode: "adaptive",
+      appliedMode: "bm25",
+      fallbackReason: "Gemini embedding is unavailable; using Atlas BM25 text search.",
+      capabilities: { vector: false, bm25: true, hybrid: false, rerank: false, adaptive: true },
+      vectorCandidates: 0,
+    });
+  });
+
   it("provides a public-safe cloud retrieval benchmark script", () => {
     const script = fs.readFileSync(path.resolve(process.cwd(), "scripts/evaluate-cloud-retrieval.mjs"), "utf8");
     expect(script).toContain("evals/rag_benchmark.json");

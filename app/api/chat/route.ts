@@ -5,11 +5,34 @@ import { retrieveForQuestion } from "@/lib/cloud-rag/retrieval";
 import { sse } from "@/lib/cloud-rag/sse";
 import { chatRequestSchema } from "@/lib/cloud-rag/validation";
 import { requireActivePublicSpaces } from "@/lib/cloud-publish/spaces";
+import type { Language, Source } from "@/lib/cloud-rag/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const encoder = new TextEncoder();
+
+function compactEvidenceLine(source: Source, index: number, language: Language): string {
+  const text = (source.snippet || source.matchedSnippet || "").replace(/\s+/g, " ").trim();
+  const excerpt = text.length > 180 ? `${text.slice(0, 177)}...` : text;
+  const title = source.title || source.entityTitle || source.docId || `Source ${index + 1}`;
+  if (language === "zh") return `${index + 1}. ${title}：${excerpt}`;
+  return `${index + 1}. ${title}: ${excerpt}`;
+}
+
+function evidenceOnlyFallback(sources: Source[], language: Language): string {
+  const lines = sources.slice(0, 5).map((source, index) => compactEvidenceLine(source, index, language)).join("\n");
+  if (language === "zh") {
+    return [
+      "Gemini 生成服务当前不可用，但我已经从公开知识库检索到以下证据。修复 API key 后会恢复完整自然语言回答：",
+      lines,
+    ].filter(Boolean).join("\n\n");
+  }
+  return [
+    "Gemini generation is currently unavailable, but I found these public knowledge-base sources. Full natural-language answers will resume after the API key is fixed:",
+    lines,
+  ].filter(Boolean).join("\n\n");
+}
 
 export async function POST(request: Request) {
   try {
@@ -69,10 +92,19 @@ export async function POST(request: Request) {
           });
         } catch (error) {
           console.error("Cloud RAG generation failed", error);
-          send("error", {
+          send("warning", {
             message: body.language === "zh"
-              ? "AI 生成服务暂时繁忙，检索结果已经保留，请稍后重试。"
-              : "The AI generation service is temporarily busy. Retrieved evidence is preserved; please retry shortly.",
+              ? "Gemini 生成服务当前不可用；已返回公开知识库证据。"
+              : "Gemini generation is currently unavailable; retrieved public evidence is returned.",
+            provider: "gemini",
+          });
+          send("token", { text: evidenceOnlyFallback(retrieval.selectedContext, body.language) });
+          send("done", {
+            intent: retrieval.intent,
+            retrieval: retrieval.retrieval,
+            finishReason: null,
+            truncated: false,
+            generationFallback: true,
           });
         } finally {
           controller.close();

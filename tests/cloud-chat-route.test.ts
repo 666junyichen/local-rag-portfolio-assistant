@@ -103,4 +103,48 @@ describe("cloud chat route", () => {
     expect(body).toContain('"truncated":true');
     expect(body).not.toContain("duplicate-child");
   });
+
+  it("streams evidence-only fallback when Gemini generation is unavailable", async () => {
+    const parent = {
+      docId: "resume", chunkId: "child-1", parentChunkId: "parent-1", semanticGroupId: "rag",
+      title: "Master Resume", category: "project", language: "zh", snippet: "Local RAG Portfolio Assistant 体现了 RAG 应用能力。",
+      matchedSnippet: "RAG 项目", score: 1, spaceId: "portfolio", spaceName: "Portfolio",
+    };
+    retrieveForQuestion.mockResolvedValue({
+      candidates: [parent],
+      selectedContext: [parent],
+      intent: "ranked",
+      retrieval: {
+        requestedMode: "adaptive",
+        appliedMode: "bm25",
+        retrievalPath: "bm25",
+        capabilities: { vector: false, bm25: true, hybrid: false, rerank: false, adaptive: true },
+        fallbackReason: "Gemini embedding is unavailable; using Atlas BM25 text search.",
+      },
+    });
+    buildPrompt.mockReturnValue("grounded prompt");
+    generateText.mockRejectedValue(new Error("Gemini request failed (403)"));
+
+    const { POST } = await import("../app/api/chat/route");
+    const response = await POST(new Request("https://example.test/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question: "Junyi 最强的 AI 项目有哪些?",
+        language: "zh",
+        history: [],
+        settings: { topK: 5, scoreThreshold: null, spaceIds: ["portfolio"], retrievalMode: "adaptive" },
+      }),
+    }));
+
+    const body = await response.text();
+    expect(response.status).toBe(200);
+    expect(body).toContain("event: retrieval");
+    expect(body).toContain("Gemini embedding is unavailable");
+    expect(body).toContain("event: warning");
+    expect(body).toContain("Gemini 生成服务当前不可用");
+    expect(body).toContain("Local RAG Portfolio Assistant");
+    expect(body).toContain("event: done");
+    expect(body).not.toContain("event: error");
+  });
 });

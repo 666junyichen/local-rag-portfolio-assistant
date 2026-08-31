@@ -91,16 +91,27 @@ const projectQuestion = (question: string) => /项目|專案|projects?/iu.test(q
 const TEXT_INDEX_UNAVAILABLE = "Atlas Search text index is unavailable; using Vector Search.";
 const ADAPTIVE_TEXT_INDEX_UNAVAILABLE = "Atlas Search text index is unavailable; adaptive used Vector Search.";
 const CLOUD_RERANK_UNAVAILABLE = "Cloud reranker is unavailable; applied Hybrid without reranking.";
+const VECTOR_EMBEDDING_UNAVAILABLE = "Gemini embedding is unavailable; using Atlas BM25 text search.";
+const VECTOR_SEARCH_UNAVAILABLE = "Atlas Vector Search is unavailable; using Atlas BM25 text search.";
+const NO_CLOUD_RETRIEVAL_PATH = "No cloud retrieval path is available because Gemini embedding and Atlas Search text index are unavailable.";
 
 type SparseResult = {
   rows: Document[];
   available: boolean;
 };
 
+type VectorResult = {
+  rows: Document[];
+  available: boolean;
+  fallbackReason?: string;
+};
+
 type RetrievalPathInput = {
   requestedMode?: RetrievalMode;
   question: string;
   vectorRows: Document[];
+  vectorAvailable?: boolean;
+  vectorFallbackReason?: string;
   textSearchAvailable: boolean;
 };
 
@@ -118,20 +129,30 @@ function precisionReasons(question: string, vectorRows: Document[]): string[] {
 
 export function chooseCloudRetrievalPath(input: RetrievalPathInput): RetrievalDiagnostics {
   const requestedMode = input.requestedMode || "vector";
+  const vectorAvailable = input.vectorAvailable !== false;
+  const vectorFallbackReason = input.vectorFallbackReason || VECTOR_EMBEDDING_UNAVAILABLE;
   const capabilities = {
-    vector: true,
+    vector: vectorAvailable,
     bm25: input.textSearchAvailable,
-    hybrid: input.textSearchAvailable,
+    hybrid: vectorAvailable && input.textSearchAvailable,
     rerank: false,
     adaptive: true,
   };
-  const rerankerReasons = requestedMode === "adaptive"
+  const rerankerReasons = requestedMode === "adaptive" && vectorAvailable
     ? precisionReasons(input.question, input.vectorRows)
     : [];
   let appliedMode: RetrievalMode = requestedMode;
   let fallbackReason: string | undefined;
 
-  if (requestedMode === "vector") {
+  if (!vectorAvailable) {
+    if (input.textSearchAvailable) {
+      appliedMode = "bm25";
+      fallbackReason = requestedMode === "bm25" ? undefined : vectorFallbackReason;
+    } else {
+      appliedMode = requestedMode === "bm25" ? "bm25" : "vector";
+      fallbackReason = NO_CLOUD_RETRIEVAL_PATH;
+    }
+  } else if (requestedMode === "vector") {
     appliedMode = "vector";
   } else if (requestedMode === "bm25") {
     appliedMode = input.textSearchAvailable ? "bm25" : "vector";
@@ -251,11 +272,23 @@ export function mergeSpaceCandidates(
 async function retrieveSpaceCandidates(
   collection: Collection<Document>,
   question: string,
-  queryVector: number[],
+  queryVector: number[] | null,
+  vectorFallbackReason: string | undefined,
   spaceId: string,
   settings: RetrievalSettings,
 ): Promise<{ sources: Source[]; diagnostics: RetrievalDiagnostics }> {
   const candidateLimit = Math.min(Math.max(settings.topK * 10, 30), 50);
+  const searchVector = async (): Promise<VectorResult> => {
+    if (!queryVector) {
+      return { rows: [], available: !vectorFallbackReason, ...(vectorFallbackReason ? { fallbackReason: vectorFallbackReason } : {}) };
+    }
+    try {
+      const rows = await collection.aggregate(buildVectorPipeline(queryVector, settings.topK, candidateLimit, [spaceId])).toArray();
+      return { rows, available: true };
+    } catch {
+      return { rows: [], available: false, fallbackReason: VECTOR_SEARCH_UNAVAILABLE };
+    }
+  };
   const searchSparse = async (): Promise<SparseResult> => {
     try {
       const rows = await collection.aggregate([
@@ -277,15 +310,17 @@ async function retrieveSpaceCandidates(
       return { rows: [], available: false };
     }
   };
-  const [vectorDocs, sparse] = await Promise.all([
-    collection.aggregate(buildVectorPipeline(queryVector, settings.topK, candidateLimit, [spaceId])).toArray(),
+  const [vector, sparse] = await Promise.all([
+    searchVector(),
     searchSparse(),
   ]);
   const diagnostics = {
     ...chooseCloudRetrievalPath({
       requestedMode: settings.retrievalMode,
       question,
-      vectorRows: vectorDocs,
+      vectorRows: vector.rows,
+      vectorAvailable: vector.available,
+      vectorFallbackReason: vector.fallbackReason,
       textSearchAvailable: sparse.available,
     }),
     bm25Candidates: sparse.rows.length,
@@ -294,9 +329,9 @@ async function retrieveSpaceCandidates(
   if (diagnostics.appliedMode === "bm25") {
     docs = annotateSparseRows(sparse.rows, diagnostics);
   } else if (diagnostics.appliedMode === "hybrid" || diagnostics.appliedMode === "hybrid-rerank") {
-    docs = annotateHybridRows(reciprocalRankFusion(vectorDocs, sparse.rows), diagnostics);
+    docs = annotateHybridRows(reciprocalRankFusion(vector.rows, sparse.rows), diagnostics);
   } else {
-    docs = annotateVectorRows(vectorDocs, diagnostics);
+    docs = annotateVectorRows(vector.rows, diagnostics);
   }
   docs.forEach((doc) => { doc.space_id = doc.space_id || spaceId; });
   return {
@@ -313,13 +348,19 @@ type RetrievalRun = {
 function mergeDiagnostics(runs: RetrievalRun[], requestedMode: RetrievalMode): RetrievalDiagnostics {
   const fallbackReason = runs.map((run) => run.diagnostics.fallbackReason).find(Boolean);
   const rerankerReasons = [...new Set(runs.flatMap((run) => run.diagnostics.rerankerReasons || []))];
-  const appliedMode = (runs.some((run) => run.diagnostics.appliedMode === "hybrid") ? "hybrid" : runs[0]?.diagnostics.appliedMode || "vector") as RetrievalMode;
+  const appliedMode = (
+    runs.some((run) => run.diagnostics.appliedMode === "hybrid")
+      ? "hybrid"
+      : runs.some((run) => run.diagnostics.appliedMode === "bm25")
+        ? "bm25"
+        : runs[0]?.diagnostics.appliedMode || "vector"
+  ) as RetrievalMode;
   return {
     requestedMode,
     appliedMode,
     retrievalPath: appliedMode,
     capabilities: {
-      vector: true,
+      vector: runs.every((run) => run.diagnostics.capabilities.vector),
       bm25: runs.every((run) => run.diagnostics.capabilities.bm25),
       hybrid: runs.every((run) => run.diagnostics.capabilities.hybrid),
       rerank: false,
@@ -336,10 +377,19 @@ function mergeDiagnostics(runs: RetrievalRun[], requestedMode: RetrievalMode): R
 async function retrieveWithDiagnostics(question: string, settings: RetrievalSettings): Promise<RetrievalRun> {
   const db = await cloudDb();
   const collection = db.collection(process.env.CLOUD_COLLECTION_NAME || "portfolio_knowledge_public");
-  const queryVector = await embedQuery(question);
+  let queryVector: number[] | null = null;
+  let vectorFallbackReason: string | undefined;
+  if ((settings.retrievalMode || "vector") !== "bm25") {
+    try {
+      queryVector = await embedQuery(question);
+    } catch (error) {
+      console.warn("Cloud RAG embedding unavailable; falling back to Atlas BM25 when available", error instanceof Error ? error.message : error);
+      vectorFallbackReason = VECTOR_EMBEDDING_UNAVAILABLE;
+    }
+  }
   const spaceIds = normalizeSpaceIds(settings.spaceIds);
   const [runs, names] = await Promise.all([
-    Promise.all(spaceIds.map((spaceId) => retrieveSpaceCandidates(collection, question, queryVector, spaceId, settings))),
+    Promise.all(spaceIds.map((spaceId) => retrieveSpaceCandidates(collection, question, queryVector, vectorFallbackReason, spaceId, settings))),
     spaceNameMap(spaceIds),
   ]);
   const groups = runs.map((run) => run.sources);
