@@ -91,7 +91,10 @@ export async function POST(request: Request) {
             truncated: generation.truncated,
           });
         } catch (error) {
-          console.error("Cloud RAG generation failed", error);
+          console.warn(
+            "Cloud RAG generation unavailable; returning evidence-only fallback",
+            error instanceof Error ? error.message : error,
+          );
           send("warning", {
             message: body.language === "zh"
               ? "Gemini 生成服务当前不可用；已返回公开知识库证据。"
