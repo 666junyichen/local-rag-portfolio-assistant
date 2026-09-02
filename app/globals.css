@@ -83,7 +83,7 @@ h2 { letter-spacing:0; }
 .sourceItem p { margin:0; padding:0 12px 10px; color:#4c5769; font-size:.81rem; line-height:1.5; }
 .sourceItem > a { display:inline-flex; align-items:center; gap:4px; padding:0 12px 12px; color:var(--blue-dark); font-size:.79rem; text-decoration:none; }
 .runtimeFacts p { display:flex; align-items:center; gap:8px; color:#5e697a; font-size:.82rem; }
-.geminiDot { width:10px; height:10px; border:3px solid var(--green); transform:rotate(45deg); }
+.providerDot { width:10px; height:10px; border:3px solid var(--green); transform:rotate(45deg); }
 .pageFrame { max-width:1180px; margin:0 auto; padding:42px 28px 72px; }
 .pageHeading { border-bottom:1px solid var(--line); padding-bottom:24px; margin-bottom:26px; }
 .catalogHeading { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; }

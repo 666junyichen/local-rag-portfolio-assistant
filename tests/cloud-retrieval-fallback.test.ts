@@ -4,9 +4,9 @@ const embedQuery = vi.fn();
 const aggregate = vi.fn();
 const cloudDb = vi.fn();
 
-vi.mock("@/lib/cloud-rag/gemini", () => ({ embedQuery }));
+vi.mock("@/lib/cloud-rag/ai-providers", () => ({ embedQuery }));
 vi.mock("@/lib/cloud-rag/mongodb", () => ({ cloudDb }));
-vi.mock("../lib/cloud-rag/gemini", () => ({ embedQuery }));
+vi.mock("../lib/cloud-rag/ai-providers", () => ({ embedQuery }));
 vi.mock("../lib/cloud-rag/mongodb", () => ({ cloudDb }));
 vi.mock("../lib/cloud-publish/spaces", () => ({
   spaceNameMap: vi.fn(async (spaceIds: string[]) => new Map(spaceIds.map((spaceId) => [spaceId, "Portfolio"]))),
@@ -22,8 +22,9 @@ describe("cloud retrieval provider fallback", () => {
     });
   });
 
-  it("uses Atlas BM25 when Gemini embedding is denied", async () => {
-    embedQuery.mockRejectedValue(new Error("Gemini request failed (403)"));
+  it("uses Atlas BM25 when cloud embedding is denied", async () => {
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    embedQuery.mockRejectedValue(new Error("OpenAI request failed (429)"));
     aggregate.mockImplementation((pipeline: Array<Record<string, unknown>>) => {
       if (pipeline[0]?.$vectorSearch) throw new Error("vector search should not run without an embedding");
       return {
@@ -44,20 +45,25 @@ describe("cloud retrieval provider fallback", () => {
       };
     });
 
-    const { retrieveForQuestion } = await import("../lib/cloud-rag/retrieval");
-    const result = await retrieveForQuestion("Junyi 最强的 AI 项目有哪些?", {
-      topK: 5,
-      scoreThreshold: null,
-      spaceIds: ["portfolio"],
-      retrievalMode: "adaptive",
-    });
+    let result;
+    try {
+      const { retrieveForQuestion } = await import("../lib/cloud-rag/retrieval");
+      result = await retrieveForQuestion("Junyi 最强的 AI 项目有哪些?", {
+        topK: 5,
+        scoreThreshold: null,
+        spaceIds: ["portfolio"],
+        retrievalMode: "adaptive",
+      });
+    } finally {
+      consoleWarn.mockRestore();
+    }
 
     expect(result.selectedContext).toHaveLength(1);
     expect(result.selectedContext[0]).toMatchObject({
       title: "Master Resume",
       retrievalChannels: ["bm25"],
       retrievalPath: "bm25",
-      fallbackReason: "Gemini embedding is unavailable; using Atlas BM25 text search.",
+      fallbackReason: "Cloud embedding is unavailable; using Atlas BM25 text search.",
     });
     expect(result.retrieval).toMatchObject({
       requestedMode: "adaptive",

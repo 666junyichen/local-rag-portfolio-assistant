@@ -201,8 +201,60 @@ export async function reconcilePublicTextIndex(collection, existingSearchIndexes
   }
 }
 
-async function embedDocument(text) {
-  const model = process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001";
+const seedProviders = new Set(["openai", "gemini"]);
+
+function normalizeSeedProvider(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return seedProviders.has(normalized) ? normalized : null;
+}
+
+export function resolveSeedEmbeddingConfig() {
+  const provider = normalizeSeedProvider(process.env.CLOUD_EMBEDDING_PROVIDER)
+    || (process.env.OPENAI_API_KEY ? "openai" : "gemini");
+  if (provider === "openai") {
+    return {
+      provider,
+      model: process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small",
+      apiKeyEnv: "OPENAI_API_KEY",
+    };
+  }
+  return {
+    provider: "gemini",
+    model: process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001",
+    apiKeyEnv: "GEMINI_API_KEY",
+  };
+}
+
+function requireSeedEmbeddingCredentials(config) {
+  if (!process.env[config.apiKeyEnv]) throw new Error(`${config.apiKeyEnv} is required for ${config.provider} embeddings`);
+}
+
+function openAIEmbeddingPayload(texts, model) {
+  const dimensions = Number(process.env.OPENAI_EMBEDDING_DIMENSIONS || 0);
+  return {
+    model,
+    input: texts,
+    encoding_format: "float",
+    ...(Number.isInteger(dimensions) && dimensions > 0 ? { dimensions } : {}),
+  };
+}
+
+async function embedOpenAIDocumentBatch(texts, model) {
+  const response = await fetch("https://api.openai.com/v1/embeddings", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify(openAIEmbeddingPayload(texts, model)),
+  });
+  if (!response.ok) throw new Error(`OpenAI embedding failed (${response.status})`);
+  const result = await response.json();
+  const rows = [...(result.data || [])].sort((left, right) => Number(left.index || 0) - Number(right.index || 0));
+  if (rows.length !== texts.length || rows.some((row) => !row.embedding?.length)) {
+    throw new Error("OpenAI returned incomplete embeddings");
+  }
+  return rows.map((row) => row.embedding);
+}
+
+async function embedGeminiDocument(text, model) {
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent`, {
     method: "POST",
     headers: { "x-goog-api-key": process.env.GEMINI_API_KEY, "Content-Type": "application/json" },
@@ -212,6 +264,37 @@ async function embedDocument(text) {
   const result = await response.json();
   if (!result.embedding?.values) throw new Error("Gemini returned no embedding");
   return result.embedding.values;
+}
+
+async function embedSeedDocuments(texts, config) {
+  if (!texts.length) return [];
+  requireSeedEmbeddingCredentials(config);
+  if (config.provider === "openai") {
+    const output = [];
+    const batchSize = 96;
+    for (let start = 0; start < texts.length; start += batchSize) {
+      const batch = texts.slice(start, start + batchSize);
+      output.push(...await embedOpenAIDocumentBatch(batch, config.model));
+      console.log(`Embedded ${Math.min(start + batch.length, texts.length)}/${texts.length} with OpenAI`);
+    }
+    return output;
+  }
+  const output = [];
+  for (let index = 0; index < texts.length; index += 1) {
+    output.push(await embedGeminiDocument(texts[index], config.model));
+    console.log(`Embedded ${index + 1}/${texts.length} with Gemini`);
+  }
+  return output;
+}
+
+export function buildVectorIndexDefinition(embeddingDimensions) {
+  return { fields: [
+      { type: "vector", path: "embedding", numDimensions: embeddingDimensions, similarity: "cosine" },
+      { type: "filter", path: "visibility" },
+      { type: "filter", path: "space_id" },
+      { type: "filter", path: "metadata.category" },
+      { type: "filter", path: "metadata.language" },
+    ] };
 }
 
 async function main() {
@@ -232,11 +315,12 @@ async function main() {
   const catalogOnly = process.argv.includes("--catalog-only");
   const spacesOnly = process.argv.includes("--spaces-only");
   if (!process.env.MONGODB_URI) throw new Error("MONGODB_URI is required");
-  if (!catalogOnly && !spacesOnly && chunks.length && !process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is required");
+  const embeddingConfig = resolveSeedEmbeddingConfig();
+  if (!catalogOnly && !spacesOnly && chunks.length) requireSeedEmbeddingCredentials(embeddingConfig);
   if (!catalogOnly && !spacesOnly) {
+    const embeddings = await embedSeedDocuments(chunks.map((chunk) => chunk.retrieval_text), embeddingConfig);
     for (let index = 0; index < chunks.length; index += 1) {
-      chunks[index].embedding = await embedDocument(chunks[index].retrieval_text);
-      console.log(`Embedded ${index + 1}/${chunks.length}`);
+      chunks[index].embedding = embeddings[index];
     }
   }
   const client = new MongoClient(process.env.MONGODB_URI);
@@ -327,24 +411,27 @@ async function main() {
     console.log(`No repository public seed documents found. Cleared repository seed chunks/catalog records and preserved ${ownerUploadCount} owner-upload chunks.`);
     return;
   }
-  const embeddingModel = process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001";
+  const embeddingProvider = embeddingConfig.provider;
+  const embeddingModel = embeddingConfig.model;
   const embeddingDimensions = chunks[0]?.embedding?.length || 0;
   if (!embeddingDimensions) throw new Error("The seed produced no embedding dimensions");
 
   const existingContract = await metadataCollection.findOne({ _id: "repo_seed_embedding" });
   if (existingContract && (
-    existingContract.model !== embeddingModel
+    (existingContract.provider && existingContract.provider !== embeddingProvider)
+    || existingContract.model !== embeddingModel
     || Number(existingContract.num_dimensions) !== embeddingDimensions
   )) {
-    throw new Error("Embedding model or dimensions changed; rebuild the vector index before seeding");
+    console.log(`Embedding contract changed from ${existingContract.provider || "legacy"}:${existingContract.model}/${existingContract.num_dimensions} to ${embeddingProvider}:${embeddingModel}/${embeddingDimensions}.`);
   }
   const existingSearchIndexes = await collection.listSearchIndexes().toArray().catch(() => []);
   const existingVectorIndex = existingSearchIndexes.find((index) => index.name === indexName);
   const vectorDefinition = existingVectorIndex?.latestDefinition || existingVectorIndex?.definition;
   const vectorField = vectorDefinition?.fields?.find((field) => field.path === "embedding");
-  if (vectorField?.numDimensions && Number(vectorField.numDimensions) !== embeddingDimensions) {
-    throw new Error(`Vector index ${indexName} expects ${vectorField.numDimensions} dimensions, received ${embeddingDimensions}`);
-  }
+  const vectorIndexDefinition = buildVectorIndexDefinition(embeddingDimensions);
+  const vectorNeedsUpdate = !vectorDefinition?.fields?.some((field) => field.path === "space_id")
+    || !vectorField?.numDimensions
+    || Number(vectorField.numDimensions) !== embeddingDimensions;
   await metadataCollection.createIndex({ updated_at: 1 });
   const chunkIds = chunks.map((chunk) => chunk.chunk_id);
   const session = client.startSession();
@@ -364,7 +451,7 @@ async function main() {
       await syncRepoSeedCatalog({ documentsCollection, documents, session, now });
       await metadataCollection.updateOne(
         { _id: "repo_seed_embedding" },
-        { $set: { model: embeddingModel, num_dimensions: embeddingDimensions, updated_at: now } },
+        { $set: { provider: embeddingProvider, model: embeddingModel, num_dimensions: embeddingDimensions, updated_at: now } },
         { upsert: true, session },
       );
     });
@@ -372,15 +459,8 @@ async function main() {
     await session.endSession();
   }
 
-  const vectorIndexDefinition = { fields: [
-      { type: "vector", path: "embedding", numDimensions: embeddingDimensions, similarity: "cosine" },
-      { type: "filter", path: "visibility" },
-      { type: "filter", path: "space_id" },
-      { type: "filter", path: "metadata.category" },
-      { type: "filter", path: "metadata.language" },
-    ] };
   if (!existingSearchIndexes.some((index) => index.name === indexName)) await collection.createSearchIndex({ name: indexName, type: "vectorSearch", definition: vectorIndexDefinition });
-  else if (!vectorDefinition?.fields?.some((field) => field.path === "space_id")) await collection.updateSearchIndex(indexName, vectorIndexDefinition);
+  else if (vectorNeedsUpdate) await collection.updateSearchIndex(indexName, vectorIndexDefinition);
 
   const textIndexResult = await reconcilePublicTextIndex(collection, existingSearchIndexes, textIndexName);
   console.log(`Text index ${textIndexName}: ${textIndexResult.status}`);

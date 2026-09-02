@@ -5,10 +5,17 @@ const aggregate = vi.fn();
 const cloudDb = vi.fn();
 
 vi.mock("@/lib/cloud-rag/mongodb", () => ({ cloudDb }));
+vi.mock("@/lib/cloud-rag/ai-providers", () => ({
+  chatProviderOrder: () => (process.env.OPENAI_API_KEY ? ["openai"] : []),
+  embeddingProviderOrder: () => (process.env.OPENAI_API_KEY ? ["openai"] : []),
+}));
 
 describe("cloud health route", () => {
   beforeEach(() => {
-    process.env.GEMINI_API_KEY = "test-gemini";
+    process.env.OPENAI_API_KEY = "test-openai";
+    delete process.env.GEMINI_API_KEY;
+    process.env.CLOUD_CHAT_PROVIDER = "openai";
+    process.env.CLOUD_EMBEDDING_PROVIDER = "openai";
     listSearchIndexes.mockReset();
     aggregate.mockReset();
     cloudDb.mockReset();
@@ -29,6 +36,12 @@ describe("cloud health route", () => {
 
     expect(response.status).toBe(200);
     expect(payload.ready).toBe(true);
+    expect(payload.openai).toBe(true);
+    expect(payload.gemini).toBe(false);
+    expect(payload.providers).toMatchObject({
+      chat: ["openai"],
+      embedding: ["openai"],
+    });
     expect(payload.textIndex).toBe(false);
     expect(payload.retrievalCapabilities).toMatchObject({
       vector: true,

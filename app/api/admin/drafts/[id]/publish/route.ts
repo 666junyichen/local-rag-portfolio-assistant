@@ -1,4 +1,4 @@
-import { embedDocuments } from "@/lib/cloud-rag/gemini";
+import { embedDocuments } from "@/lib/cloud-rag/ai-providers";
 import { requireOwner } from "@/lib/cloud-publish/auth";
 import { publishApiError } from "@/lib/cloud-publish/http";
 import { publishDraft } from "@/lib/cloud-publish/publishing";

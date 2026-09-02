@@ -1,6 +1,6 @@
 import type { Collection, Document } from "mongodb";
 import { cloudDb } from "./mongodb";
-import { embedQuery } from "./gemini";
+import { embedQuery } from "./ai-providers";
 import type { AnswerIntent, RetrievalDiagnostics, RetrievalMode, RetrievalResult, RetrievalSettings, Source } from "./types";
 import { planQuery, shouldRefuseWithoutRetrieval } from "./query-planning";
 import { classifyAnswerIntent } from "./prompt";
@@ -91,9 +91,9 @@ const projectQuestion = (question: string) => /项目|專案|projects?/iu.test(q
 const TEXT_INDEX_UNAVAILABLE = "Atlas Search text index is unavailable; using Vector Search.";
 const ADAPTIVE_TEXT_INDEX_UNAVAILABLE = "Atlas Search text index is unavailable; adaptive used Vector Search.";
 const CLOUD_RERANK_UNAVAILABLE = "Cloud reranker is unavailable; applied Hybrid without reranking.";
-const VECTOR_EMBEDDING_UNAVAILABLE = "Gemini embedding is unavailable; using Atlas BM25 text search.";
+const VECTOR_EMBEDDING_UNAVAILABLE = "Cloud embedding is unavailable; using Atlas BM25 text search.";
 const VECTOR_SEARCH_UNAVAILABLE = "Atlas Vector Search is unavailable; using Atlas BM25 text search.";
-const NO_CLOUD_RETRIEVAL_PATH = "No cloud retrieval path is available because Gemini embedding and Atlas Search text index are unavailable.";
+const NO_CLOUD_RETRIEVAL_PATH = "No cloud retrieval path is available because cloud embedding and Atlas Search text index are unavailable.";
 
 type SparseResult = {
   rows: Document[];

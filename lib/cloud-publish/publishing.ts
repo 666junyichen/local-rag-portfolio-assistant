@@ -46,7 +46,7 @@ const digest = (value: string, size = 24) => createHash("sha256").update(value, 
 
 export class PublishQuotaUnavailableError extends Error {
   constructor() {
-    super("Gemini free quota is temporarily unavailable. The draft was kept for a later retry.");
+    super("The embedding provider quota is temporarily unavailable. The draft was kept for a later retry.");
     this.name = "PublishQuotaUnavailableError";
   }
 }

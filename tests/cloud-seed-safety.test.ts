@@ -72,6 +72,40 @@ describe("cloud seed safety", () => {
     expect(script).toContain("numDimensions");
   });
 
+  it("selects OpenAI as the cloud seed embedding provider without requiring Gemini", async () => {
+    const previous = {
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+      GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+      CLOUD_EMBEDDING_PROVIDER: process.env.CLOUD_EMBEDDING_PROVIDER,
+      OPENAI_EMBEDDING_MODEL: process.env.OPENAI_EMBEDDING_MODEL,
+    };
+    process.env.OPENAI_API_KEY = "test-openai";
+    delete process.env.GEMINI_API_KEY;
+    process.env.CLOUD_EMBEDDING_PROVIDER = "openai";
+    process.env.OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
+
+    try {
+      // @ts-expect-error The executable seed script intentionally has no declaration file.
+      const { buildVectorIndexDefinition, resolveSeedEmbeddingConfig } = await import("../scripts/seed-atlas.mjs");
+      expect(resolveSeedEmbeddingConfig()).toEqual({
+        provider: "openai",
+        model: "text-embedding-3-small",
+        apiKeyEnv: "OPENAI_API_KEY",
+      });
+      expect(buildVectorIndexDefinition(1536)).toMatchObject({
+        fields: expect.arrayContaining([
+          { type: "vector", path: "embedding", numDimensions: 1536, similarity: "cosine" },
+          { type: "filter", path: "space_id" },
+        ]),
+      });
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
   it("can backfill the public catalog without generating new embeddings", async () => {
     // @ts-expect-error The executable seed script intentionally has no declaration file.
     const { normalizePublicDocuments, syncRepoSeedCatalog } = await import("../scripts/seed-atlas.mjs");

@@ -11,7 +11,7 @@ import {
 import { DEFAULT_PROCESSING_PROFILE, buildChunkPreview } from "../lib/cloud-publish/processing";
 
 function readyDraft(overrides: Partial<DraftRecord> = {}): DraftRecord {
-  const cleanedBody = "Portfolio RAG uses MongoDB Vector Search and Gemini for grounded public answers.";
+  const cleanedBody = "Portfolio RAG uses MongoDB Vector Search and OpenAI for grounded public answers.";
   return {
     draftId: "draft-1",
     ownerId: "owner-1",
@@ -94,10 +94,10 @@ describe("owner publication lifecycle", () => {
     expect(repository.commitPublication).not.toHaveBeenCalled();
   });
 
-  it("keeps the draft and records a recoverable state when free Gemini quota is unavailable", async () => {
+  it("keeps the draft and records a recoverable state when embedding quota is unavailable", async () => {
     const draft = readyDraft();
     const repository = fakeRepository(draft);
-    const embed = vi.fn().mockRejectedValue(new Error("Gemini request failed (429)"));
+    const embed = vi.fn().mockRejectedValue(new Error("OpenAI request failed (429)"));
 
     await expect(publishDraft(repository, { userId: "owner-1", email: "owner@example.com" }, "draft-1", embed))
       .rejects.toBeInstanceOf(PublishQuotaUnavailableError);

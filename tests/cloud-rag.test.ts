@@ -86,7 +86,7 @@ describe("cloud RAG contracts", () => {
     });
   });
 
-  it("reports BM25 fallback when Gemini embedding makes vector retrieval unavailable", () => {
+  it("reports BM25 fallback when cloud embedding makes vector retrieval unavailable", () => {
     expect(chooseCloudRetrievalPath({
       requestedMode: "adaptive",
       question: "Junyi 最强的 AI 项目有哪些?",
@@ -96,7 +96,7 @@ describe("cloud RAG contracts", () => {
     })).toMatchObject({
       requestedMode: "adaptive",
       appliedMode: "bm25",
-      fallbackReason: "Gemini embedding is unavailable; using Atlas BM25 text search.",
+      fallbackReason: "Cloud embedding is unavailable; using Atlas BM25 text search.",
       capabilities: { vector: false, bm25: true, hybrid: false, rerank: false, adaptive: true },
       vectorCandidates: 0,
     });

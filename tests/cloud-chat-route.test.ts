@@ -5,9 +5,12 @@ const generateText = vi.fn();
 const buildPrompt = vi.fn();
 
 vi.mock("@/lib/cloud-rag/retrieval", () => ({ retrieveForQuestion }));
-vi.mock("@/lib/cloud-rag/gemini", () => ({ generateText }));
+vi.mock("@/lib/cloud-rag/ai-providers", () => ({ generateText }));
 vi.mock("@/lib/cloud-rag/prompt", () => ({ buildPrompt }));
-vi.mock("@/lib/cloud-rag/rate-limit", () => ({ enforceRateLimit: vi.fn().mockResolvedValue(true) }));
+vi.mock("@/lib/cloud-rag/rate-limit", () => ({
+  enforceRateLimit: vi.fn().mockResolvedValue(true),
+  enforceUsageBudget: vi.fn().mockResolvedValue({ allowed: true }),
+}));
 vi.mock("@/lib/cloud-rag/sse", () => ({
   sse: (event: string, payload: unknown) => `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`,
 }));
@@ -62,7 +65,7 @@ describe("cloud chat route", () => {
     expect(generateText).not.toHaveBeenCalled();
   });
 
-  it("sends only deduplicated parent context to Gemini and exposes truncation metadata", async () => {
+  it("sends only deduplicated parent context to the configured generator and exposes truncation metadata", async () => {
     const parent = {
       docId: "resume", chunkId: "child-1", parentChunkId: "parent-1", semanticGroupId: "rag",
       title: "Master Resume", category: "project", language: "en", snippet: "Full parent evidence",
@@ -104,7 +107,7 @@ describe("cloud chat route", () => {
     expect(body).not.toContain("duplicate-child");
   });
 
-  it("streams evidence-only fallback when Gemini generation is unavailable", async () => {
+  it("streams evidence-only fallback when cloud generation is unavailable", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const parent = {
@@ -121,11 +124,11 @@ describe("cloud chat route", () => {
         appliedMode: "bm25",
         retrievalPath: "bm25",
         capabilities: { vector: false, bm25: true, hybrid: false, rerank: false, adaptive: true },
-        fallbackReason: "Gemini embedding is unavailable; using Atlas BM25 text search.",
+        fallbackReason: "Cloud embedding is unavailable; using Atlas BM25 text search.",
       },
     });
     buildPrompt.mockReturnValue("grounded prompt");
-    generateText.mockRejectedValue(new Error("Gemini request failed (403)"));
+    generateText.mockRejectedValue(new Error("OpenAI request failed (429)"));
 
     try {
       const { POST } = await import("../app/api/chat/route");
@@ -143,15 +146,15 @@ describe("cloud chat route", () => {
       const body = await response.text();
       expect(response.status).toBe(200);
       expect(body).toContain("event: retrieval");
-      expect(body).toContain("Gemini embedding is unavailable");
+      expect(body).toContain("Cloud embedding is unavailable");
       expect(body).toContain("event: warning");
-      expect(body).toContain("Gemini 生成服务当前不可用");
+      expect(body).toContain("AI 生成服务当前不可用");
       expect(body).toContain("Local RAG Portfolio Assistant");
       expect(body).toContain("event: done");
       expect(body).not.toContain("event: error");
       expect(consoleWarn).toHaveBeenCalledWith(
         "Cloud RAG generation unavailable; returning evidence-only fallback",
-        "Gemini request failed (403)",
+        "OpenAI request failed (429)",
       );
       expect(consoleError).not.toHaveBeenCalled();
     } finally {

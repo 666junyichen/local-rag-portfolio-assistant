@@ -12,7 +12,7 @@ const copy = {
   zh: {
     kicker: "公开云端 RAG",
     title: "向 Junyi 的项目资料提问",
-    description: "系统先从 MongoDB Atlas 召回公开证据，再由 Gemini 基于证据回答。",
+    description: "系统先从 MongoDB Atlas 召回公开证据，再由 OpenAI 基于证据回答。",
     placeholder: "例如：哪些项目体现了 Junyi 的 AI 应用能力？",
     empty: "你好，我可以根据公开的简历与项目资料，回答关于 Junyi 的技术能力、项目和经历。",
     questions: ["Junyi 最强的 AI 项目有哪些？", "他有哪些 MongoDB 经验？", "为什么适合全栈开发岗位？"],
@@ -20,7 +20,7 @@ const copy = {
   en: {
     kicker: "PUBLIC CLOUD RAG",
     title: "Ask Junyi's portfolio evidence",
-    description: "MongoDB Atlas retrieves public evidence first; Gemini then answers from that evidence.",
+    description: "MongoDB Atlas retrieves public evidence first; OpenAI then answers from that evidence.",
     placeholder: "Ask about projects, skills, or technical experience",
     empty: "Hi. I answer questions about Junyi's public projects, skills, and experience with retrieved evidence.",
     questions: ["What are Junyi's strongest AI projects?", "What MongoDB experience does he have?", "Why is he a fit for full-stack roles?"],

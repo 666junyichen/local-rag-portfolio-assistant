@@ -11,7 +11,7 @@ export function EvidenceRail({ sources }: { sources: Source[] }) {
     <section className="railSection runtimeFacts">
       <div className="sectionLabel"><Cloud size={16}/> Cloud runtime</div>
       <p><Database size={15}/> MongoDB Atlas Vector Search</p>
-      <p><span className="geminiDot"/> Gemini embedding + generation</p>
+      <p><span className="providerDot"/> OpenAI embedding + Luna generation</p>
       <p><LockKeyhole size={15}/> Public portfolio documents only</p>
     </section>
   </aside>;

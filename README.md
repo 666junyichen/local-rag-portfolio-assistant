@@ -3,7 +3,7 @@
 A bilingual portfolio assistant with two deliberately separated privacy modes:
 
 - **Local private mode:** Streamlit, MongoDB Local Atlas, SentenceTransformers, and Ollama.
-- **Cloud public mode:** Next.js, Vercel Functions, MongoDB Atlas Vector Search, and Gemini.
+- **Cloud public mode:** Next.js, Vercel Functions, MongoDB Atlas Vector/BM25 Search, and OpenAI.
 
 Development status and handoff context are maintained in [Project Status](docs/project-memory/CURRENT_STATE.md).
 
@@ -37,11 +37,11 @@ flowchart LR
     PJ[portfolio_docs.json] --> GS[Validated seed]
     OW[Owner Publish Studio] --> PC[Parse, clean, PII gate]
     PC --> PP[Preview and confirm publication]
-    GS --> GE[Gemini document embeddings]
+    GS --> GE[OpenAI document embeddings]
     PP --> GE
     GE --> MA[MongoDB Atlas public vector index]
     QC[Question] --> V[Vercel Function]
-    V --> GQ[Gemini query embedding] --> MA --> GG[Gemini generation] --> NX[Next.js streaming chat]
+    V --> GQ[OpenAI query embedding] --> MA --> GG[OpenAI Luna generation] --> NX[Next.js streaming chat]
   end
 ```
 
@@ -50,7 +50,7 @@ The two modes use separate collections and indexes because their embedding model
 | Mode | Collection | Embedding | Generation |
 |---|---|---|---|
 | Local | `portfolio_knowledge_local` | multilingual MiniLM (default) or `voyageai/voyage-4-nano` | Ollama (`qwen2.5:3b` or Gemma) |
-| Cloud | `portfolio_knowledge_public` | `gemini-embedding-001` | Gemini Flash |
+| Cloud | `portfolio_knowledge_public` | `text-embedding-3-small` | OpenAI `gpt-5.6-luna` |
 
 Local mode keeps Vector Search and text-search indexes separate, fuses their rankings with RRF, and may add a multilingual Cross-Encoder. Cloud requests now use the same mode names (`vector`, `bm25`, `hybrid`, `hybrid-rerank`, and `adaptive`) but resolve them through public Atlas capabilities on each request. If `text_index_public` is unavailable, cloud `bm25`, `hybrid`, and `adaptive` precision paths explicitly report a Vector Search fallback instead of silently pretending Hybrid is active. Do not make adaptive the public default until a current cloud benchmark beats the Vector baseline without no-answer or privacy regression.
 
@@ -204,12 +204,19 @@ Server-only variables:
 
 ```dotenv
 MONGODB_URI=mongodb+srv://...
-GEMINI_API_KEY=...
+OPENAI_API_KEY=...
+GEMINI_API_KEY=... # optional fallback
+CLOUD_CHAT_PROVIDER=openai
+CLOUD_CHAT_FALLBACK_PROVIDER=gemini
+CLOUD_EMBEDDING_PROVIDER=openai
+OPENAI_CHAT_MODEL=gpt-5.6-luna
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+OPENAI_REASONING_EFFORT=none
+CLOUD_DAILY_CHAT_LIMIT=50
+CLOUD_MONTHLY_CHAT_LIMIT=1500
 CLOUD_DB_NAME=portfolio_rag
 CLOUD_COLLECTION_NAME=portfolio_knowledge_public
 CLOUD_VECTOR_INDEX_NAME=vector_index_public
-GEMINI_EMBEDDING_MODEL=gemini-embedding-001
-GEMINI_CHAT_MODEL=gemini-3.5-flash
 CLOUD_DOCUMENTS_COLLECTION_NAME=portfolio_public_documents
 CLOUD_DRAFTS_COLLECTION_NAME=portfolio_public_drafts
 CLOUD_METADATA_COLLECTION_NAME=portfolio_public_metadata
@@ -232,7 +239,7 @@ npm run dev
 
 `seed:atlas:apply` reconciles `text_index_public` without deleting unrelated Atlas indexes. If Atlas refuses the Search index because the tier has no remaining index capacity, the app continues with Vector Search and `/api/retrieve` reports the fallback in its retrieval diagnostics.
 
-When the retrieval chunks already exist and only the new public Knowledge catalog needs to be populated, use the quota-free catalog backfill. It does not call Gemini or regenerate embeddings:
+When the retrieval chunks already exist and only the new public Knowledge catalog needs to be populated, use the quota-free catalog backfill. It does not call an embedding provider or regenerate embeddings:
 
 ```powershell
 node scripts/seed-atlas.mjs --catalog-only
@@ -259,7 +266,7 @@ The Vercel application provides:
 - `/lab` read-only Retrieval Lab for Top-K and threshold inspection.
 - `/architecture` privacy boundaries, runtime evidence, and screenshots.
 - `/studio` Owner-only Publish Studio after Clerk and `OWNER_EMAILS` are configured.
-- `/api/health` Atlas, Gemini, and vector index status without secret values.
+- `/api/health` Atlas, OpenAI/Gemini provider availability, and vector/text index status without secret values.
 
 ### Knowledge Spaces
 
@@ -268,7 +275,7 @@ Both runtimes organize documents into spaces instead of mixing unrelated subject
 - Chat, Retrieval Lab, Knowledge, and Publish Studio share the same space contract.
 - A missing selection defaults to `portfolio` for backward compatibility.
 - Multi-space retrieval embeds the question once, retrieves inside each selected space, and reserves evidence from every space with matches before filling the remaining Top-K positions.
-- Moving a document only updates catalog and chunk metadata; it does not regenerate embeddings or spend Gemini quota.
+- Moving a document only updates catalog and chunk metadata; it does not regenerate embeddings or spend model quota.
 - Archived spaces stop appearing in public APIs and stop retrieval immediately, while their documents remain recoverable.
 - Local SQLite spaces and private documents never appear in Vercel or public APIs.
 
@@ -281,7 +288,7 @@ Cloud publication is intentionally not an anonymous upload feature. A verified C
 1. Upload PDF, DOCX, Markdown, TXT, or CSV files up to 4 MB each.
 2. Edit parsed and cleaned text, then run mandatory email, phone, identity-number, and address checks.
 3. Preview Standard, Parent-child, or Resume semantic chunks before any external model receives the text.
-4. Publish only PII-clean public chunks with the existing `gemini-embedding-001` contract.
+4. Publish only PII-clean public chunks with the configured cloud embedding contract.
 5. Revise, unpublish, archive, permanently delete, or export Owner-created public records.
 
 Draft text expires from `portfolio_public_drafts` after seven days. Original uploaded files are never persisted. Publishing is idempotent and transactional, and quota failures keep the draft ready for a later retry. Repository seed operations update only `source_origin=repo_seed`; they never delete `owner_upload` records.
@@ -325,10 +332,10 @@ npm run evaluate:cloud -- --base-url=https://your-deployment.example --limit=5
 
 ## Resume Description
 
-**Dual-mode Portfolio RAG Assistant | Python, Next.js, MongoDB Vector/Search, BM25, RRF, SentenceTransformers, Ollama, Gemini, Vercel**
+**Dual-mode Portfolio RAG Assistant | Python, Next.js, MongoDB Vector/Search, BM25, RRF, SentenceTransformers, Ollama, OpenAI, Vercel**
 
 - Built an end-to-end bilingual RAG system with resume-aware semantic chunking, token budgets, independent dense/BM25 retrieval, RRF fusion, optional Cross-Encoder reranking, grounded prompting, and traceable citations.
-- Separated a local private workflow using MongoDB Local Atlas and Ollama from a shareable Vercel demo using MongoDB Atlas Vector Search and Gemini, with isolated collections and explicit public-data validation.
+- Separated a local private workflow using MongoDB Local Atlas and Ollama from a shareable Vercel demo using MongoDB Atlas Vector/BM25 Search and OpenAI, with isolated collections and explicit public-data validation.
 - Added a 50-question bilingual benchmark with hit/recall@k, MRR, nDCG, no-answer and privacy checks, plus bounded multi-query routing for comparison and summary questions.
 
 ## Repository Layout
@@ -343,7 +350,7 @@ evals/rag_benchmark.json       Fixed bilingual retrieval benchmark
 evals/resume_semantic_benchmark.json  Private-resume semantic retrieval cases
 app/                           Next.js pages and Vercel route handlers
 components/                    Chat, evidence, navigation, retrieval UI
-lib/cloud-rag/                 Atlas, Gemini, validation, prompt, rate limit, SSE
+lib/cloud-rag/                 Atlas, OpenAI/Gemini providers, validation, prompt, rate limit, SSE
 scripts/ingest.py              Local index build
 scripts/evaluate_resume_chunks.py  In-memory semantic-resume evaluation
 scripts/evaluate-cloud-retrieval.mjs  Public `/api/retrieve` benchmark

@@ -1,4 +1,5 @@
 import { cloudDb } from "@/lib/cloud-rag/mongodb";
+import { chatProviderOrder, embeddingProviderOrder } from "@/lib/cloud-rag/ai-providers";
 
 export const runtime = "nodejs";
 
@@ -23,7 +24,17 @@ async function canQueryTextIndex(collection: ReturnType<Awaited<ReturnType<typeo
 }
 
 export async function GET() {
-  const status = { atlas: false, gemini: Boolean(process.env.GEMINI_API_KEY), vectorIndex: false, textIndex: false };
+  const providers = {
+    chat: chatProviderOrder(),
+    embedding: embeddingProviderOrder(),
+  };
+  const status = {
+    atlas: false,
+    openai: Boolean(process.env.OPENAI_API_KEY),
+    gemini: Boolean(process.env.GEMINI_API_KEY),
+    vectorIndex: false,
+    textIndex: false,
+  };
   try {
     const db = await cloudDb();
     await db.command({ ping: 1 });
@@ -39,9 +50,10 @@ export async function GET() {
   } catch {
     // Health output deliberately contains no configuration values.
   }
-  const ready = status.atlas && status.gemini && status.vectorIndex;
+  const ready = status.atlas && Boolean(providers.chat.length) && Boolean(providers.embedding.length) && status.vectorIndex;
   return Response.json({
     ...status,
+    providers,
     ready,
     retrievalCapabilities: {
       vector: status.vectorIndex,

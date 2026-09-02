@@ -64,6 +64,8 @@ export type GenerationResult = {
   text: string;
   finishReason: string | null;
   truncated: boolean;
+  provider?: "openai" | "gemini";
+  fallbackReason?: string;
 };
 
 export type ChatTurn = { role: "user" | "assistant"; content: string };

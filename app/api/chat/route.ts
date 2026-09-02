@@ -1,6 +1,6 @@
 import { buildPrompt } from "@/lib/cloud-rag/prompt";
-import { generateText } from "@/lib/cloud-rag/gemini";
-import { enforceRateLimit } from "@/lib/cloud-rag/rate-limit";
+import { generateText } from "@/lib/cloud-rag/ai-providers";
+import { enforceRateLimit, enforceUsageBudget } from "@/lib/cloud-rag/rate-limit";
 import { retrieveForQuestion } from "@/lib/cloud-rag/retrieval";
 import { sse } from "@/lib/cloud-rag/sse";
 import { chatRequestSchema } from "@/lib/cloud-rag/validation";
@@ -24,12 +24,12 @@ function evidenceOnlyFallback(sources: Source[], language: Language): string {
   const lines = sources.slice(0, 5).map((source, index) => compactEvidenceLine(source, index, language)).join("\n");
   if (language === "zh") {
     return [
-      "Gemini 生成服务当前不可用，但我已经从公开知识库检索到以下证据。修复 API key 后会恢复完整自然语言回答：",
+      "AI 生成服务当前不可用，但我已经从公开知识库检索到以下证据。修复 API key 或额度后会恢复完整自然语言回答：",
       lines,
     ].filter(Boolean).join("\n\n");
   }
   return [
-    "Gemini generation is currently unavailable, but I found these public knowledge-base sources. Full natural-language answers will resume after the API key is fixed:",
+    "AI generation is currently unavailable, but I found these public knowledge-base sources. Full natural-language answers will resume after the API key or quota is fixed:",
     lines,
   ].filter(Boolean).join("\n\n");
 }
@@ -41,6 +41,16 @@ export async function POST(request: Request) {
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
     if (!(await enforceRateLimit(ip))) {
       return Response.json({ error: "Too many requests. Please try again in one minute." }, { status: 429 });
+    }
+    const usageBudget = await enforceUsageBudget();
+    if (!usageBudget.allowed) {
+      const zhScope = usageBudget.scope === "monthly" ? "本月" : "今天";
+      const enScope = usageBudget.scope === "monthly" ? "monthly" : "daily";
+      return Response.json({
+        error: body.language === "zh"
+          ? `${zhScope}公开 Demo 问答次数已达到上限（${usageBudget.limit}）。请稍后再试。`
+          : `The public demo has reached its ${enScope} chat limit (${usageBudget.limit}). Please try again later.`,
+      }, { status: 429 });
     }
     const retrieval = await retrieveForQuestion(body.question, body.settings);
     const stream = new ReadableStream({
@@ -97,9 +107,8 @@ export async function POST(request: Request) {
           );
           send("warning", {
             message: body.language === "zh"
-              ? "Gemini 生成服务当前不可用；已返回公开知识库证据。"
-              : "Gemini generation is currently unavailable; retrieved public evidence is returned.",
-            provider: "gemini",
+              ? "AI 生成服务当前不可用；已返回公开知识库证据。"
+              : "AI generation is currently unavailable; retrieved public evidence is returned.",
           });
           send("token", { text: evidenceOnlyFallback(retrieval.selectedContext, body.language) });
           send("done", {

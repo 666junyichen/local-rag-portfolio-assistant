@@ -153,7 +153,7 @@ def sync_public_json_to_cloud() -> int:
     if return_code == 0:
         st.success("已同步到 Vercel 云端 Atlas；生产 Demo 会从云端公开知识库读取这些资料。")
     else:
-        st.error("云端同步失败。请检查上面的输出，通常是 MONGODB_URI / GEMINI_API_KEY / 网络权限问题。")
+        st.error("云端同步失败。请检查上面的输出，通常是 MONGODB_URI / OPENAI_API_KEY / 网络权限问题。")
     return return_code
 
 
